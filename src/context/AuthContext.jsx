@@ -1,0 +1,170 @@
+import React, { createContext, useState, useContext, useEffect } from 'react';
+
+const AuthContext = createContext();
+
+// API URL from environment variable
+const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+
+// Allowed roles for unified admin
+const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin'];
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Get storage keys based on role
+  const getStorageKeys = (role) => {
+    switch(role) {
+      case 'super_admin':
+        return { token: 'superAdminToken', user: 'superAdminUser' };
+      case 'franchise_admin':
+        return { token: 'franchiseAdminToken', user: 'franchiseAdminUser' };
+      case 'admin':
+      default:
+        return { token: 'adminToken', user: 'adminUser' };
+    }
+  };
+
+  // Load user from localStorage on mount - check all possible storage keys
+  useEffect(() => {
+    // Try to find existing user from any role
+    let storedUser = null;
+    let token = null;
+    let userRole = null;
+
+    // Check in priority order: super_admin > franchise_admin > admin
+    const superAdminUser = localStorage.getItem('superAdminUser');
+    const superAdminToken = localStorage.getItem('superAdminToken');
+    if (superAdminUser && superAdminToken) {
+      storedUser = JSON.parse(superAdminUser);
+      token = superAdminToken;
+      userRole = 'super_admin';
+    } else {
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const franchiseAdminToken = localStorage.getItem('franchiseAdminToken');
+      if (franchiseAdminUser && franchiseAdminToken) {
+        storedUser = JSON.parse(franchiseAdminUser);
+        token = franchiseAdminToken;
+        userRole = 'franchise_admin';
+      } else {
+        const adminUser = localStorage.getItem('adminUser');
+        const adminToken = localStorage.getItem('adminToken');
+        if (adminUser && adminToken) {
+          storedUser = JSON.parse(adminUser);
+          token = adminToken;
+          userRole = 'admin';
+        }
+      }
+    }
+
+    if (storedUser && token && ALLOWED_ROLES.includes(storedUser.role)) {
+      setUser(storedUser);
+      verifyToken(token, storedUser.role);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  // Login function - handles all admin roles
+  const login = async (email, password) => {
+    try {
+      const response = await fetch(`${nodeApi}/api/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+
+      const data = await response.json();
+
+      // Check if user has an allowed role
+      if (!response.ok || !data?.token || !ALLOWED_ROLES.includes(data?.user?.role)) {
+        throw new Error(data?.message || 'Login failed or not authorized as admin');
+      }
+
+      const userRole = data.user.role;
+      const storageKeys = getStorageKeys(userRole);
+
+      // Store user and token with role-specific keys
+      localStorage.setItem(storageKeys.token, data.token);
+      localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
+      setUser(data.user);
+
+      console.log('[AuthContext] Login successful, role:', userRole);
+      console.log('[AuthContext] Token stored in:', storageKeys.token);
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Login failed',
+      };
+    }
+  };
+
+  // Verify token
+  const verifyToken = async (token, expectedRole) => {
+    try {
+      const response = await fetch(`${nodeApi}/api/admin/verify`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      // Check for deactivation errors
+      if (response.status === 403) {
+        const errorMessage = data?.message || 'Your account has been deactivated. Please contact the TerraCart Support.';
+        alert(errorMessage);
+        logout();
+        window.location.href = '/login';
+        return;
+      }
+
+      // Verify returns { success, user: { ... } }
+      if (!response.ok || !data?.success || !ALLOWED_ROLES.includes(data?.user?.role)) {
+        throw new Error('Token invalid or not authorized');
+      }
+
+      // Update storage with verified user data
+      const storageKeys = getStorageKeys(data.user.role);
+      setUser(data.user);
+      localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      logout();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout function - clears all admin tokens
+  const logout = () => {
+    // Clear all possible tokens
+    localStorage.removeItem('superAdminToken');
+    localStorage.removeItem('superAdminUser');
+    localStorage.removeItem('franchiseAdminToken');
+    localStorage.removeItem('franchiseAdminUser');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Custom hook to use auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
