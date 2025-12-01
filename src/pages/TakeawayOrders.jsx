@@ -1,5 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import {
   ORDER_TRANSITIONS,
   canAccept,
@@ -14,13 +17,435 @@ const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 
+const buildInvoiceId = (order) => {
+  if (!order) return "";
+  const date = new Date(order.createdAt || Date.now())
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, "");
+  const tail = (order._id || "").toString().slice(-6).toUpperCase();
+  return `INV-${date}-${tail}`;
+};
+
+const formatMoney = (value) => {
+  const num = Number(value);
+  if (Number.isNaN(num)) return "0.00";
+  return num.toFixed(2);
+};
+
+const paiseToRupees = (value) => {
+  if (value === undefined || value === null) return 0;
+  const num = Number(value);
+  if (Number.isNaN(num)) return 0;
+  return num / 100;
+};
+
+// Aggregate all items from all KOTs
+const aggregateKotItems = (kotLines = []) => {
+  const map = new Map();
+  (kotLines || []).forEach((kot) => {
+    (kot?.items || []).forEach((item) => {
+      if (!item || item.returned) return; // Skip returned items
+      const name = item.name || "Item";
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = paiseToRupees(item.price || 0);
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          unitPrice,
+          quantity: 0,
+          amount: 0,
+        });
+      }
+      const entry = map.get(name);
+      entry.quantity += quantity;
+      entry.amount += unitPrice * quantity;
+      if (!entry.unitPrice) {
+        entry.unitPrice = unitPrice;
+      }
+    });
+  });
+  return Array.from(map.values());
+};
+
+// Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
+const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
+  // Calculate subtotal from non-returned items (amount is already in rupees)
+  const subtotal = aggregatedItems.reduce((sum, item) => {
+    const amount = Number(item.amount) || 0;
+    return sum + amount;
+  }, 0);
+  
+  // Round subtotal to 2 decimal places
+  const subtotalRounded = Number(subtotal.toFixed(2));
+  
+  // Calculate GST (5%)
+  const gst = Number((subtotalRounded * 0.05).toFixed(2));
+  
+  // Calculate total amount
+  const totalAmount = Number((subtotalRounded + gst).toFixed(2));
+  
+  return {
+    subtotal: subtotalRounded,
+    gst: gst,
+    totalAmount: totalAmount,
+  };
+};
+
+const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
+  if (!order) return "";
+  const invoiceNumber = buildInvoiceId(order);
+  const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
+  const aggregatedItems = aggregateKotItems(kotLines);
+  const totals = computeKotTotals(kotLines, aggregatedItems);
+
+  // Get cart address (prefer address, fallback to location)
+  const cartAddress = cartData?.address || "—";
+  // Get franchise GST number
+  const franchiseGST = franchiseData?.gstNumber || "—";
+
+  const rows =
+    aggregatedItems.length > 0
+      ? aggregatedItems
+          .map((item) => {
+            const quantity = item.quantity || 0;
+            const price = item.unitPrice || 0;
+            const amount = item.amount || 0;
+            return `
+              <tr>
+                <td class="py-2 border-b">${item.name || ""}</td>
+                <td class="py-2 border-b">${quantity}</td>
+                <td class="py-2 border-b">₹${formatMoney(price)}</td>
+                <td class="py-2 border-b text-right">₹${formatMoney(amount)}</td>
+              </tr>
+            `;
+          })
+          .join("")
+      : `
+        <tr>
+          <td colspan="4" class="py-4 text-center text-gray-500 border-b">No items recorded.</td>
+        </tr>
+      `;
+
+  return `
+    <div class="invoice-root">
+      <style>
+        .invoice-root {
+          font-family: 'Courier New', monospace;
+          color: #000000;
+          width: 80mm;
+          max-width: 302px;
+          margin: 0 auto;
+          padding: 8px;
+          border: none;
+          background: #ffffff;
+          font-size: 11px;
+        }
+        .invoice-header {
+          display: block;
+          margin-bottom: 12px;
+          text-align: center;
+        }
+        .invoice-header h1 {
+          margin: 0;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .invoice-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+        }
+        .invoice-table th {
+          text-align: left;
+          padding: 4px 2px;
+          border-bottom: 1px dashed #000;
+          color: #000;
+          font-size: 9px;
+        }
+        .invoice-table td {
+          padding: 3px 2px;
+          font-size: 9px;
+        }
+        .invoice-line {
+          margin-top: 6px;
+          display: flex;
+          justify-content: space-between;
+          font-size: 10px;
+        }
+        .invoice-totals {
+          margin-top: 12px;
+          width: 100%;
+          display: block;
+        }
+        .invoice-totals-inner {
+          width: 100%;
+        }
+        .invoice-footer {
+          margin-top: 16px;
+          font-size: 8px;
+          color: #000;
+          text-align: center;
+        }
+      </style>
+      <div class="invoice-header">
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
+            order.paidAt || order.updatedAt || order.createdAt || Date.now()
+          ).toLocaleDateString()}</div>
+        </div>
+      <div style="margin-bottom: 8px;">
+        <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
+        <div style="font-size: 9px;">
+          ${order.tableNumber || "TAKEAWAY"}
+        </div>
+      </div>
+      <table class="invoice-table" style="margin-top: 16px;">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Price (₹)</th>
+            <th style="text-align:right;">Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+      <div class="invoice-totals">
+        <div class="invoice-totals-inner">
+          <div class="invoice-line">
+            <span>Subtotal</span>
+            <span>₹${formatMoney(totals.subtotal)}</span>
+          </div>
+          <div class="invoice-line">
+            <span>GST (5%)</span>
+            <span>₹${formatMoney(totals.gst)}</span>
+          </div>
+          <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
+            <span>Total</span>
+            <span>₹${formatMoney(totals.totalAmount)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="invoice-footer">
+        This is a system generated invoice. Thank you for dining with Terra Cart.
+      </div>
+    </div>
+  `;
+};
+
+const printOrderInvoice = async (order) => {
+  if (!order) return;
+
+  // Fetch franchise and cart data
+  let franchiseData = null;
+  let cartData = null;
+
+  try {
+    // Fetch franchise data if franchiseId exists
+    if (order.franchiseId) {
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      if (franchiseRes.data) {
+        franchiseData = {
+          gstNumber: franchiseRes.data.gstNumber || null,
+          name: franchiseRes.data.name || null,
+        };
+      }
+    }
+
+    // Fetch cart data if cartId exists
+    if (order.cartId) {
+      const cartRes = await api.get(`/users/${order.cartId}`);
+      if (cartRes.data) {
+        cartData = {
+          address: cartRes.data.address || cartRes.data.location || null,
+          cartName: cartRes.data.cartName || cartRes.data.name || null,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load franchise/cart data:", err);
+  }
+
+  const html = buildInvoiceMarkup(order, franchiseData, cartData);
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow?.document;
+  if (!doc) return;
+
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${buildInvoiceId(order)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            margin: 0; padding: 8px;
+            background: white; color: #000;
+            width: 80mm;
+            max-width: 302px;
+            font-size: 11px;
+          }
+          h1,h2,h3,h4 { margin: 0; }
+          table { border-collapse: collapse; width: 100%; font-size: 9px; }
+          th, td { padding: 3px 2px; border-bottom: 1px dashed #000; }
+          th { text-align: left; font-size: 9px; }
+          .invoice {
+            width: 80mm;
+            max-width: 302px;
+            margin: 0 auto;
+            padding: 8px;
+          }
+          .flex { display: flex; justify-content: space-between; }
+          .totals div { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; }
+          .totals div:last-child { font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        ${html}
+      </body>
+    </html>
+  `);
+  doc.close();
+  iframe.onload = function () {
+  setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      document.body.removeChild(iframe);
+    }, 50);
+  };
+};
+
+const downloadOrderInvoice = async (order) => {
+  if (!order) return;
+
+  // Fetch franchise and cart data
+  let franchiseData = null;
+  let cartData = null;
+
+  try {
+    // Fetch franchise data if franchiseId exists
+    if (order.franchiseId) {
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      if (franchiseRes.data) {
+        franchiseData = {
+          gstNumber: franchiseRes.data.gstNumber || null,
+          name: franchiseRes.data.name || null,
+        };
+      }
+    }
+
+    // Fetch cart data if cartId exists
+    if (order.cartId) {
+      const cartRes = await api.get(`/users/${order.cartId}`);
+      if (cartRes.data) {
+        cartData = {
+          address: cartRes.data.address || cartRes.data.location || null,
+          cartName: cartRes.data.cartName || cartRes.data.name || null,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load franchise/cart data:", err);
+  }
+
+  const html = buildInvoiceMarkup(order, franchiseData, cartData);
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.top = "-10000px";
+  wrapper.style.left = "-10000px";
+  wrapper.style.opacity = "0";
+  wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+
+  const element = wrapper.querySelector(".invoice-root");
+  if (!element) {
+    document.body.removeChild(wrapper);
+    alert("Failed to render invoice for download.");
+    return;
+  }
+
+  try {
+    const canvas = await html2canvas(element, {
+      scale: window.devicePixelRatio || 2,
+      useCORS: true,
+      backgroundColor: '#ffffff'
+    });
+
+    const imageData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 'auto']
+    });
+    const pdfWidth = 80;
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const margin = 4;
+    const usableWidth = pdfWidth - margin * 2;
+
+    const imgProps = pdf.getImageProperties(imageData);
+    const imgRatio = imgProps.height / imgProps.width;
+    const imgHeight = usableWidth * imgRatio;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
+    heightLeft -= (pdfHeight - margin * 2);
+
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = margin - heightLeft;
+      pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
+      heightLeft -= (pdfHeight - margin * 2);
+    }
+
+    pdf.save(`${buildInvoiceId(order)}.pdf`);
+  } catch (err) {
+    console.error("Failed to download invoice PDF", err);
+    alert("Failed to generate PDF. Please try again.");
+  } finally {
+    if (document.body.contains(wrapper)) {
+    document.body.removeChild(wrapper);
+    }
+  }
+};
+
 const TakeawayOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [searchOrderId, setSearchOrderId] = useState("");
   const [searchTable, setSearchTable] = useState("");
   const [searchInvoice, setSearchInvoice] = useState("");
   const [expanded, setExpanded] = useState({});
   const [filterStatus, setFilterStatus] = useState("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState(null);
 
   const socketRef = React.useRef(null);
   const upsertOrder = React.useCallback(
@@ -51,16 +476,24 @@ const TakeawayOrders = () => {
 
     const fetchOrders = async () => {
       try {
-        const res = await fetch(`${nodeApi}/api/orders`);
-        if (!res.ok) throw new Error("Failed to fetch orders");
-        const data = await res.json();
+        // Use authenticated API to get orders filtered by cartId for cart admins
+        const res = await api.get("/orders");
+        const data = res.data || [];
         if (!active) return;
+        // Filter for takeaway orders only
         const takeawayOrders = (Array.isArray(data) ? data : []).filter(
           (order) => order.serviceType === "TAKEAWAY"
         );
+        console.log(`[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`);
         setOrders(takeawayOrders);
       } catch (err) {
         console.error("Failed to load takeaway orders:", err);
+        // Show user-friendly error message
+        if (err.response?.status === 401) {
+          console.warn("Authentication failed - user may need to login again");
+        } else if (err.response?.status === 403) {
+          console.warn("Access denied - user may not have permission");
+        }
       }
     };
 
@@ -96,16 +529,6 @@ const TakeawayOrders = () => {
     };
   }, []); // Empty dependency array - only run once on mount
 
-  const buildInvoiceId = (order) => {
-    if (!order) return "";
-    const date = new Date(order.createdAt || Date.now())
-      .toISOString()
-      .slice(0, 10)
-      .replace(/-/g, "");
-    const tail = (order._id || "").toString().slice(-6).toUpperCase();
-    return `INV-${date}-${tail}`;
-  };
-
   const changeStatus = async (orderId, newStatus) => {
     try {
       const response = await api.patch(`/orders/${orderId}/status`, { status: newStatus });
@@ -114,6 +537,42 @@ const TakeawayOrders = () => {
       console.error("Status change failed:", e);
       const errorMessage = e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);
+    }
+  };
+
+  const handleEdit = (order) => {
+    setCurrentOrder(order);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    if (!currentOrder?._id) {
+      return;
+    }
+
+    try {
+      // Update status if changed
+      const newStatus = form.status.value;
+      if (newStatus !== currentOrder.status) {
+        await api.patch(`/orders/${currentOrder._id}/status`, { status: newStatus });
+      }
+
+      // Refresh orders list by fetching again
+      const ordersRes = await api.get("/orders");
+      const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+      const takeawayOrders = allOrders.filter((o) => o.serviceType === "TAKEAWAY");
+      
+      setOrders(takeawayOrders);
+
+      setIsModalOpen(false);
+      setCurrentOrder(null);
+      alert("Order updated successfully!");
+    } catch (err) {
+      console.error("Save failed:", err);
+      const errorMessage = err.response?.data?.message || "Failed to update order. Please try again.";
+      alert(errorMessage);
     }
   };
 
@@ -128,6 +587,31 @@ const TakeawayOrders = () => {
       console.error("Delete failed:", err);
       const errorMessage = err.response?.data?.message || err.message || "Failed to delete order";
       alert(errorMessage);
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "Paid":
+        return "✅";
+      case "Confirmed":
+        return "👨‍🍳";
+      case "Preparing":
+        return "🔥";
+      case "Ready":
+        return "🍽️";
+      case "Served":
+        return "🍴";
+      case "Finalized":
+        return "📋";
+      case "Pending":
+        return "⏳";
+      case "Cancelled":
+        return "❌";
+      case "Returned":
+        return "↩️";
+      default:
+        return "📦";
     }
   };
 
@@ -375,7 +859,8 @@ const TakeawayOrders = () => {
                         );
                       }
 
-                      if (nextStatus) {
+                      // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
+                      if (nextStatus && !canAccept(order.status)) {
                         buttons.push(
                           <button
                             key="next"
@@ -414,13 +899,72 @@ const TakeawayOrders = () => {
                   </div>
                 </div>
               </td>
-              <td className="px-6 py-4 text-sm space-x-2">
-                <button
-                  onClick={() => handleDelete(order._id)}
-                  className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
-                >
-                  🗑️ Delete
-                </button>
+              <td className="px-6 py-4 text-sm">
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={() => handleEdit(order)}
+                    className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(order._id)}
+                    className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+                  >
+                    🗑️ Delete
+                  </button>
+                  <button
+                    onClick={() => printOrderInvoice(order)}
+                    disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
+                    className={`px-3 py-1 rounded-md border ${
+                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                        ? "text-gray-700 border-gray-200 hover:bg-gray-100"
+                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                    }`}
+                    title={
+                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                        ? "Print invoice"
+                        : "Invoice available after order is confirmed"
+                    }
+                  >
+                    🖨️ Print
+                  </button>
+                  <button
+                    onClick={() => downloadOrderInvoice(order)}
+                    disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
+                    className={`px-3 py-1 rounded-md border ${
+                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                        ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                    }`}
+                    title={
+                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                        ? "Download invoice PDF"
+                        : "Invoice available after order is confirmed"
+                    }
+                  >
+                    ⬇️ PDF
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Navigate to feedback page with order ID to filter feedback for this order
+                      navigate(`/feedback?orderId=${order._id}`);
+                    }}
+                    disabled={(order.status || "").toLowerCase() !== "paid"}
+                    className={`px-3 py-1 rounded-md border ${
+                      (order.status || "").toLowerCase() === "paid"
+                        ? "text-green-700 border-green-200 hover:bg-green-50"
+                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                    }`}
+                    title={
+                      (order.status || "").toLowerCase() === "paid"
+                        ? "View feedback for this order"
+                        : "Feedback available after payment"
+                    }
+                  >
+                    💬 Feedback
+                  </button>
+                </div>
               </td>
             </tr>
 
@@ -475,6 +1019,69 @@ const TakeawayOrders = () => {
       </tbody>
     </table>
   </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl m-4">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Edit Takeaway Order
+              </h2>
+              <button 
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setCurrentOrder(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <form
+              onSubmit={handleSave}
+              className="space-y-6"
+            >
+              <div>
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Order Status {getStatusIcon(currentOrder?.status || "Pending")}
+                </label>
+                <select
+                  name="status"
+                  defaultValue={currentOrder?.status || "Pending"}
+                  className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                >
+                  <option value="Pending">⏳ Pending</option>
+                  <option value="Confirmed">👨‍🍳 Confirmed</option>
+                  <option value="Preparing">🔥 Preparing</option>
+                  <option value="Ready">🍽️ Ready</option>
+                  <option value="Paid">✅ Paid</option>
+                  <option value="Cancelled">❌ Cancelled</option>
+                  <option value="Returned">↩️ Returned</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setCurrentOrder(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 </div>
   );
 };

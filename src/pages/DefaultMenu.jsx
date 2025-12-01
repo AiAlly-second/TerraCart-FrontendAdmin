@@ -207,7 +207,7 @@ const DefaultMenu = () => {
           franchiseId,
           franchiseName: franchise?.name || 'Unknown',
           success: true,
-          message: `Updated ${response.data.cafesUpdated || 0} carts`,
+          message: `Updated ${response.data.cartsUpdated || response.data.cafesUpdated || 0} carts`,
           data: response.data
         });
       } catch (error) {

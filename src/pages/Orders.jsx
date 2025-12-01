@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -92,21 +92,23 @@ const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
   };
 };
 
-const buildInvoiceMarkup = (order) => {
-  if (!order) return "<div>Invalid order</div>";
+const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
+  if (!order) return "";
   const invoiceNumber = buildInvoiceId(order);
   const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
   const aggregatedItems = aggregateKotItems(kotLines);
   const totals = computeKotTotals(kotLines, aggregatedItems);
-  const subtotal = totals.subtotal;
-  const gst = totals.gst;
-  const total = totals.totalAmount;
+
+  // Get cart address (prefer address, fallback to location)
+  const cartAddress = cartData?.address || "—";
+  // Get franchise GST number
+  const franchiseGST = franchiseData?.gstNumber || "—";
 
   const rows =
     aggregatedItems.length > 0
       ? aggregatedItems
           .map((item) => {
-            const quantity = item.quantity || 1;
+            const quantity = item.quantity || 0;
             const price = item.unitPrice || 0;
             const amount = item.amount || 0;
             return `
@@ -129,74 +131,76 @@ const buildInvoiceMarkup = (order) => {
     <div class="invoice-root">
       <style>
         .invoice-root {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          color: #1f2933;
-          max-width: 720px;
+          font-family: 'Courier New', monospace;
+          color: #000000;
+          width: 80mm;
+          max-width: 302px;
           margin: 0 auto;
-          padding: 24px;
-          border: 1px solid #d2d6dc;
-          border-radius: 12px;
+          padding: 8px;
+          border: none;
           background: #ffffff;
+          font-size: 11px;
         }
         .invoice-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
+          display: block;
+          margin-bottom: 12px;
+          text-align: center;
         }
         .invoice-header h1 {
           margin: 0;
+          font-size: 14px;
+          font-weight: bold;
         }
         .invoice-table {
           width: 100%;
           border-collapse: collapse;
+          font-size: 10px;
         }
         .invoice-table th {
           text-align: left;
-          padding: 8px 0;
-          border-bottom: 1px solid #e5e7eb;
-          color: #4b5563;
+          padding: 4px 2px;
+          border-bottom: 1px dashed #000;
+          color: #000;
+          font-size: 9px;
+        }
+        .invoice-table td {
+          padding: 3px 2px;
+          font-size: 9px;
         }
         .invoice-line {
-          margin-top: 16px;
+          margin-top: 6px;
           display: flex;
           justify-content: space-between;
-          font-size: 0.95rem;
+          font-size: 10px;
         }
         .invoice-totals {
-          margin-top: 24px;
+          margin-top: 12px;
           width: 100%;
-          display: flex;
-          justify-content: flex-end;
+          display: block;
         }
         .invoice-totals-inner {
           width: 100%;
-          max-width: 320px;
         }
         .invoice-footer {
-          margin-top: 32px;
-          font-size: 0.75rem;
-          color: #6b7280;
+          margin-top: 16px;
+          font-size: 8px;
+          color: #000;
           text-align: center;
         }
       </style>
       <div class="invoice-header">
-        <div>
-          <div style="font-size: 1.75rem; font-weight: 700;">Terra Cart</div>
-          <div style="font-size: 0.9rem; color: #4b5563;">123 Main Street, City</div>
-          <div style="font-size: 0.9rem; color: #4b5563;">GSTIN: 22AAAAA0000A1Z5</div>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 1.1rem; font-weight: 600;">Invoice</div>
-          <div style="font-size: 0.9rem; color: #4b5563;">Invoice No: ${invoiceNumber}</div>
-          <div style="font-size: 0.9rem; color: #4b5563;">Date: ${new Date(
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
             order.paidAt || order.updatedAt || order.createdAt || Date.now()
           ).toLocaleDateString()}</div>
         </div>
-      </div>
-      <div>
-        <div style="font-weight: 600; color: #1f2933; margin-bottom: 8px;">Billed To</div>
-        <div style="color: #4b5563; font-size: 0.95rem;">
+      <div style="margin-bottom: 8px;">
+        <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
+        <div style="font-size: 9px;">
           Table ${order.tableNumber || "—"}
         </div>
       </div>
@@ -217,15 +221,15 @@ const buildInvoiceMarkup = (order) => {
         <div class="invoice-totals-inner">
           <div class="invoice-line">
             <span>Subtotal</span>
-            <span>₹${formatMoney(subtotal)}</span>
+            <span>₹${formatMoney(totals.subtotal)}</span>
           </div>
           <div class="invoice-line">
             <span>GST (5%)</span>
-            <span>₹${formatMoney(gst)}</span>
+            <span>₹${formatMoney(totals.gst)}</span>
           </div>
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
-            <span>₹${formatMoney(total)}</span>
+            <span>₹${formatMoney(totals.totalAmount)}</span>
           </div>
         </div>
       </div>
@@ -236,43 +240,141 @@ const buildInvoiceMarkup = (order) => {
   `;
 };
 
-const printOrderInvoice = (order) => {
+const printOrderInvoice = async (order) => {
   if (!order) return;
 
-  const html = buildInvoiceMarkup(order);
-  const printWindow = window.open("", "_blank", "width=900,height=650");
+  // Fetch franchise and cart data
+  let franchiseData = null;
+  let cartData = null;
 
-  if (!printWindow) {
-    alert("Unable to open print window. Please allow pop-ups for this site.");
-    return;
+  try {
+    // Fetch franchise data if franchiseId exists
+    if (order.franchiseId) {
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      if (franchiseRes.data) {
+        franchiseData = {
+          gstNumber: franchiseRes.data.gstNumber || null,
+          name: franchiseRes.data.name || null,
+        };
+      }
+    }
+
+    // Fetch cart data if cartId exists
+    if (order.cartId) {
+      const cartRes = await api.get(`/users/${order.cartId}`);
+      if (cartRes.data) {
+        cartData = {
+          address: cartRes.data.address || cartRes.data.location || null,
+          cartName: cartRes.data.cartName || cartRes.data.name || null,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load franchise/cart data:", err);
   }
 
-  printWindow.document.open();
-  printWindow.document.write(`
+  const html = buildInvoiceMarkup(order, franchiseData, cartData);
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow?.document;
+  if (!doc) return;
+
+  doc.open();
+  doc.write(`
     <!DOCTYPE html>
     <html>
       <head>
         <title>${buildInvoiceId(order)}</title>
-        <meta charset="utf-8" />
+        <style>
+          * { box-sizing: border-box; }
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            margin: 0; padding: 8px;
+            background: white; color: #000;
+            width: 80mm;
+            max-width: 302px;
+            font-size: 11px;
+          }
+          h1,h2,h3,h4 { margin: 0; }
+          table { border-collapse: collapse; width: 100%; font-size: 9px; }
+          th, td { padding: 3px 2px; border-bottom: 1px dashed #000; }
+          th { text-align: left; font-size: 9px; }
+          .invoice {
+            width: 80mm;
+            max-width: 302px;
+            margin: 0 auto;
+            padding: 8px;
+          }
+          .flex { display: flex; justify-content: space-between; }
+          .totals div { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; }
+          .totals div:last-child { font-weight: bold; }
+        </style>
       </head>
-      <body style="margin:0;padding:32px;background:#f3f4f6;">
+      <body>
         ${html}
       </body>
     </html>
   `);
-  printWindow.document.close();
-  printWindow.focus();
-
+  doc.close();
+  iframe.onload = function () {
   setTimeout(() => {
-    printWindow.print();
-    printWindow.close();
-  }, 250);
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      document.body.removeChild(iframe);
+    }, 50);
+  };
 };
 
 const downloadOrderInvoice = async (order) => {
   if (!order) return;
 
-  const html = buildInvoiceMarkup(order);
+  // Fetch franchise and cart data
+  let franchiseData = null;
+  let cartData = null;
+
+  try {
+    // Fetch franchise data if franchiseId exists
+    if (order.franchiseId) {
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      if (franchiseRes.data) {
+        franchiseData = {
+          gstNumber: franchiseRes.data.gstNumber || null,
+          name: franchiseRes.data.name || null,
+        };
+      }
+    }
+
+    // Fetch cart data if cartId exists
+    if (order.cartId) {
+      const cartRes = await api.get(`/users/${order.cartId}`);
+      if (cartRes.data) {
+        cartData = {
+          address: cartRes.data.address || cartRes.data.location || null,
+          cartName: cartRes.data.cartName || cartRes.data.name || null,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load franchise/cart data:", err);
+  }
+
+  const html = buildInvoiceMarkup(order, franchiseData, cartData);
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
   wrapper.style.top = "-10000px";
@@ -292,14 +394,18 @@ const downloadOrderInvoice = async (order) => {
     const canvas = await html2canvas(element, {
       scale: window.devicePixelRatio || 2,
       useCORS: true,
-      backgroundColor: "#ffffff",
+      backgroundColor: '#ffffff'
     });
 
-    const imageData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const imageData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 'auto']
+    });
+    const pdfWidth = 80;
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
+    const margin = 4;
     const usableWidth = pdfWidth - margin * 2;
 
     const imgProps = pdf.getImageProperties(imageData);
@@ -309,14 +415,14 @@ const downloadOrderInvoice = async (order) => {
     let heightLeft = imgHeight;
     let position = margin;
 
-    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= pdfHeight - margin * 2;
+    pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
+    heightLeft -= (pdfHeight - margin * 2);
 
     while (heightLeft > 0) {
       pdf.addPage();
-      position = margin - (imgHeight - heightLeft);
-      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= pdfHeight - margin * 2;
+      position = margin - heightLeft;
+      pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
+      heightLeft -= (pdfHeight - margin * 2);
     }
 
     pdf.save(`${buildInvoiceId(order)}.pdf`);
@@ -324,12 +430,15 @@ const downloadOrderInvoice = async (order) => {
     console.error("Failed to download invoice PDF", err);
     alert("Failed to generate PDF. Please try again.");
   } finally {
+    if (document.body.contains(wrapper)) {
     document.body.removeChild(wrapper);
+    }
   }
 };
 
 const Orders = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filterCafeId = searchParams.get("cafeId");
   const [orders, setOrders] = useState([]);
   const [cafeInfo, setCafeInfo] = useState(null);
@@ -453,12 +562,12 @@ const Orders = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (filterCafeId) {
-        // Fetch cafe info for the filter
+        // Fetch cart info for the filter
         try {
           const cafeRes = await api.get(`/users/${filterCafeId}`);
           setCafeInfo(cafeRes.data);
         } catch (err) {
-          console.error("Failed to fetch cafe info:", err);
+          console.error("Failed to fetch cart info:", err);
         }
       }
       
@@ -472,7 +581,7 @@ const Orders = () => {
           (order) => order.serviceType === "DINE_IN"
         ) : [];
         
-        // If cafeId filter is provided, filter by specific cart
+        // If cartId filter is provided, filter by specific cart
         if (filterCafeId) {
           dineInOrders = dineInOrders.filter((order) => {
             let orderCafeId = order.cafeId;
@@ -488,7 +597,7 @@ const Orders = () => {
             }
             return orderCafeId && orderCafeId.toString() === filterCafeId;
           });
-          console.log(`Filtered orders for cafe ${filterCafeId}:`, dineInOrders.length);
+          console.log(`Filtered orders for cart ${filterCafeId}:`, dineInOrders.length);
         }
         
         console.log("Fetched dine-in orders:", dineInOrders.length, "out of", data.length || 0, "total orders");
@@ -547,6 +656,10 @@ const Orders = () => {
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
     resetDraft();
+    // Ensure menu is loaded when opening Add Order modal
+    if (menuItems.length === 0 && !menuLoading) {
+      loadMenu();
+    }
     setIsModalOpen(true);
   };
 
@@ -607,7 +720,7 @@ const Orders = () => {
       const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
       let dineInOrders = allOrders.filter((o) => o.serviceType === "DINE_IN");
       
-      // Re-apply cafe filter if active
+      // Re-apply cart filter if active
       if (filterCafeId) {
         dineInOrders = dineInOrders.filter((order) => {
           let orderCafeId = order.cafeId;
@@ -646,48 +759,68 @@ const Orders = () => {
       return;
     }
 
-    if (!selectedTableId) {
-      setCreateError("Please select a table for this order.");
-      return;
-    }
+    // For DINE_IN orders, table selection is required
+    // For TAKEAWAY orders, no table selection needed (counter orders)
+    if (draftServiceType === "DINE_IN") {
+      if (!selectedTableId) {
+        setCreateError("Please select a table for this order.");
+        return;
+      }
 
-    const tableSource = tables.find((t) => t._id === selectedTableId);
-    const table = tableSource;
-    if (!table) {
-      setCreateError("Selected table could not be found. Refresh the page and try again.");
-      return;
-    }
+      const tableSource = tables.find((t) => t._id === selectedTableId);
+      const table = tableSource;
+      if (!table) {
+        setCreateError("Selected table could not be found. Refresh the page and try again.");
+        return;
+      }
 
-    if (table.status !== "AVAILABLE" && !table.sessionToken) {
-      setCreateError(`Table ${table.number || table.name || ""} is not currently available.`);
-      return;
+      // Check table availability for DINE_IN orders
+      if (table.status !== "AVAILABLE" && !table.sessionToken) {
+        setCreateError(`Table ${table.number || table.name || ""} is not currently available.`);
+        return;
+      }
     }
 
     setCreateSubmitting(true);
 
     try {
-      let sessionToken = table.sessionToken;
-      if (!sessionToken) {
-        if (!table.qrSlug) {
-          throw new Error("Unable to claim table: missing QR slug.");
+      let sessionToken = null;
+      let table = null;
+      let tableNumber = null;
+      
+      // For DINE_IN orders, we need a table and session token
+      // For TAKEAWAY orders, no table needed (counter orders)
+      if (draftServiceType === "DINE_IN") {
+        table = tables.find((t) => t._id === selectedTableId);
+        if (!table) {
+          throw new Error("Selected table could not be found.");
         }
-        const lookupRes = await fetch(`${nodeApi}/api/tables/lookup/${table.qrSlug}`);
-        const lookupPayload = await lookupRes.json().catch(() => ({}));
-        if (lookupRes.status === 423) {
-          throw new Error(lookupPayload?.message || "Table is currently assigned to another guest.");
+        
+        tableNumber = table.number || table.tableNumber;
+        sessionToken = table.sessionToken;
+        if (!sessionToken) {
+          if (!table.qrSlug) {
+            throw new Error("Unable to claim table: missing QR slug.");
+          }
+          const lookupRes = await fetch(`${nodeApi}/api/tables/lookup/${table.qrSlug}`);
+          const lookupPayload = await lookupRes.json().catch(() => ({}));
+          if (lookupRes.status === 423) {
+            throw new Error(lookupPayload?.message || "Table is currently assigned to another guest.");
+          }
+          if (!lookupRes.ok) {
+            throw new Error(lookupPayload?.message || "Failed to allocate table. Please try again.");
+          }
+          sessionToken =
+            lookupPayload.sessionToken ||
+            lookupPayload.table?.sessionToken ||
+            null;
         }
-        if (!lookupRes.ok) {
-          throw new Error(lookupPayload?.message || "Failed to allocate table. Please try again.");
-        }
-        sessionToken =
-          lookupPayload.sessionToken ||
-          lookupPayload.table?.sessionToken ||
-          null;
-      }
 
-      if (!sessionToken) {
-        throw new Error("Unable to obtain a session token for this table. Ask staff to release the table.");
+        if (!sessionToken) {
+          throw new Error("Unable to obtain a session token for this table. Ask staff to release the table.");
+        }
       }
+      // For TAKEAWAY orders, no table or sessionToken needed (counter orders)
 
       const itemsPayload = draftItemsArray.map((entry) => ({
         name: entry.name,
@@ -697,9 +830,9 @@ const Orders = () => {
 
       const payload = {
         serviceType: draftServiceType,
-        tableId: table._id,
-        tableNumber: table.number || table.tableNumber,
-        sessionToken,
+        tableId: draftServiceType === "TAKEAWAY" ? null : (table?._id || null), // TAKEAWAY orders don't need tableId
+        tableNumber: draftServiceType === "TAKEAWAY" ? "TAKEAWAY" : (tableNumber || null), // TAKEAWAY orders use "TAKEAWAY" as table number
+        sessionToken: draftServiceType === "TAKEAWAY" ? undefined : sessionToken, // TAKEAWAY orders don't need sessionToken
         items: itemsPayload,
       };
 
@@ -760,12 +893,18 @@ const Orders = () => {
     try {
       setMenuLoading(true);
       setMenuError("");
-      const res = await fetch(`${nodeApi}/api/menu/public`);
-      if (!res.ok) {
-        throw new Error(`Menu fetch failed with status ${res.status}`);
+      // Use authenticated API endpoint which automatically filters by cartId for cart admins
+      const res = await api.get("/menu");
+      const payload = res.data || [];
+      
+      if (!Array.isArray(payload) || payload.length === 0) {
+        setMenuError("No menu items found. Please add menu items first.");
+        setMenuCategories([{ id: "all", label: "All" }]);
+        setMenuItems([]);
+        return;
       }
-      const payload = await res.json();
-      const safeCategories = (payload || []).map((category) => ({
+      
+      const safeCategories = payload.map((category) => ({
         name: category.name || "Menu",
         items: (category.items || []).map((item) => ({
           id: item._id || `${category.name || "Menu"}-${item.name || Math.random()}`,
@@ -799,7 +938,11 @@ const Orders = () => {
       setMenuItems(flatItems);
     } catch (err) {
       console.error("Failed to load menu", err);
-      setMenuError(err.message || "Failed to load menu");
+      const errorMessage = err.response?.data?.message || err.message || "Failed to load menu";
+      setMenuError(errorMessage);
+      // Set empty state on error
+      setMenuCategories([{ id: "all", label: "All" }]);
+      setMenuItems([]);
     } finally {
       setMenuLoading(false);
     }
@@ -892,8 +1035,16 @@ const Orders = () => {
 
   const { tablesForService, usingFallbackTables } = useMemo(() => {
     if (draftServiceType === "DINE_IN") {
-      return { tablesForService: tables, usingFallbackTables: false };
+      // For DINE_IN: Only show AVAILABLE tables (or tables with sessionToken)
+      // Occupied tables should not be available for dine-in orders
+      const availableTables = tables.filter((table) => {
+        const status = table.status || "UNKNOWN";
+        const isAvailable = status === "AVAILABLE" || Boolean(table.sessionToken);
+        return isAvailable;
+      });
+      return { tablesForService: availableTables, usingFallbackTables: false };
     }
+    // For TAKEAWAY: Show all tables regardless of status (counter takeaway, not table takeaway)
     const takeawayCandidates = tables.filter((table) => {
       const label = `${table.name || ""} ${table.number || ""}`.toLowerCase();
       return label.includes("takeaway") || label.includes("counter");
@@ -901,6 +1052,7 @@ const Orders = () => {
     if (takeawayCandidates.length > 0) {
       return { tablesForService: takeawayCandidates, usingFallbackTables: false };
     }
+    // Fallback: Show all tables for takeaway (they're counter orders, not table-specific)
     return { tablesForService: tables, usingFallbackTables: true };
   }, [tables, draftServiceType]);
 
@@ -1097,8 +1249,8 @@ const Orders = () => {
                             );
                           }
                           
-                          // Show next sequential step button
-                          if (nextStatus) {
+                          // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
+                          if (nextStatus && !canAccept(order.status)) {
                             buttons.push(
                               <button
                                 key="next"
@@ -1153,35 +1305,54 @@ const Orders = () => {
                     </button>
                       <button
                         onClick={() => printOrderInvoice(order)}
-                        disabled={(order.status || "").toLowerCase() !== "paid"}
+                        disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
                         className={`px-3 py-1 rounded-md border ${
-                          (order.status || "").toLowerCase() === "paid"
+                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
                             ? "text-gray-700 border-gray-200 hover:bg-gray-100"
                             : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
                         }`}
                         title={
-                          (order.status || "").toLowerCase() === "paid"
+                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
                             ? "Print invoice"
-                            : "Invoice available after payment"
+                            : "Invoice available after order is confirmed"
                         }
                       >
                         🖨️ Print
                       </button>
                       <button
                         onClick={() => downloadOrderInvoice(order)}
-                        disabled={(order.status || "").toLowerCase() !== "paid"}
+                        disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
                         className={`px-3 py-1 rounded-md border ${
-                          (order.status || "").toLowerCase() === "paid"
+                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
                             ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                             : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
                         }`}
                         title={
-                          (order.status || "").toLowerCase() === "paid"
+                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
                             ? "Download invoice PDF"
-                            : "Invoice available after payment"
+                            : "Invoice available after order is confirmed"
                         }
                       >
                         ⬇️ PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Navigate to feedback page with order ID to filter feedback for this order
+                          navigate(`/feedback?orderId=${order._id}`);
+                        }}
+                        disabled={(order.status || "").toLowerCase() !== "paid"}
+                        className={`px-3 py-1 rounded-md border ${
+                          (order.status || "").toLowerCase() === "paid"
+                            ? "text-green-700 border-green-200 hover:bg-green-50"
+                            : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                        }`}
+                        title={
+                          (order.status || "").toLowerCase() === "paid"
+                            ? "View feedback for this order"
+                            : "Feedback available after payment"
+                        }
+                      >
+                        💬 Feedback
                       </button>
                     </div>
                   </td>
@@ -1253,7 +1424,7 @@ const Orders = () => {
                       {createError}
                     </div>
                   )}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className={`grid gap-4 ${draftServiceType === "DINE_IN" ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
                         Service Type
@@ -1279,61 +1450,56 @@ const Orders = () => {
                       </div>
                       {draftServiceType === "TAKEAWAY" && (
                         <p className="text-xs text-gray-500 mt-2">
-                          Select a takeaway counter/table. Tables labelled “Takeaway” will appear first.
+                          Counter takeaway order - no table selection needed.
                         </p>
                       )}
                     </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Choose Table 🪑
-                      </label>
-                      <div className="flex flex-col md:flex-row md:items-center gap-3">
-                        <select
-                          value={selectedTableId}
-                          onChange={(e) => setSelectedTableId(e.target.value)}
-                          className="shadow-sm border border-gray-300 rounded-lg w-full md:w-72 py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                        >
-                          <option value="">Select a table</option>
-                          {tablesForService.map((table) => {
-                            const label = table.number
-                              ? `Table ${table.number}`
-                              : table.name || "Unnamed";
-                            const status = table.status || "UNKNOWN";
-                            const isAvailable =
-                              status === "AVAILABLE" || Boolean(table.sessionToken);
-                            return (
-                              <option
-                                key={table._id}
-                                value={table._id}
-                                disabled={!isAvailable}
-                              >
-                                {label} · {status.toLowerCase()}
-                                {!isAvailable ? " (locked)" : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={loadTables}
-                          className="text-sm text-blue-600 hover:text-blue-800"
-                        >
-                          Refresh tables
-                        </button>
-                      </div>
-                      {tableLoading && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Loading tables…
-                        </p>
-                      )}
-                      {!tableLoading &&
-                        draftServiceType === "TAKEAWAY" &&
-                        usingFallbackTables && (
-                          <p className="text-xs text-rose-500 mt-2">
-                            No dedicated takeaway tables found. Showing all tables instead.
+                    {draftServiceType === "DINE_IN" && (
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-2">
+                          Choose Table 🪑
+                        </label>
+                        <div className="flex flex-col md:flex-row md:items-center gap-3">
+                          <select
+                            value={selectedTableId}
+                            onChange={(e) => setSelectedTableId(e.target.value)}
+                            className="shadow-sm border border-gray-300 rounded-lg w-full md:w-72 py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                          >
+                            <option value="">Select a table</option>
+                            {tablesForService.map((table) => {
+                              const label = table.number
+                                ? `Table ${table.number}`
+                                : table.name || "Unnamed";
+                              const status = table.status || "UNKNOWN";
+                              // For DINE_IN: tables are already filtered to only available ones
+                              const isAvailable = status === "AVAILABLE" || Boolean(table.sessionToken);
+                              return (
+                                <option
+                                  key={table._id}
+                                  value={table._id}
+                                  disabled={!isAvailable}
+                                >
+                                  {label} · {status.toLowerCase()}
+                                  {!isAvailable ? " (locked)" : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={loadTables}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            Refresh tables
+                          </button>
+                        </div>
+                        {tableLoading && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Loading tables…
                           </p>
                         )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">

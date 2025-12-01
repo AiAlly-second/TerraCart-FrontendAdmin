@@ -260,9 +260,9 @@ const Franchises = () => {
       `You are about to PERMANENTLY DELETE "${franchiseName}".\n\n` +
       `This will PERMANENTLY DELETE:\n` +
       `• The franchise account and login\n` +
-      `• ALL cafes under this franchise\n` +
-      `• ALL cafe login credentials\n` +
-      `• ALL employees (franchise and cafe level)\n` +
+      `• ALL carts under this franchise\n` +
+      `• ALL cart login credentials\n` +
+      `• ALL employees (franchise and cart level)\n` +
       `• ALL menu items and categories\n` +
       `• ALL tables and waitlist entries\n` +
       `• ALL non-paid orders and payments\n` +
@@ -288,7 +288,7 @@ const Franchises = () => {
           ? `${response.data.preservedPaidOrders} paid orders preserved for revenue tracking.\n\n`
           : ''
         ) +
-        `All associated cafes, employees, and data have been removed.`
+        `All associated carts, employees, and data have been removed.`
       );
       fetchFranchises();
     } catch (error) {

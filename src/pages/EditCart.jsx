@@ -42,7 +42,7 @@ const EditCart = () => {
       const response = await api.get(`/users/${id}`);
       const user = response.data;
       
-      // Verify this is a cafe admin (role: "admin")
+      // Verify this is a cart admin (role: "admin")
       if (user.role !== "admin") {
         alert("This user is not a cart admin. Cannot edit.");
         navigate("/carts");

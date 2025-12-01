@@ -599,7 +599,7 @@ const Users = () => {
                       required
                       value={formData.cartName}
                       onChange={(e) => setFormData({ ...formData, cartName: e.target.value })}
-                      placeholder="e.g., Downtown Cafe"
+                      placeholder="e.g., Downtown Cart"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

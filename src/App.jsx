@@ -38,6 +38,15 @@ import Franchises from './pages/Franchises';
 import Users from './pages/Users';
 import RevenueHistory from './pages/RevenueHistory';
 
+// Costing pages
+import CostingLayout from './pages/costing/CostingLayout';
+import CostingDashboard from './pages/costing/Dashboard';
+import Investments from './pages/costing/Investments';
+import DailyExpenses from './pages/costing/DailyExpenses';
+import InventoryCosting from './pages/costing/InventoryCosting';
+import RecipeCosting from './pages/costing/RecipeCosting';
+import CostingReports from './pages/costing/Reports';
+
 function App() {
   const location = useLocation();
   const { user } = useAuth();
@@ -267,6 +276,26 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['super_admin']}>
                   <RevenueHistory />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Costing routes (Super Admin only, feature flag protected) */}
+            <Route
+              path="/costing/*"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <Routes>
+                    <Route element={<CostingLayout />}>
+                      <Route path="dashboard" element={<CostingDashboard />} />
+                      <Route path="investments" element={<Investments />} />
+                      <Route path="expenses" element={<DailyExpenses />} />
+                      <Route path="inventory" element={<InventoryCosting />} />
+                      <Route path="recipes" element={<RecipeCosting />} />
+                      <Route path="reports" element={<CostingReports />} />
+                      <Route index element={<Navigate to="/costing/dashboard" replace />} />
+                    </Route>
+                  </Routes>
                 </ProtectedRoute>
               }
             />

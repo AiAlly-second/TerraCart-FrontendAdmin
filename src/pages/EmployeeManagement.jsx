@@ -268,7 +268,7 @@ const EmployeeManagement = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
-          <p className="text-gray-600 mt-1">Manage employees hierarchically by Franchise and Cafe</p>
+          <p className="text-gray-600 mt-1">Manage employees hierarchically by Franchise and Cart</p>
         </div>
         <button
           onClick={openCreateModal}
@@ -284,7 +284,7 @@ const EmployeeManagement = () => {
           <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by franchise, cafe, or employee name..."
+            placeholder="Search by franchise, cart, or employee name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -321,7 +321,7 @@ const EmployeeManagement = () => {
                   </div>
                   <div className="flex items-center space-x-4">
                     <span className="text-sm text-gray-600">
-                      {franchise.cafes?.length || 0} Cafes, {franchise.employees?.length || 0} Franchise Employees
+                      {franchise.cafes?.length || 0} Carts, {franchise.employees?.length || 0} Franchise Employees
                     </span>
                     <span className={`px-2 py-1 rounded text-xs ${franchise.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {franchise.isActive ? 'Active' : 'Inactive'}
@@ -368,13 +368,13 @@ const EmployeeManagement = () => {
                       </div>
                     )}
 
-                    {/* Cafes */}
+                    {/* Carts */}
                     {franchise.cafes && franchise.cafes.length > 0 && (
                       <div className="ml-4 space-y-3">
-                        <h4 className="font-semibold text-gray-700 mb-2">Cafes</h4>
+                        <h4 className="font-semibold text-gray-700 mb-2">Carts</h4>
                         {franchise.cafes.map((cafe) => (
                           <div key={cafe._id} className="border border-gray-200 rounded-lg">
-                            {/* Cafe Header */}
+                            {/* Cart Header */}
                             <div
                               className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer"
                               onClick={() => toggleCafe(cafe._id)}
@@ -401,7 +401,7 @@ const EmployeeManagement = () => {
                               </div>
                             </div>
 
-                            {/* Cafe Employees */}
+                            {/* Cart Employees */}
                             {expandedCafes.has(cafe._id) && (
                               <div className="p-4 space-y-2">
                                 {cafe.employees && cafe.employees.length > 0 ? (
@@ -434,7 +434,7 @@ const EmployeeManagement = () => {
                                   ))
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
-                                    No employees in this cafe
+                                    No employees in this cart
                                   </div>
                                 )}
                               </div>
@@ -449,7 +449,7 @@ const EmployeeManagement = () => {
             ))
           )}
 
-          {/* Orphan Employees (no franchise/cafe) */}
+          {/* Orphan Employees (no franchise/cart) */}
           {orphanEmployees && orphanEmployees.length > 0 && (
             <div className="border border-yellow-200 rounded-lg bg-yellow-50 p-4">
               <h3 className="font-semibold text-yellow-800 mb-2">Unassigned Employees</h3>
@@ -586,14 +586,14 @@ const EmployeeManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cafe</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
                   <select
                     value={selectedCafe}
                     onChange={(e) => handleCafeChange(e.target.value)}
                     disabled={!selectedFranchise}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   >
-                    <option value="">Select Cafe (Optional)</option>
+                    <option value="">Select Cart (Optional)</option>
                     {cafes
                       .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
                       .map(cafe => (

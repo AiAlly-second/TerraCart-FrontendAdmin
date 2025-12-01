@@ -69,13 +69,18 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
-const buildInvoiceMarkup = (order, invoiceItems, totals) => {
+const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData) => {
   if (!order) return "";
   const invoiceNumber = (() => {
     const date = new Date(order.createdAt || Date.now()).toISOString().slice(0, 10).replace(/-/g, "");
     const tail = (order._id || "").toString().slice(-6).toUpperCase();
     return `INV-${date}-${tail}`;
   })();
+
+  // Get cart address (prefer address, fallback to location)
+  const cartAddress = cartData?.address || "—";
+  // Get franchise GST number
+  const franchiseGST = franchiseData?.gstNumber || "—";
 
   const rows =
     invoiceItems.length > 0
@@ -163,8 +168,8 @@ const buildInvoiceMarkup = (order, invoiceItems, totals) => {
       </style>
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">123 Main Street, City</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: 22AAAAA0000A1Z5</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
@@ -218,6 +223,8 @@ const Invoices = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [franchiseData, setFranchiseData] = useState(null);
+  const [cartData, setCartData] = useState(null);
   const [paymentsByOrder, setPaymentsByOrder] = useState({});
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
@@ -243,6 +250,46 @@ const Invoices = () => {
       setError(err.response?.data?.message || err.message || "Failed to load orders");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFranchiseAndCartData = async (order) => {
+    if (!order) {
+      setFranchiseData(null);
+      setCartData(null);
+      return;
+    }
+
+    try {
+      // Fetch franchise data if franchiseId exists
+      if (order.franchiseId) {
+        const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+        if (franchiseRes.data) {
+          setFranchiseData({
+            gstNumber: franchiseRes.data.gstNumber || null,
+            name: franchiseRes.data.name || null,
+          });
+        }
+      } else {
+        setFranchiseData(null);
+      }
+
+      // Fetch cart data if cartId exists
+      if (order.cartId) {
+        const cartRes = await api.get(`/users/${order.cartId}`);
+        if (cartRes.data) {
+          setCartData({
+            address: cartRes.data.address || cartRes.data.location || null,
+            cartName: cartRes.data.cartName || cartRes.data.name || null,
+          });
+        }
+      } else {
+        setCartData(null);
+      }
+    } catch (err) {
+      console.error("Failed to load franchise/cart data:", err);
+      setFranchiseData(null);
+      setCartData(null);
     }
   };
 
@@ -282,6 +329,15 @@ const Invoices = () => {
     loadOrders();
     loadPayments();
   }, []);
+
+  useEffect(() => {
+    if (selected) {
+      loadFranchiseAndCartData(selected);
+    } else {
+      setFranchiseData(null);
+      setCartData(null);
+    }
+  }, [selected]);
 
   const paidOrders = useMemo(() => orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid'), [orders]);
   const selectedPayments = useMemo(
@@ -541,7 +597,7 @@ const Invoices = () => {
                   ref={printRef} 
                   className="bg-white rounded-lg shadow border"
                   dangerouslySetInnerHTML={{
-                    __html: buildInvoiceMarkup(selected, selectedInvoiceItems, selectedTotals)
+                    __html: buildInvoiceMarkup(selected, selectedInvoiceItems, selectedTotals, franchiseData, cartData)
                   }}
                 />
               </div>
