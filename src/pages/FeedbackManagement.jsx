@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 
 const FeedbackManagement = () => {
+  const [searchParams] = useSearchParams();
+  const orderIdParam = searchParams.get('orderId');
   const [feedbacks, setFeedbacks] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,13 +40,26 @@ const FeedbackManagement = () => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
   };
 
-  const filteredFeedbacks = filter === 'all' 
-    ? feedbacks 
-    : feedbacks.filter(f => {
-        if (filter === 'high') return f.overallRating >= 4;
-        if (filter === 'low') return f.overallRating <= 2;
-        return true;
+  const filteredFeedbacks = (() => {
+    let result = feedbacks;
+    
+    // First filter by orderId if provided
+    if (orderIdParam) {
+      result = result.filter(f => {
+        const feedbackOrderId = f.orderId?._id || f.orderId;
+        return feedbackOrderId && feedbackOrderId.toString() === orderIdParam;
       });
+    }
+    
+    // Then apply rating filter
+    if (filter === 'high') {
+      result = result.filter(f => f.overallRating >= 4);
+    } else if (filter === 'low') {
+      result = result.filter(f => f.overallRating <= 2);
+    }
+    
+    return result;
+  })();
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div></div>;
@@ -51,7 +67,22 @@ const FeedbackManagement = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800">Feedback Management</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-800">Feedback Management</h1>
+        {orderIdParam && (
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm">
+              Filtered by Order ID: {orderIdParam.substring(0, 12)}...
+            </span>
+            <button
+              onClick={() => window.location.href = '/feedback'}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+            >
+              Clear Filter
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Statistics */}
       {stats && (

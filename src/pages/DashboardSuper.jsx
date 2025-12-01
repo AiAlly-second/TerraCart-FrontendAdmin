@@ -343,7 +343,7 @@ const Dashboard = () => {
 
       {/* Cart Statistics Section */}
       <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6">
-        <h2 className="text-lg md:text-xl font-semibold text-[#4a2e1f] mb-3 md:mb-4">Cart (Cafe) Statistics</h2>
+        <h2 className="text-lg md:text-xl font-semibold text-[#4a2e1f] mb-3 md:mb-4">Cart Statistics</h2>
         {loading ? (
           <div className="flex justify-center py-8">
             <FaSpinner className="animate-spin text-gray-400 text-2xl" />

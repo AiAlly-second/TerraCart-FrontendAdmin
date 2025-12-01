@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaFileAlt, FaSpinner, FaDownload, FaChartLine, FaRupeeSign, FaShoppingBag, FaUsers, FaStore, FaBuilding, FaChartBar, FaSync, FaChevronDown, FaChevronRight } from 'react-icons/fa';
+import * as XLSX from 'xlsx';
 import api from '../utils/api';
 
 const Reports = () => {
@@ -155,26 +156,231 @@ const Reports = () => {
   };
 
   const exportReport = () => {
-    const report = {
-      generatedAt: new Date().toISOString(),
-      summary: {
-        totalUsers: reportData.totalUsers,
-        totalFranchises: reportData.totalFranchises,
-        totalCarts: reportData.totalCarts,
-        totalOrders: reportData.totalOrders,
-        totalRevenue: reportData.totalRevenue,
-      },
-      franchiseBreakdown: reportData.franchiseRevenue,
-      cartBreakdown: reportData.cartRevenue,
-      usersByRole: reportData.usersByRole,
-    };
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `super-admin-report-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const workbook = XLSX.utils.book_new();
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      // Sheet 1: Executive Summary
+      const summaryData = [
+        ['SUPER ADMIN REPORT'],
+        ['Generated At:', new Date().toLocaleString('en-IN')],
+        [],
+        ['OVERALL STATISTICS'],
+        ['Total Users', reportData.totalUsers],
+        ['Total Franchises', reportData.totalFranchises],
+        ['Total Carts', reportData.totalCarts],
+        ['Total Orders', reportData.totalOrders],
+        ['Total Revenue', `₹${reportData.totalRevenue.toLocaleString('en-IN')}`],
+        ['Paid Payments', reportData.paidPayments],
+        ['Pending Payments', reportData.pendingPayments],
+        [],
+        ['USERS BY ROLE'],
+        ['Role', 'Count'],
+        ...Object.entries(reportData.usersByRole).map(([role, count]) => [
+          role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          count,
+        ]),
+      ];
+      
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      summarySheet['!cols'] = [{ wch: 25 }, { wch: 15 }];
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
+      
+      // Sheet 2: Franchise Performance
+      if (reportData.franchiseRevenue && reportData.franchiseRevenue.length > 0) {
+        const franchiseHeaders = ['#', 'Franchise Name', 'Email', 'Status', 'Revenue', 'Orders', 'Carts', 'Avg Order Value'];
+        const franchiseRows = reportData.franchiseRevenue
+          .sort((a, b) => b.revenue - a.revenue)
+          .map((franchise, index) => {
+            const avgOrderValue = franchise.orderCount > 0 
+              ? franchise.revenue / franchise.orderCount 
+              : 0;
+            return [
+              index + 1,
+              franchise.franchiseName || 'Unknown',
+              franchise.email || 'N/A',
+              franchise.isActive ? 'Active' : 'Inactive',
+              franchise.revenue || 0,
+              franchise.orderCount || 0,
+              franchise.cartCount || 0,
+              avgOrderValue,
+            ];
+          });
+        
+        const franchiseData = [franchiseHeaders, ...franchiseRows];
+        const franchiseSheet = XLSX.utils.aoa_to_sheet(franchiseData);
+        
+        franchiseSheet['!cols'] = [
+          { wch: 5 },   // #
+          { wch: 30 },  // Franchise Name
+          { wch: 30 },  // Email
+          { wch: 12 },  // Status
+          { wch: 18 },  // Revenue
+          { wch: 10 },  // Orders
+          { wch: 10 },  // Carts
+          { wch: 18 },  // Avg Order Value
+        ];
+        
+        XLSX.utils.book_append_sheet(workbook, franchiseSheet, 'Franchise Performance');
+      }
+      
+      // Sheet 3: Cart/Kiosk Details
+      if (reportData.franchiseRevenue && reportData.franchiseRevenue.length > 0) {
+        const cartHeaders = ['#', 'Cart Name', 'Franchise Name', 'Status', 'Revenue', 'Orders', 'Avg Order Value'];
+        const cartRows = [];
+        
+        reportData.franchiseRevenue.forEach((franchise) => {
+          if (franchise.carts && franchise.carts.length > 0) {
+            franchise.carts.forEach((cart, index) => {
+              const avgOrderValue = (cart.orderCount || 0) > 0 
+                ? (cart.revenue || 0) / (cart.orderCount || 0)
+                : 0;
+              const status = cart.isApproved === false 
+                ? 'Pending' 
+                : cart.isActive !== false 
+                ? 'Active' 
+                : 'Inactive';
+              
+              cartRows.push([
+                cartRows.length + 1,
+                cart.cartName || cart.name || 'Unknown',
+                franchise.franchiseName || 'Unknown',
+                status,
+                cart.revenue || 0,
+                cart.orderCount || 0,
+                avgOrderValue,
+              ]);
+            });
+          }
+        });
+        
+        if (cartRows.length > 0) {
+          const cartData = [cartHeaders, ...cartRows];
+          const cartSheet = XLSX.utils.aoa_to_sheet(cartData);
+          
+          cartSheet['!cols'] = [
+            { wch: 5 },   // #
+            { wch: 30 },  // Cart Name
+            { wch: 30 },  // Franchise Name
+            { wch: 12 },  // Status
+            { wch: 18 },  // Revenue
+            { wch: 10 },  // Orders
+            { wch: 18 },  // Avg Order Value
+          ];
+          
+          XLSX.utils.book_append_sheet(workbook, cartSheet, 'Cart Details');
+        }
+      }
+      
+      // Sheet 4: Franchise-Cart Hierarchy
+      if (reportData.franchiseRevenue && reportData.franchiseRevenue.length > 0) {
+        const hierarchyHeaders = ['Level', 'Type', 'Name', 'Parent Franchise', 'Status', 'Orders', 'Revenue', 'Carts'];
+        const hierarchyRows = [];
+        
+        reportData.franchiseRevenue
+          .sort((a, b) => b.revenue - a.revenue)
+          .forEach((franchise) => {
+            // Add franchise row
+            hierarchyRows.push([
+              'Level 1',
+              'Franchise',
+              franchise.franchiseName || 'Unknown',
+              '—',
+              franchise.isActive ? 'Active' : 'Inactive',
+              franchise.orderCount || 0,
+              franchise.revenue || 0,
+              franchise.cartCount || 0,
+            ]);
+            
+            // Add cart rows under this franchise
+            if (franchise.carts && franchise.carts.length > 0) {
+              franchise.carts.forEach((cart) => {
+                const status = cart.isApproved === false 
+                  ? 'Pending' 
+                  : cart.isActive !== false 
+                  ? 'Active' 
+                  : 'Inactive';
+                
+                hierarchyRows.push([
+                  'Level 2',
+                  'Cart',
+                  cart.cartName || cart.name || 'Unknown',
+                  franchise.franchiseName || 'Unknown',
+                  status,
+                  cart.orderCount || 0,
+                  cart.revenue || 0,
+                  '—',
+                ]);
+              });
+            }
+          });
+        
+        const hierarchyData = [hierarchyHeaders, ...hierarchyRows];
+        const hierarchySheet = XLSX.utils.aoa_to_sheet(hierarchyData);
+        
+        hierarchySheet['!cols'] = [
+          { wch: 10 },  // Level
+          { wch: 12 },  // Type
+          { wch: 30 },  // Name
+          { wch: 30 },  // Parent Franchise
+          { wch: 12 },  // Status
+          { wch: 10 },  // Orders
+          { wch: 18 },  // Revenue
+          { wch: 10 },  // Carts
+        ];
+        
+        XLSX.utils.book_append_sheet(workbook, hierarchySheet, 'Hierarchy View');
+      }
+      
+      // Sheet 5: Recent Orders
+      if (reportData.recentOrders && reportData.recentOrders.length > 0) {
+        const orderHeaders = ['Order ID', 'Status', 'Service Type', 'Amount', 'Date'];
+        const orderRows = reportData.recentOrders.map((order) => {
+          const orderAmount = order.kotLines?.reduce((sum, kot) => sum + Number(kot.totalAmount || 0), 0) || 0;
+          return [
+            order._id.slice(-8),
+            order.status || 'Unknown',
+            order.serviceType === 'TAKEAWAY' ? 'Takeaway' : 'Dine In',
+            orderAmount,
+            new Date(order.createdAt).toLocaleString('en-IN'),
+          ];
+        });
+        
+        const orderData = [orderHeaders, ...orderRows];
+        const orderSheet = XLSX.utils.aoa_to_sheet(orderData);
+        
+        orderSheet['!cols'] = [
+          { wch: 15 },  // Order ID
+          { wch: 12 },  // Status
+          { wch: 15 },  // Service Type
+          { wch: 18 },  // Amount
+          { wch: 25 },  // Date
+        ];
+        
+        XLSX.utils.book_append_sheet(workbook, orderSheet, 'Recent Orders');
+      }
+      
+      // Sheet 6: Payment Statistics
+      const paymentData = [
+        ['PAYMENT STATISTICS'],
+        [],
+        ['Metric', 'Value'],
+        ['Paid Payments', reportData.paidPayments],
+        ['Pending Payments', reportData.pendingPayments],
+        ['Total Revenue', `₹${reportData.totalRevenue.toLocaleString('en-IN')}`],
+      ];
+      
+      const paymentSheet = XLSX.utils.aoa_to_sheet(paymentData);
+      paymentSheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment Stats');
+      
+      // Generate Excel file
+      const fileName = `super-admin-report-${dateStr}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export Excel file. Please try again.');
+    }
   };
 
   // Calculate chart data for franchise performance

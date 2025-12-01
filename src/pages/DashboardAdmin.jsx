@@ -82,7 +82,7 @@ const Dashboard = () => {
     // Fetch staff data
     const fetchStaffData = async () => {
       try {
-        // Fetch all employees for this cafe
+        // Fetch all employees for this cart
         const employeesRes = await api.get("/employees");
         const totalStaff = employeesRes.data?.length || 0;
 
@@ -113,7 +113,7 @@ const Dashboard = () => {
     // Fetch table data
     const fetchTableData = async () => {
       try {
-        // Fetch all tables for this cafe
+        // Fetch all tables for this cart
         const tablesRes = await api.get("/tables");
         const allTables = tablesRes.data || [];
         const totalTables = allTables.length;

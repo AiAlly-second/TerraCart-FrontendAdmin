@@ -53,15 +53,18 @@ const Sidebar = ({ isOpen, onClose }) => {
   };
 
   // Get franchise name for franchise admin
-  const franchiseName = userRole === 'franchise_admin' ? (user?.name || "Sarva Cafe") : null;
+  const franchiseName = userRole === 'franchise_admin' ? (user?.name || "Sarva Cart") : null;
   const portalTitle = userRole === 'super_admin' ? 'Super Admin' : 
                       userRole === 'franchise_admin' ? 'Franchise Admin' : 
                       'Terra Cart';
 
+  // Check if costing feature is enabled
+  const isCostingEnabled = import.meta.env.VITE_FEATURE_COSTING_ENABLED === 'true';
+
   // Menu items based on role
   const getMenuItems = () => {
     if (userRole === 'super_admin') {
-      return [
+      const items = [
         { path: '/dashboard', icon: '📊', label: 'Dashboard' },
         { path: '/franchises', icon: '🏢', label: 'Franchises' },
         { path: '/default-menu', icon: '🍽️', label: 'Default Menu' },
@@ -69,8 +72,15 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: '/employees', icon: '👤', label: 'Employee Management' },
         { path: '/reports', icon: '📈', label: 'Reports' },
         { path: '/revenue-history', icon: '💰', label: 'Revenue History' },
-        { path: '/settings', icon: '⚙️', label: 'Settings' },
       ];
+      
+      // Add Costing menu if feature is enabled
+      if (isCostingEnabled) {
+        items.push({ path: '/costing', icon: '💰', label: 'Costing', hasSubmenu: true });
+      }
+      
+      items.push({ path: '/settings', icon: '⚙️', label: 'Settings' });
+      return items;
     } else if (userRole === 'franchise_admin') {
       return [
         { path: '/dashboard', icon: '📊', label: 'Dashboard' },
@@ -149,25 +159,91 @@ const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Nav Links */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-        {menuItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/dashboard'}
-            style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
-            className="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5]"
-          >
-            <div className="flex items-center">
-              <span>{item.icon}</span>
-              <span className="ml-3">{item.label}</span>
-            </div>
-            {item.showStats && !menuLoading && menuStats.categories > 0 && (
-              <span className="ml-2 text-xs bg-[#d86d2a] text-white px-2 py-0.5 rounded-full">
-                {menuStats.categories} cat{menuStats.categories !== 1 ? 's' : ''} • {menuStats.items} items
-              </span>
-            )}
-          </NavLink>
-        ))}
+        {menuItems.map((item) => {
+          // Handle Costing submenu
+          if (item.path === '/costing' && item.hasSubmenu) {
+            return (
+              <div key={item.path} className="space-y-1">
+                <NavLink
+                  to={item.path}
+                  style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                  className="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5]"
+                >
+                  <div className="flex items-center">
+                    <span>{item.icon}</span>
+                    <span className="ml-3">{item.label}</span>
+                  </div>
+                </NavLink>
+                {/* Submenu items */}
+                <div className="ml-6 space-y-1">
+                  <NavLink
+                    to="/costing/dashboard"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Dashboard</span>
+                  </NavLink>
+                  <NavLink
+                    to="/costing/investments"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Investments</span>
+                  </NavLink>
+                  <NavLink
+                    to="/costing/expenses"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Daily Expenses</span>
+                  </NavLink>
+                  <NavLink
+                    to="/costing/inventory"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Inventory Costing</span>
+                  </NavLink>
+                  <NavLink
+                    to="/costing/recipes"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Recipe Costing</span>
+                  </NavLink>
+                  <NavLink
+                    to="/costing/reports"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
+                  >
+                    <span className="ml-3">Reports & P&L</span>
+                  </NavLink>
+                </div>
+              </div>
+            );
+          }
+          
+          // Regular menu items
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/dashboard'}
+              style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+              className="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5]"
+            >
+              <div className="flex items-center">
+                <span>{item.icon}</span>
+                <span className="ml-3">{item.label}</span>
+              </div>
+              {item.showStats && !menuLoading && menuStats.categories > 0 && (
+                <span className="ml-2 text-xs bg-[#d86d2a] text-white px-2 py-0.5 rounded-full">
+                  {menuStats.categories} cat{menuStats.categories !== 1 ? 's' : ''} • {menuStats.items} items
+                </span>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Logout Button */}
