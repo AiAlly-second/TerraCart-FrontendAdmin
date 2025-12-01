@@ -41,7 +41,9 @@ const EmployeeManagement = () => {
     name: '',
     dateOfBirth: '',
     mobile: '',
-    employeeRole: 'waiter',
+    email: '', // Add email field for user creation
+    password: '', // Add password field for user creation
+    role: 'waiter', // Use role instead of employeeRole
     franchiseId: '',
     cafeId: '',
     kycVerified: false,
@@ -143,7 +145,9 @@ const EmployeeManagement = () => {
         ...formData,
         dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
         franchiseId: selectedFranchise || undefined,
-        cafeId: selectedCafe || undefined
+        cafeId: selectedCafe || undefined,
+        employeeRole: formData.role, // Map role to employeeRole for Employee model compatibility
+        role: formData.role // Also send role for User creation
       };
 
       if (editingEmployee) {
@@ -176,7 +180,8 @@ const EmployeeManagement = () => {
       name: employee.name || '',
       dateOfBirth: dob,
       mobile: employee.mobile || '',
-      employeeRole: employee.employeeRole || 'waiter',
+      email: employee.email || '', // Get email from employee or linked user
+      role: employee.employeeRole || employee.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
       franchiseId: employee.franchiseId?._id || '',
       cafeId: employee.cafeId?._id || '',
       kycVerified: employee.kycVerified || false,
@@ -208,7 +213,9 @@ const EmployeeManagement = () => {
       name: '',
       dateOfBirth: '',
       mobile: '',
-      employeeRole: 'waiter',
+      email: '',
+      password: '',
+      role: 'waiter',
       franchiseId: '',
       cafeId: '',
       kycVerified: false,
@@ -240,21 +247,12 @@ const EmployeeManagement = () => {
     return franchiseMatch || cafeMatch || employeeMatch;
   });
 
+  // Unified roles for employee creation (matches User model roles)
   const employeeRoles = [
-    { value: 'waiter', label: 'Waiter' },
-    { value: 'chef', label: 'Chef' },
     { value: 'manager', label: 'Manager' },
-    { value: 'cashier', label: 'Cashier' },
-    { value: 'cleaner', label: 'Cleaner' },
-    { value: 'franchise_manager', label: 'Franchise Manager' },
-    { value: 'area_manager', label: 'Area Manager' },
-    { value: 'supervisor', label: 'Supervisor' },
-    { value: 'accountant', label: 'Accountant' },
-    { value: 'hr_manager', label: 'HR Manager' },
-    { value: 'operations_manager', label: 'Operations Manager' },
-    { value: 'quality_auditor', label: 'Quality Auditor' },
-    { value: 'training_coordinator', label: 'Training Coordinator' },
-    { value: 'other', label: 'Other' }
+    { value: 'captain', label: 'Captain' },
+    { value: 'waiter', label: 'Waiter' },
+    { value: 'cook', label: 'Cook' }
   ];
 
   if (loading) {
@@ -347,7 +345,7 @@ const EmployeeManagement = () => {
                               <div className="flex-1">
                                 <div className="font-medium">{employee.name}</div>
                                 <div className="text-sm text-gray-600">
-                                  {employee.employeeRole} • {employee.mobile}
+                                  {employee.employeeRole || employee.role || 'N/A'} • {employee.mobile}
                                 </div>
                               </div>
                               <div className="flex items-center space-x-2">
@@ -415,7 +413,7 @@ const EmployeeManagement = () => {
                                       <div className="flex-1">
                                         <div className="font-medium">{employee.name}</div>
                                         <div className="text-sm text-gray-600">
-                                          {employee.employeeRole} • {employee.mobile}
+                                          {employee.employeeRole || employee.role || 'N/A'} • {employee.mobile}
                                         </div>
                                       </div>
                                       <div className="flex items-center space-x-2">
@@ -535,11 +533,11 @@ const EmployeeManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee Role *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
                   <select
                     required
-                    value={formData.employeeRole}
-                    onChange={(e) => setFormData({ ...formData, employeeRole: e.target.value })}
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {employeeRoles.map(role => (
@@ -547,6 +545,33 @@ const EmployeeManagement = () => {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email {!editingEmployee && '*'}</label>
+                  <input
+                    type="email"
+                    required={!editingEmployee}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="employee@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Required for login access</p>
+                </div>
+                {!editingEmployee && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Min 6 characters"
+                      minLength={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
                   <select

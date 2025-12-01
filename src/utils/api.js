@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const nodeApiBase = import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001';
+// Ensure URL has protocol (http:// or https://)
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001';
+  // If URL doesn't start with http:// or https://, add http://
+  if (envUrl && !envUrl.match(/^https?:\/\//)) {
+    return `http://${envUrl}`;
+  }
+  return envUrl;
+};
+
+const nodeApiBase = getApiUrl();
 
 const api = axios.create({
   baseURL: `${nodeApiBase.replace(/\/$/, '')}/api`
@@ -114,15 +124,38 @@ api.interceptors.response.use(
       }
     } else if (error.response?.status === 401) {
       // Unauthorized - token invalid or expired
-      console.warn('[401 Unauthorized] Token invalid or expired, redirecting to login');
-      // Clear all tokens
-      localStorage.removeItem('superAdminToken');
-      localStorage.removeItem('superAdminUser');
-      localStorage.removeItem('franchiseAdminToken');
-      localStorage.removeItem('franchiseAdminUser');
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminUser');
-      window.location.href = '/login';
+      const errorData = error.response?.data || {};
+      const errorCode = errorData.code;
+
+      console.warn('[401 Unauthorized]', {
+        code: errorCode,
+        message: errorData.message,
+      });
+
+      // Only force logout for clear auth token issues
+      if (
+        errorCode === 'TOKEN_EXPIRED' ||
+        errorCode === 'TOKEN_INVALID' ||
+        errorCode === 'AUTH_ERROR' ||
+        errorCode === 'NO_TOKEN' ||
+        errorCode === 'USER_NOT_FOUND'
+      ) {
+        console.warn('[401 Unauthorized] Clearing tokens and redirecting to login');
+        // Clear all tokens
+        localStorage.removeItem('superAdminToken');
+        localStorage.removeItem('superAdminUser');
+        localStorage.removeItem('franchiseAdminToken');
+        localStorage.removeItem('franchiseAdminUser');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        window.location.href = '/login';
+      } else {
+        // For other 401s, just show an alert and keep the user on the same page
+        const message =
+          errorData.message ||
+          'You are not authorized to perform this action. Please check your permissions or login again.';
+        alert(message);
+      }
     } else if (error.response?.status === 403) {
       // Forbidden - check if it's account deactivation
       const errorData = error.response?.data || {};

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 const Users = () => {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [franchises, setFranchises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,13 +16,52 @@ const Users = () => {
     name: '',
     email: '',
     password: '',
-    role: 'employee',
+    role: 'waiter',
     franchiseId: '',
     cartName: '',
     location: '',
     phone: '',
     address: ''
   });
+
+  // Get allowed roles based on current user's hierarchy
+  const getAllowedRoles = () => {
+    if (!currentUser) return [];
+    
+    const userRole = currentUser.role;
+    
+    if (userRole === 'super_admin') {
+      // Super Admin can create all roles
+      return [
+        { value: 'super_admin', label: 'Super Admin' },
+        { value: 'franchise_admin', label: 'Franchise Admin' },
+        { value: 'cart_admin', label: 'Cart Admin' },
+        { value: 'manager', label: 'Manager' },
+        { value: 'captain', label: 'Captain' },
+        { value: 'waiter', label: 'Waiter' },
+        { value: 'cook', label: 'Cook' }
+      ];
+    } else if (userRole === 'franchise_admin') {
+      // Franchise Admin can create: cart_admin, manager, captain, waiter, cook
+      return [
+        { value: 'cart_admin', label: 'Cart Admin' },
+        { value: 'manager', label: 'Manager' },
+        { value: 'captain', label: 'Captain' },
+        { value: 'waiter', label: 'Waiter' },
+        { value: 'cook', label: 'Cook' }
+      ];
+    } else if (userRole === 'admin' || userRole === 'cart_admin') {
+      // Cart Admin can create: manager, captain, waiter, cook
+      return [
+        { value: 'manager', label: 'Manager' },
+        { value: 'captain', label: 'Captain' },
+        { value: 'waiter', label: 'Waiter' },
+        { value: 'cook', label: 'Cook' }
+      ];
+    }
+    
+    return [];
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -60,7 +101,7 @@ const Users = () => {
     if (user.role === 'franchise_admin') {
       endpoint = `/users/${user._id}/toggle-status`;
       confirmMessage = `Are you sure you want to ${isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE'} this franchise?\n\n${isCurrentlyActive ? '⚠️ All carts under this franchise will also be deactivated.' : '✅ All carts under this franchise will also be activated.'}`;
-    } else if (user.role === 'admin') {
+    } else if (user.role === 'admin' || user.role === 'cart_admin') {
       endpoint = `/users/${user._id}/toggle-cafe-status`;
       confirmMessage = `Are you sure you want to ${isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE'} this cart?`;
     } else {
@@ -107,7 +148,7 @@ const Users = () => {
         alert('User updated successfully');
       } else {
         // Create user
-        if (formData.role === 'admin') {
+        if (formData.role === 'admin' || formData.role === 'cart_admin') {
           // For cart admin, use registerCafeAdmin endpoint with franchiseId
           if (!formData.franchiseId) {
             alert('Please select a franchise for the cart admin');
@@ -191,7 +232,7 @@ const Users = () => {
         }
       }
       // Only close modal if we reach here (not for cart admin creation which handles its own success)
-      if (formData.role !== 'admin') {
+      if (formData.role !== 'admin' && formData.role !== 'cart_admin') {
         setShowModal(false);
         setEditingUser(null);
         setFormData({ name: '', email: '', password: '', role: 'employee', franchiseId: '', cartName: '', location: '', phone: '', address: '' });
@@ -253,6 +294,11 @@ const Users = () => {
     super_admin: 'bg-purple-100 text-purple-800',
     franchise_admin: 'bg-blue-100 text-blue-800',
     admin: 'bg-green-100 text-green-800',
+    cart_admin: 'bg-green-100 text-green-800',
+    manager: 'bg-indigo-100 text-indigo-800',
+    captain: 'bg-teal-100 text-teal-800',
+    waiter: 'bg-yellow-100 text-yellow-800',
+    cook: 'bg-orange-100 text-orange-800',
     employee: 'bg-yellow-100 text-yellow-800',
     customer: 'bg-gray-100 text-gray-800'
   };
@@ -262,6 +308,11 @@ const Users = () => {
       super_admin: 'Super Admin',
       franchise_admin: 'Franchise Admin',
       admin: 'Cart Admin',
+      cart_admin: 'Cart Admin',
+      manager: 'Manager',
+      captain: 'Captain',
+      waiter: 'Waiter',
+      cook: 'Cook',
       employee: 'Employee',
       customer: 'Customer'
     };
@@ -275,7 +326,7 @@ const Users = () => {
     let statusLabel;
     let extraInfo = '';
     
-    if (user.role === 'admin' && user.effectivelyActive !== undefined) {
+    if ((user.role === 'admin' || user.role === 'cart_admin') && user.effectivelyActive !== undefined) {
       isEffectivelyActive = user.effectivelyActive;
       // Check if inactive due to franchise being inactive
       if (!isEffectivelyActive && user.isActive !== false && user.franchiseActive === false) {
@@ -406,8 +457,8 @@ const Users = () => {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex justify-end space-x-2">
-                        {/* Toggle Status Button - Only for franchise_admin and admin roles */}
-                        {(user.role === 'franchise_admin' || user.role === 'admin') && (
+                        {/* Toggle Status Button - Only for franchise_admin and admin/cart_admin roles */}
+                        {(user.role === 'franchise_admin' || user.role === 'admin' || user.role === 'cart_admin') && (
                           <button
                             onClick={() => handleToggleStatus(user)}
                             disabled={togglingStatus === user._id || (user.role === 'admin' && user.franchiseActive === false)}
@@ -506,16 +557,20 @@ const Users = () => {
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value, franchiseId: '', cartName: '', location: '', phone: '', address: '' })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   >
-                    <option value="employee">Employee</option>
-                    <option value="franchise_admin">Franchise Admin</option>
-                    <option value="admin">Cart Admin</option>
+                    <option value="">Select a role</option>
+                    {getAllowedRoles().map((role) => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}
               
               {/* Cart Admin specific fields */}
-              {!editingUser && formData.role === 'admin' && (
+              {!editingUser && (formData.role === 'admin' || formData.role === 'cart_admin') && (
                 <>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -595,7 +650,7 @@ const Users = () => {
                   onClick={() => {
                     setShowModal(false);
                     setEditingUser(null);
-                    setFormData({ name: '', email: '', password: '', role: 'employee', franchiseId: '', cartName: '', location: '', phone: '', address: '' });
+                    setFormData({ name: '', email: '', password: '', role: 'waiter', franchiseId: '', cartName: '', location: '', phone: '', address: '' });
                   }}
                   className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
                 >

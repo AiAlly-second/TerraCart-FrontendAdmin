@@ -3,7 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Allowed roles for unified admin
-const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin'];
+// Include "cart_admin" for backward compatibility with existing admin accounts
+const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin', 'cart_admin'];
 
 const ProtectedRoute = ({ children, allowedRoles = ALLOWED_ROLES }) => {
   const location = useLocation();

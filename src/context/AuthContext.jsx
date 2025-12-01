@@ -3,10 +3,26 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 const AuthContext = createContext();
 
 // API URL from environment variable
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+// Ensure URL has protocol (http:// or https://)
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+  // If URL doesn't start with http:// or https://, add http://
+  if (envUrl && !envUrl.match(/^https?:\/\//)) {
+    const fixedUrl = `http://${envUrl}`;
+    console.warn(`[AuthContext] API URL missing protocol, fixed: ${envUrl} → ${fixedUrl}`);
+    return fixedUrl;
+  }
+  if (import.meta.env.DEV) {
+    console.log(`[AuthContext] Using API URL: ${envUrl}`);
+  }
+  return envUrl;
+};
+
+const nodeApi = getApiUrl();
 
 // Allowed roles for unified admin
-const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin'];
+// Include "cart_admin" for backward compatibility with existing admin accounts
+const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin', 'cart_admin'];
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -20,6 +36,7 @@ export const AuthProvider = ({ children }) => {
       case 'franchise_admin':
         return { token: 'franchiseAdminToken', user: 'franchiseAdminUser' };
       case 'admin':
+      case 'cart_admin':
       default:
         return { token: 'adminToken', user: 'adminUser' };
     }
@@ -114,24 +131,25 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      // Check for deactivation errors
-      if (response.status === 403) {
-        const errorMessage = data?.message || 'Your account has been deactivated. Please contact the TerraCart Support.';
-        alert(errorMessage);
-        logout();
-        window.location.href = '/login';
-        return;
-      }
+    // Check for deactivation or authorization errors
+    if (response.status === 403) {
+      const errorMessage =
+        data?.message ||
+        'Your account has been deactivated or is not authorized. Please contact TerraCart Support.';
+      alert(errorMessage);
+      logout();
+      return;
+    }
 
-      // Verify returns { success, user: { ... } }
-      if (!response.ok || !data?.success || !ALLOWED_ROLES.includes(data?.user?.role)) {
-        throw new Error('Token invalid or not authorized');
-      }
+    // Verify returns { success, user: { ... } }
+    if (!response.ok || !data?.success || !ALLOWED_ROLES.includes(data?.user?.role)) {
+      throw new Error('Token invalid or not authorized');
+    }
 
-      // Update storage with verified user data
-      const storageKeys = getStorageKeys(data.user.role);
-      setUser(data.user);
-      localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
+    // Update storage with verified user data
+    const storageKeys = getStorageKeys(data.user.role);
+    setUser(data.user);
+    localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
     } catch (error) {
       console.error('Token verification failed:', error);
       logout();
