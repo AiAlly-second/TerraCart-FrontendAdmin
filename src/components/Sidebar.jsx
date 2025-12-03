@@ -70,13 +70,13 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: '/default-menu', icon: '🍽️', label: 'Default Menu' },
         { path: '/users', icon: '👥', label: 'Administrative Users' },
         { path: '/employees', icon: '👤', label: 'Employee Management' },
+        { path: '/revenue-history', icon: '📊', label: 'Revenue History' },
         { path: '/reports', icon: '📈', label: 'Reports' },
-        { path: '/revenue-history', icon: '💰', label: 'Revenue History' },
       ];
       
       // Add Costing menu if feature is enabled
       if (isCostingEnabled) {
-        items.push({ path: '/costing', icon: '💰', label: 'Costing', hasSubmenu: true });
+        items.push({ path: '/costing', icon: '💹', label: 'Costing', hasSubmenu: true });
       }
       
       items.push({ path: '/settings', icon: '⚙️', label: 'Settings' });
@@ -86,7 +86,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: '/dashboard', icon: '📊', label: 'Dashboard' },
         { path: '/carts', icon: '🛒', label: 'Cart Management' },
         { path: '/orders', icon: '📦', label: 'Orders' },
-        { path: '/reports', icon: '📈', label: 'Reports' },
+        { path: '/revenue', icon: '💰', label: 'Revenue' },
         { path: '/employees', icon: '👥', label: 'Employees' },
         { path: '/attendance', icon: '⏰', label: 'Attendance' },
         { path: '/default-menu', icon: '🍽️', label: 'Default Menu' },
@@ -210,13 +210,6 @@ const Sidebar = ({ isOpen, onClose }) => {
                     className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
                   >
                     <span className="ml-3">Recipe Costing</span>
-                  </NavLink>
-                  <NavLink
-                    to="/costing/reports"
-                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
-                    className="flex items-center px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5] text-sm"
-                  >
-                    <span className="ml-3">Reports & P&L</span>
                   </NavLink>
                 </div>
               </div>

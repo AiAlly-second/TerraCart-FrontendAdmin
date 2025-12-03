@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaBuilding, FaStore, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 // Minimum age as per Indian Labor Laws (18 years for general employment)
 const MINIMUM_WORKING_AGE = 18;
@@ -25,6 +26,9 @@ const getMaxDOBDate = () => {
 };
 
 const EmployeeManagement = () => {
+  const { user } = useAuth();
+  const userRole = user?.role;
+  const isCartAdmin = userRole === 'admin';
   const [hierarchy, setHierarchy] = useState([]);
   const [orphanEmployees, setOrphanEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,11 +77,13 @@ const EmployeeManagement = () => {
       setHierarchy(hierarchyResponse.data.hierarchy || []);
       setOrphanEmployees(hierarchyResponse.data.orphanEmployees || []);
       
-      // Fetch franchises and cafes for dropdowns
-      const usersResponse = await api.get('/users');
-      const allUsers = usersResponse.data || [];
-      setFranchises(allUsers.filter(u => u.role === 'franchise_admin'));
-      setCafes(allUsers.filter(u => u.role === 'admin'));
+      // Fetch franchises and cafes for dropdowns (only for franchise admin and super admin)
+      if (!isCartAdmin) {
+        const usersResponse = await api.get('/users');
+        const allUsers = usersResponse.data || [];
+        setFranchises(allUsers.filter(u => u.role === 'franchise_admin'));
+        setCafes(allUsers.filter(u => u.role === 'admin'));
+      }
       
       // Expand all by default
       const franchiseIds = hierarchyResponse.data.hierarchy.map(f => f._id);
@@ -166,8 +172,14 @@ const EmployeeManagement = () => {
 
   const handleEdit = (employee) => {
     setEditingEmployee(employee);
-    setSelectedFranchise(employee.franchiseId?._id || '');
-    setSelectedCafe(employee.cafeId?._id || '');
+    // Cart admin cannot see/edit franchise info
+    if (!isCartAdmin) {
+      setSelectedFranchise(employee.franchiseId?._id || '');
+      setSelectedCafe(employee.cafeId?._id || '');
+    } else {
+      // Cart admin: cafeId is automatically their cart
+      setSelectedCafe(user?._id || '');
+    }
     
     // Format date for input
     const dob = employee.dateOfBirth ? new Date(employee.dateOfBirth).toISOString().split('T')[0] : '';
@@ -177,8 +189,8 @@ const EmployeeManagement = () => {
       dateOfBirth: dob,
       mobile: employee.mobile || '',
       employeeRole: employee.employeeRole || 'waiter',
-      franchiseId: employee.franchiseId?._id || '',
-      cafeId: employee.cafeId?._id || '',
+      franchiseId: isCartAdmin ? '' : (employee.franchiseId?._id || ''),
+      cafeId: isCartAdmin ? (user?._id || '') : (employee.cafeId?._id || ''),
       kycVerified: employee.kycVerified || false,
       disability: employee.disability || { hasDisability: false, type: '' },
       deviceIssued: employee.deviceIssued || { smartwatch: false, tracker: false },
@@ -210,7 +222,7 @@ const EmployeeManagement = () => {
       mobile: '',
       employeeRole: 'waiter',
       franchiseId: '',
-      cafeId: '',
+      cafeId: isCartAdmin ? (user?._id || '') : '', // Auto-set for cart admin
       kycVerified: false,
       disability: { hasDisability: false, type: '' },
       deviceIssued: { smartwatch: false, tracker: false },
@@ -218,7 +230,7 @@ const EmployeeManagement = () => {
       isActive: true
     });
     setSelectedFranchise('');
-    setSelectedCafe('');
+    setSelectedCafe(isCartAdmin ? (user?._id || '') : '');
   };
 
   const openCreateModal = () => {
@@ -304,38 +316,60 @@ const EmployeeManagement = () => {
           ) : (
             filteredHierarchy.map((franchise) => (
               <div key={franchise._id} className="border border-gray-200 rounded-lg">
-                {/* Franchise Header */}
-                <div
-                  className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => toggleFranchise(franchise._id)}
-                >
-                  <div className="flex items-center space-x-3">
-                    {expandedFranchises.has(franchise._id) ? (
-                      <FaChevronDown className="text-gray-500" />
-                    ) : (
-                      <FaChevronRight className="text-gray-500" />
-                    )}
-                    <FaBuilding className="text-blue-600" />
-                    <div>
-                      <h3 className="font-semibold text-lg">{franchise.name}</h3>
-                      <p className="text-sm text-gray-500">{franchise.email}</p>
+                {/* Franchise/Cart Header */}
+                {isCartAdmin ? (
+                  // Cart Admin View: Show only cart header (no franchise info)
+                  <div className="flex items-center justify-between p-4 bg-blue-50">
+                    <div className="flex items-center space-x-3">
+                      <FaStore className="text-green-600" />
+                      <div>
+                        <h3 className="font-semibold text-lg">{franchise.name}</h3>
+                        <p className="text-sm text-gray-500">{franchise.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm text-gray-600">
+                        {franchise.cafes?.[0]?.employees?.length || 0} Employees
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs ${franchise.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {franchise.isActive ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <span className="text-sm text-gray-600">
-                      {franchise.cafes?.length || 0} Carts, {franchise.employees?.length || 0} Franchise Employees
-                    </span>
-                    <span className={`px-2 py-1 rounded text-xs ${franchise.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {franchise.isActive ? 'Active' : 'Inactive'}
-                    </span>
+                ) : (
+                  // Franchise Admin / Super Admin View: Show franchise header
+                  <div
+                    className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => toggleFranchise(franchise._id)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      {expandedFranchises.has(franchise._id) ? (
+                        <FaChevronDown className="text-gray-500" />
+                      ) : (
+                        <FaChevronRight className="text-gray-500" />
+                      )}
+                      <FaBuilding className="text-blue-600" />
+                      <div>
+                        <h3 className="font-semibold text-lg">{franchise.name}</h3>
+                        <p className="text-sm text-gray-500">{franchise.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm text-gray-600">
+                        {franchise.cafes?.length || 0} Carts, {franchise.employees?.length || 0} Franchise Employees
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs ${franchise.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {franchise.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Franchise Content */}
-                {expandedFranchises.has(franchise._id) && (
+                {(isCartAdmin || (!isCartAdmin && expandedFranchises.has(franchise._id))) && (
                   <div className="p-4 space-y-4">
-                    {/* Franchise-Level Employees */}
-                    {franchise.employees && franchise.employees.length > 0 && (
+                    {/* Franchise-Level Employees - HIDDEN for cart admin */}
+                    {!isCartAdmin && franchise.employees && franchise.employees.length > 0 && (
                       <div className="ml-4">
                         <h4 className="font-semibold text-gray-700 mb-2">Franchise Employees</h4>
                         <div className="space-y-2">
@@ -372,39 +406,13 @@ const EmployeeManagement = () => {
 
                     {/* Carts */}
                     {franchise.cafes && franchise.cafes.length > 0 && (
-                      <div className="ml-4 space-y-3">
-                        <h4 className="font-semibold text-gray-700 mb-2">Carts</h4>
+                      <div className={isCartAdmin ? "space-y-3" : "ml-4 space-y-3"}>
+                        {!isCartAdmin && <h4 className="font-semibold text-gray-700 mb-2">Carts</h4>}
                         {franchise.cafes.map((cafe) => (
                           <div key={cafe._id} className="border border-gray-200 rounded-lg">
                             {/* Cart Header */}
-                            <div
-                              className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer"
-                              onClick={() => toggleCafe(cafe._id)}
-                            >
-                              <div className="flex items-center space-x-3">
-                                {expandedCafes.has(cafe._id) ? (
-                                  <FaChevronDown className="text-gray-500" />
-                                ) : (
-                                  <FaChevronRight className="text-gray-500" />
-                                )}
-                                <FaStore className="text-green-600" />
-                                <div>
-                                  <h4 className="font-semibold">{cafe.cafeName || cafe.name}</h4>
-                                  <p className="text-sm text-gray-500">{cafe.email}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-4">
-                                <span className="text-sm text-gray-600">
-                                  {cafe.employees?.length || 0} Employees
-                                </span>
-                                <span className={`px-2 py-1 rounded text-xs ${cafe.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                  {cafe.isActive ? 'Active' : 'Inactive'}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Cart Employees */}
-                            {expandedCafes.has(cafe._id) && (
+                            {isCartAdmin ? (
+                              // Cart Admin: Always show employees (no expand/collapse)
                               <div className="p-4 space-y-2">
                                 {cafe.employees && cafe.employees.length > 0 ? (
                                   cafe.employees.map((employee) => (
@@ -440,6 +448,74 @@ const EmployeeManagement = () => {
                                   </div>
                                 )}
                               </div>
+                            ) : (
+                              // Franchise Admin / Super Admin: Show expandable cart
+                              <>
+                                <div
+                                  className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                                  onClick={() => toggleCafe(cafe._id)}
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    {expandedCafes.has(cafe._id) ? (
+                                      <FaChevronDown className="text-gray-500" />
+                                    ) : (
+                                      <FaChevronRight className="text-gray-500" />
+                                    )}
+                                    <FaStore className="text-green-600" />
+                                    <div>
+                                      <h4 className="font-semibold">{cafe.cafeName || cafe.name}</h4>
+                                      <p className="text-sm text-gray-500">{cafe.email}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center space-x-4">
+                                    <span className="text-sm text-gray-600">
+                                      {cafe.employees?.length || 0} Employees
+                                    </span>
+                                    <span className={`px-2 py-1 rounded text-xs ${cafe.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                      {cafe.isActive ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Cart Employees */}
+                                {expandedCafes.has(cafe._id) && (
+                                  <div className="p-4 space-y-2">
+                                    {cafe.employees && cafe.employees.length > 0 ? (
+                                      cafe.employees.map((employee) => (
+                                        <div
+                                          key={employee._id}
+                                          className="flex items-center justify-between p-3 bg-white rounded border border-gray-200"
+                                        >
+                                          <div className="flex-1">
+                                            <div className="font-medium">{employee.name}</div>
+                                            <div className="text-sm text-gray-600">
+                                              {employee.employeeRole} • {employee.mobile}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <button
+                                              onClick={() => handleEdit(employee)}
+                                              className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                                            >
+                                              <FaEdit />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDelete(employee._id)}
+                                              className="p-2 text-red-600 hover:bg-red-50 rounded"
+                                            >
+                                              <FaTrash />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-center py-4 text-gray-500 text-sm">
+                                        No employees in this cart
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         ))}
@@ -547,35 +623,51 @@ const EmployeeManagement = () => {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
-                  <select
-                    value={selectedFranchise}
-                    onChange={(e) => handleFranchiseChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select Franchise</option>
-                    {franchises.map(franchise => (
-                      <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
-                  <select
-                    value={selectedCafe}
-                    onChange={(e) => handleCafeChange(e.target.value)}
-                    disabled={!selectedFranchise}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                  >
-                    <option value="">Select Cart (Optional)</option>
-                    {cafes
-                      .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
-                      .map(cafe => (
-                        <option key={cafe._id} value={cafe._id}>{cafe.cafeName || cafe.name}</option>
-                      ))}
-                  </select>
-                </div>
+                {!isCartAdmin && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
+                      <select
+                        value={selectedFranchise}
+                        onChange={(e) => handleFranchiseChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Franchise</option>
+                        {franchises.map(franchise => (
+                          <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
+                      <select
+                        value={selectedCafe}
+                        onChange={(e) => handleCafeChange(e.target.value)}
+                        disabled={!selectedFranchise}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      >
+                        <option value="">Select Cart (Optional)</option>
+                        {cafes
+                          .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
+                          .map(cafe => (
+                            <option key={cafe._id} value={cafe._id}>{cafe.cafeName || cafe.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+                {isCartAdmin && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
+                    <input
+                      type="text"
+                      value={user?.name || user?.cartName || 'Your Cart'}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Employees will be assigned to your cart automatically</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-4">

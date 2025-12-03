@@ -13,6 +13,20 @@ const DailyExpenses = () => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [bulkImportModal, setBulkImportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('expenses'); // 'expenses' or 'opex'
+  const [opexList, setOpexList] = useState([]);
+  const [opexModalOpen, setOpexModalOpen] = useState(false);
+  const [deleteOpexModal, setDeleteOpexModal] = useState({ isOpen: false, id: null });
+  const [opexFormData, setOpexFormData] = useState({
+    outletId: '',
+    franchiseId: '',
+    costCategory: '',
+    amount: '',
+    periodStartDate: new Date().toISOString().split('T')[0],
+    periodEndDate: new Date().toISOString().split('T')[0],
+    description: '',
+  });
+  const [opexInvoiceFile, setOpexInvoiceFile] = useState(null);
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -33,9 +47,26 @@ const DailyExpenses = () => {
   const [bulkData, setBulkData] = useState([]);
 
   useEffect(() => {
-    fetchExpenses();
-    fetchCategories();
-  }, [filters]);
+    if (activeTab === 'expenses') {
+      fetchExpenses();
+      fetchCategories();
+    } else if (activeTab === 'opex') {
+      fetchOPEX();
+    }
+  }, [filters, activeTab]);
+
+  const fetchOPEX = async () => {
+    try {
+      setLoading(true);
+      const response = await costingApi.getOutletOPEX(filters);
+      setOpexList(response.data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch OPEX:', error);
+      alert('Failed to load OPEX');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchExpenses = async () => {
     try {
@@ -209,33 +240,88 @@ const DailyExpenses = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-[#4a2e1f]">Daily Expenses</h2>
+        <h2 className="text-2xl font-bold text-[#4a2e1f]">Daily Expenses & OPEX</h2>
         <div className="flex gap-3">
-          <button
-            onClick={() => setBulkImportModal(true)}
-            className="px-4 py-2 bg-[#6b4423] text-white rounded-lg hover:bg-[#5a3520] transition-colors"
-          >
-            📥 Bulk Import
-          </button>
-          <button
-            onClick={() => handleOpenModal()}
-            className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
-          >
-            + Add Expense
-          </button>
+          {activeTab === 'expenses' && (
+            <>
+              <button
+                onClick={() => setBulkImportModal(true)}
+                className="px-4 py-2 bg-[#6b4423] text-white rounded-lg hover:bg-[#5a3520] transition-colors"
+              >
+                📥 Bulk Import
+              </button>
+              <button
+                onClick={() => handleOpenModal()}
+                className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
+              >
+                + Add Expense
+              </button>
+            </>
+          )}
+          {activeTab === 'opex' && (
+            <button
+              onClick={() => {
+                setOpexFormData({
+                  outletId: '',
+                  franchiseId: '',
+                  costCategory: '',
+                  amount: '',
+                  periodStartDate: new Date().toISOString().split('T')[0],
+                  periodEndDate: new Date().toISOString().split('T')[0],
+                  description: '',
+                });
+                setOpexInvoiceFile(null);
+                setOpexModalOpen(true);
+              }}
+              className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
+            >
+              + Add OPEX
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('expenses')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'expenses'
+                ? 'border-[#d86d2a] text-[#d86d2a]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Daily Expenses
+          </button>
+          <button
+            onClick={() => setActiveTab('opex')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'opex'
+                ? 'border-[#d86d2a] text-[#d86d2a]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Outlet OPEX
+          </button>
+        </nav>
+      </div>
+
+      {/* Expenses Tab */}
+      {activeTab === 'expenses' && (
+        <div className="space-y-6">
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-md p-4 border border-[#e2c1ac]">
         <h3 className="text-lg font-semibold text-[#4a2e1f] mb-4">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <DateRangePicker
-            startDate={filters.startDate}
-            endDate={filters.endDate}
-            onStartDateChange={(date) => setFilters({ ...filters, startDate: date })}
-            onEndDateChange={(date) => setFilters({ ...filters, endDate: date })}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="md:col-span-2 lg:col-span-2">
+            <DateRangePicker
+              startDate={filters.startDate}
+              endDate={filters.endDate}
+              onStartDateChange={(date) => setFilters({ ...filters, startDate: date })}
+              onEndDateChange={(date) => setFilters({ ...filters, endDate: date })}
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-[#6b4423] mb-1">Category</label>
             <select
@@ -271,7 +357,6 @@ const DailyExpenses = () => {
           </div>
         </div>
       </div>
-
       {/* Expenses Table */}
       <div className="bg-white rounded-lg shadow-md border border-[#e2c1ac] overflow-x-auto">
         <table className="min-w-full">
@@ -530,9 +615,271 @@ const DailyExpenses = () => {
         cancelText="Cancel"
         danger={true}
       />
+        </div>
+      )}
+
+      {/* OPEX Tab */}
+      {activeTab === 'opex' && (
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow-md p-4 border border-[#e2c1ac]">
+            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-4">Filters</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="md:col-span-2 lg:col-span-2">
+                <DateRangePicker
+                  startDate={filters.startDate}
+                  endDate={filters.endDate}
+                  onStartDateChange={(date) => setFilters({ ...filters, startDate: date })}
+                  onEndDateChange={(date) => setFilters({ ...filters, endDate: date })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID</label>
+                <input
+                  type="text"
+                  placeholder="Optional"
+                  value={filters.franchiseId}
+                  onChange={(e) => setFilters({ ...filters, franchiseId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#6b4423] mb-1">Kiosk ID</label>
+                <input
+                  type="text"
+                  placeholder="Optional"
+                  value={filters.kioskId}
+                  onChange={(e) => setFilters({ ...filters, kioskId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                />
+              </div>
+            </div>
+          </div>
+          {/* OPEX Table */}
+          <div className="bg-white rounded-lg shadow-md border border-[#e2c1ac] overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-[#f5e3d5]">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">OPEX ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Period</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Outlet</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {opexList.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                      No OPEX records found
+                    </td>
+                  </tr>
+                ) : (
+                  opexList.map((opex) => (
+                    <tr key={opex._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900">{opex.outletOpexId}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{opex.costCategory}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-[#4a2e1f]">
+                        {formatCurrency(opex.amount)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {new Date(opex.periodStartDate).toLocaleDateString()} - {new Date(opex.periodEndDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {opex.outletId?.cartName || opex.outletId?.name || '—'}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setOpexFormData({
+                                outletId: opex.outletId?._id || '',
+                                franchiseId: opex.franchiseId?._id || '',
+                                costCategory: opex.costCategory,
+                                amount: opex.amount,
+                                periodStartDate: new Date(opex.periodStartDate).toISOString().split('T')[0],
+                                periodEndDate: new Date(opex.periodEndDate).toISOString().split('T')[0],
+                                description: opex.description || '',
+                              });
+                              setOpexInvoiceFile(null);
+                              setOpexModalOpen(true);
+                            }}
+                            className="text-[#d86d2a] hover:text-[#b85a1f]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setDeleteOpexModal({ isOpen: true, id: opex._id })}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* OPEX Create/Edit Modal */}
+          {opexModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">Add Outlet OPEX</h3>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const data = {
+                      ...opexFormData,
+                      amount: parseFloat(opexFormData.amount),
+                      outletId: opexFormData.outletId || null,
+                      franchiseId: opexFormData.franchiseId || null,
+                    };
+                    await costingApi.createOutletOPEX(data, opexInvoiceFile);
+                    setOpexModalOpen(false);
+                    fetchOPEX();
+                    alert('OPEX created successfully!');
+                  } catch (error) {
+                    console.error('Failed to create OPEX:', error);
+                    alert(`Failed to create OPEX: ${error.response?.data?.message || error.message}`);
+                  }
+                }} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Outlet ID *</label>
+                      <input
+                        type="text"
+                        required
+                        value={opexFormData.outletId}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, outletId: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID</label>
+                      <input
+                        type="text"
+                        value={opexFormData.franchiseId}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, franchiseId: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Cost Category *</label>
+                      <select
+                        required
+                        value={opexFormData.costCategory}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, costCategory: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                      >
+                        <option value="">Select Category</option>
+                        {['Salary', 'Electricity', 'Water', 'Gas', 'Cleaning', 'Licensing', 'AMC', 'Rent', 'Insurance', 'Marketing', 'Maintenance', 'Other'].map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Amount *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        min="0"
+                        value={opexFormData.amount}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, amount: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Period Start Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={opexFormData.periodStartDate}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, periodStartDate: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Period End Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={opexFormData.periodEndDate}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, periodEndDate: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Description</label>
+                      <textarea
+                        value={opexFormData.description}
+                        onChange={(e) => setOpexFormData({ ...opexFormData, description: e.target.value })}
+                        rows="3"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <FileUploader
+                        onFileSelect={setOpexInvoiceFile}
+                        currentFile={null}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setOpexModalOpen(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Delete OPEX Confirmation Modal */}
+          <ConfirmModal
+            isOpen={deleteOpexModal.isOpen}
+            onClose={() => setDeleteOpexModal({ isOpen: false, id: null })}
+            onConfirm={async () => {
+              try {
+                await costingApi.deleteOutletOPEX(deleteOpexModal.id);
+                setDeleteOpexModal({ isOpen: false, id: null });
+                fetchOPEX();
+                alert('OPEX deleted successfully!');
+              } catch (error) {
+                console.error('Failed to delete OPEX:', error);
+                alert(`Failed to delete OPEX: ${error.response?.data?.message || error.message}`);
+              }
+            }}
+            title="Delete OPEX"
+            message="Are you sure you want to delete this OPEX record? This action cannot be undone."
+            confirmText="Delete"
+            cancelText="Cancel"
+            danger={true}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
 export default DailyExpenses;
+
+
+
 

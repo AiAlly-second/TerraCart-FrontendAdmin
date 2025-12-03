@@ -70,3 +70,7 @@ const FileUploader = ({ onFileSelect, accept = '.pdf,.jpg,.jpeg,.png', maxSizeMB
 
 export default FileUploader;
 
+
+
+
+

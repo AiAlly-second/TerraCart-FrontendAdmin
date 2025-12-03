@@ -43,11 +43,12 @@ const Dashboard = () => {
       return sum + orderTotal;
     }, 0);
     
+    const safeTotalRevenue = Number(totalRevenue || 0);
     setStats((prev) => ({
       ...prev,
       revenue: { 
         ...prev.revenue, 
-        value: `₹${totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        value: `₹${safeTotalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         loading: false
       },
       orders: {
