@@ -142,6 +142,114 @@ export const costingApi = {
     return api.get(`${BASE_PATH}/inventory/transactions`, { params });
   },
 
+  // Ingredient Purchases
+  getIngredientPurchases: (params = {}) => {
+    return api.get(`${BASE_PATH}/ingredient-purchases`, { params });
+  },
+  createIngredientPurchase: (data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.post(`${BASE_PATH}/ingredient-purchases`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  updateIngredientPurchase: (id, data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.put(`${BASE_PATH}/ingredient-purchases/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteIngredientPurchase: (id) => {
+    return api.delete(`${BASE_PATH}/ingredient-purchases/${id}`);
+  },
+
+  // Outlet OPEX
+  getOutletOPEX: (params = {}) => {
+    return api.get(`${BASE_PATH}/outlet-opex`, { params });
+  },
+  createOutletOPEX: (data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.post(`${BASE_PATH}/outlet-opex`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  updateOutletOPEX: (id, data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.put(`${BASE_PATH}/outlet-opex/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteOutletOPEX: (id) => {
+    return api.delete(`${BASE_PATH}/outlet-opex/${id}`);
+  },
+
+  // Outlet Assets
+  getOutletAssets: (params = {}) => {
+    return api.get(`${BASE_PATH}/outlet-assets`, { params });
+  },
+  createOutletAsset: (data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.post(`${BASE_PATH}/outlet-assets`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  updateOutletAsset: (id, data, invoiceFile = null) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (invoiceFile) {
+      formData.append('invoice', invoiceFile);
+    }
+    return api.put(`${BASE_PATH}/outlet-assets/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteOutletAsset: (id) => {
+    return api.delete(`${BASE_PATH}/outlet-assets/${id}`);
+  },
+
   // Reports
   getPnLReport: (params = {}) => {
     return api.get(`${BASE_PATH}/reports/pnl`, { params, responseType: params.format === 'csv' ? 'blob' : 'json' });
@@ -149,7 +257,16 @@ export const costingApi = {
   getROIReport: (params = {}) => {
     return api.get(`${BASE_PATH}/reports/roi`, { params });
   },
+  getProfitabilityReport: (params = {}) => {
+    return api.get(`${BASE_PATH}/reports/profitability`, { params });
+  },
+  getCostPerDishReport: (params = {}) => {
+    return api.get(`${BASE_PATH}/reports/cost-per-dish`, { params });
+  },
 };
 
 export default costingApi;
+
+
+
 

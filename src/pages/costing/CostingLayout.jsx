@@ -13,7 +13,6 @@ const CostingLayout = () => {
     { path: '/costing/expenses', label: 'Daily Expenses' },
     { path: '/costing/inventory', label: 'Inventory Costing' },
     { path: '/costing/recipes', label: 'Recipe Costing' },
-    { path: '/costing/reports', label: 'Reports & P&L' },
   ];
 
   return (
@@ -43,4 +42,7 @@ const CostingLayout = () => {
 };
 
 export default CostingLayout;
+
+
+
 

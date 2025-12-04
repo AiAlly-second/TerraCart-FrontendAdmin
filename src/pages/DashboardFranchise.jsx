@@ -495,7 +495,7 @@ const Dashboard = () => {
                     <span className="font-medium text-[#4a2e1f]">{cart.cartName}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center mt-3">
+        <div className="grid grid-cols-3 gap-2 text-center mt-3">
                   <div className="bg-white rounded p-2">
                     <p className="text-xs text-[#6b4423]">Today</p>
                     <p className="text-lg font-bold text-[#4a2e1f]">{cart.todayOrders}</p>
@@ -506,7 +506,9 @@ const Dashboard = () => {
                   </div>
                   <div className="bg-white rounded p-2">
                     <p className="text-xs text-[#6b4423]">Revenue</p>
-                    <p className="text-sm font-bold text-green-600">₹{cart.revenue.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-green-600">
+                      ₹{Number(cart.revenue || 0).toLocaleString()}
+                    </p>
                   </div>
                 </div>
               </div>

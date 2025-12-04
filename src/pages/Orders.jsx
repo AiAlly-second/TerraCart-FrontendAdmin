@@ -12,6 +12,7 @@ import {
   canReturn,
 } from "../domain/orderLogic";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 // Use Vite environment variable if available, fallback to localhost:5001
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
@@ -439,9 +440,12 @@ const downloadOrderInvoice = async (order) => {
 const Orders = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const filterCafeId = searchParams.get("cafeId");
   const [orders, setOrders] = useState([]);
   const [cafeInfo, setCafeInfo] = useState(null);
+  const [carts, setCarts] = useState([]); // For franchise admin: list of carts
+  const [expandedCarts, setExpandedCarts] = useState({}); // Track expanded cart sections
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [searchOrderId, setSearchOrderId] = useState("");
@@ -559,6 +563,210 @@ const Orders = () => {
     }
   };
 
+  const tryAccept = (order) => {
+    if (canAccept(order.status)) {
+      changeStatus(order._id, nextStatusOnAccept);
+    }
+  };
+
+  // Render order row (reusable for both grouped and flat views)
+  const renderOrderRow = (order) => (
+    <React.Fragment key={order._id}>
+      <tr className={`hover:bg-gray-50 ${order.status === 'Pending' ? 'bg-orange-50' : ''}`}>
+        <td className="px-6 py-4 text-sm">
+          <button onClick={() => toggleExpand(order._id)} className="flex items-center gap-2">
+            <span className="font-mono text-xs text-gray-500">{buildInvoiceId(order)}</span>
+            <span className="text-gray-900 font-medium">{new Date(order.createdAt).toLocaleTimeString()}</span>
+          </button>
+          {expanded[order._id] && (
+            <div className="mt-2 text-xs text-gray-600 space-y-1">
+              <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
+              <div>
+                Invoice:{" "}
+                <span className="font-mono">{buildInvoiceId(order)}</span>
+              </div>
+              <div>
+                Service Type:{" "}
+                <span className="font-semibold text-gray-700">
+                  {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
+                </span>
+              </div>
+            </div>
+          )}
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🪑</span>
+            <span className="text-lg font-semibold text-gray-700">{order.tableNumber || 'N/A'}</span>
+          </div>
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex flex-col gap-2">
+            <span className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${getStatusClass(order.status)}`}>
+              {getStatusIcon(order.status)} {order.status}
+            </span>
+            {/* Sequential flow - show only next step + cancel option */}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {(() => {
+                const nextStatus = getNextStatus(order.status);
+                const buttons = [];
+                
+                // Show Accept button for Confirmed orders
+                if (canAccept(order.status)) {
+                  buttons.push(
+                    <button
+                      key="accept"
+                      onClick={() => tryAccept(order)}
+                      className="px-3 py-1 text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
+                    >
+                      ✅ Accept (Preparing)
+                    </button>
+                  );
+                }
+                
+                // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
+                if (nextStatus && !canAccept(order.status)) {
+                  buttons.push(
+                    <button
+                      key="next"
+                      onClick={() => changeStatus(order._id, nextStatus)}
+                      className="px-3 py-1 text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
+                    >
+                      {nextStatus}
+                    </button>
+                  );
+                }
+                
+                if (canReturn(order.status)) {
+                  buttons.push(
+                    <button
+                      key="return"
+                      onClick={() => changeStatus(order._id, 'Returned')}
+                      className="px-3 py-1 text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
+                    >
+                      ↩️ Return Order
+                    </button>
+                  );
+                } else if (canCancel(order.status)) {
+                  buttons.push(
+                    <button
+                      key="cancel"
+                      onClick={() => changeStatus(order._id, 'Cancelled')}
+                      className="px-3 py-1 text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
+                    >
+                      ❌ Cancel
+                    </button>
+                  );
+                }
+                
+                return buttons;
+              })()}
+            </div>
+          </div>
+        </td>
+        <td className="px-6 py-4 text-sm">
+          <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => handleEdit(order)}
+            className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
+          >
+            ✏️ Edit
+          </button>
+          <button 
+            onClick={() => handleDelete(order._id)}
+            className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+          >
+            🗑️ Delete
+          </button>
+            <button
+              onClick={() => printOrderInvoice(order)}
+              disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
+              className={`px-3 py-1 rounded-md border ${
+                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                  ? "text-gray-700 border-gray-200 hover:bg-gray-100"
+                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                  ? "Print invoice"
+                  : "Invoice available after order is confirmed"
+              }
+            >
+              🖨️ Print
+            </button>
+            <button
+              onClick={() => downloadOrderInvoice(order)}
+              disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
+              className={`px-3 py-1 rounded-md border ${
+                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                  ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
+                  ? "Download invoice PDF"
+                  : "Invoice available after order is confirmed"
+              }
+            >
+              ⬇️ PDF
+            </button>
+            <button
+              onClick={() => {
+                // Navigate to feedback page with order ID to filter feedback for this order
+                navigate(`/feedback?orderId=${order._id}`);
+              }}
+              disabled={(order.status || "").toLowerCase() !== "paid"}
+              className={`px-3 py-1 rounded-md border ${
+                (order.status || "").toLowerCase() === "paid"
+                  ? "text-green-700 border-green-200 hover:bg-green-50"
+                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                (order.status || "").toLowerCase() === "paid"
+                  ? "View feedback for this order"
+                  : "Feedback available after payment"
+              }
+            >
+              💬 Feedback
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      {expanded[order._id] && (
+        <tr className="bg-gray-50">
+          <td colSpan="4" className="px-6 py-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Array.isArray(order.kotLines) && order.kotLines.map((kot, idx) => (
+                  <div key={idx} className="bg-white p-4 rounded-lg border shadow-sm">
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="text-lg font-semibold text-gray-800">KOT #{idx + 1}</div>
+                      <div className="text-lg font-bold text-green-600">₹{(kot.totalAmount || kot.total || 0).toString()}</div>
+                    </div>
+                    <div className="space-y-2">
+                      {(kot.items || []).map((item, i) => (
+                        <div key={i} className="flex justify-between items-center py-1 border-b">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-bold">
+                              {item.quantity}x
+                            </span>
+                            <span className="text-gray-800">{item.name}</span>
+                          </div>
+                          <span className="text-gray-600">₹{((item.price||0)/100 * (item.quantity||1)).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+
   useEffect(() => {
     const fetchData = async () => {
       if (filterCafeId) {
@@ -568,6 +776,25 @@ const Orders = () => {
           setCafeInfo(cafeRes.data);
         } catch (err) {
           console.error("Failed to fetch cart info:", err);
+        }
+      }
+      
+      // For franchise admin without filter: fetch all carts
+      if (user?.role === 'franchise_admin' && !filterCafeId) {
+        try {
+          const usersRes = await api.get("/users");
+          const allUsers = usersRes.data || [];
+          // Filter admin users (carts) that belong to this franchise
+          const franchiseCarts = allUsers.filter((u) => {
+            return u.role === "admin" && 
+                   u.franchiseId && 
+                   (u.franchiseId._id?.toString() === user._id?.toString() || 
+                    u.franchiseId.toString() === user._id?.toString());
+          });
+          setCarts(franchiseCarts);
+          console.log(`[Orders] Found ${franchiseCarts.length} carts for franchise admin`);
+        } catch (err) {
+          console.error("Failed to fetch carts:", err);
         }
       }
       
@@ -584,7 +811,7 @@ const Orders = () => {
         // If cartId filter is provided, filter by specific cart
         if (filterCafeId) {
           dineInOrders = dineInOrders.filter((order) => {
-            let orderCafeId = order.cafeId;
+            let orderCafeId = order.cafeId || order.cartId;
             if (orderCafeId && typeof orderCafeId === 'object') {
               orderCafeId = orderCafeId._id || orderCafeId;
             }
@@ -651,7 +878,7 @@ const Orders = () => {
       socket.off("orderUpdated");
       socket.off("orderDeleted");
     };
-  }, [upsertOrder, filterCafeId]);
+  }, [upsertOrder, filterCafeId, user]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -865,6 +1092,48 @@ const Orders = () => {
   const addNewItemRow = () => setNewItems((prev) => [...prev, { name: "", quantity: 1, price: 0 }]);
   const removeNewItemRow = (idx) => setNewItems((prev) => prev.filter((_, i) => i !== idx));
 
+  // Group orders by cart for franchise admin
+  const ordersByCart = useMemo(() => {
+    if (user?.role !== 'franchise_admin' || filterCafeId) {
+      return null; // Don't group if not franchise admin or if filtering by specific cart
+    }
+    
+    const grouped = {};
+    carts.forEach(cart => {
+      const cartId = cart._id?.toString() || cart._id;
+      grouped[cartId] = {
+        cart,
+        orders: []
+      };
+    });
+    
+    orders.forEach(order => {
+      let orderCartId = order.cafeId || order.cartId;
+      if (orderCartId && typeof orderCartId === 'object') {
+        orderCartId = orderCartId._id || orderCartId;
+      }
+      if (!orderCartId && order.table && order.table.cafeId) {
+        orderCartId = order.table.cafeId;
+        if (typeof orderCartId === 'object') {
+          orderCartId = orderCartId._id || orderCartId;
+        }
+      }
+      
+      const cartIdStr = orderCartId?.toString();
+      if (cartIdStr && grouped[cartIdStr]) {
+        grouped[cartIdStr].orders.push(order);
+      } else if (cartIdStr) {
+        // Cart not in our list, create entry
+        grouped[cartIdStr] = {
+          cart: { _id: cartIdStr, name: 'Unknown Cart', cartName: 'Unknown Cart' },
+          orders: [order]
+        };
+      }
+    });
+    
+    return grouped;
+  }, [orders, carts, user, filterCafeId]);
+
   const filteredOrders = (() => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
     const normalizedTable = searchTable.trim().toLowerCase();
@@ -888,6 +1157,32 @@ const Orders = () => {
     if (filterStatus === 'all') return matches;
     return matches.filter((o) => o.status === filterStatus);
   })();
+
+  // Filter orders by cart for grouped view
+  const getFilteredOrdersForCart = (cartOrders) => {
+    const normalizedOrder = searchOrderId.trim().toLowerCase();
+    const normalizedTable = searchTable.trim().toLowerCase();
+    const normalizedInvoice = searchInvoice.trim().toLowerCase();
+
+    const matches = cartOrders.filter((order) => {
+      const orderIdMatch = !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
+      const tableMatch =
+        !normalizedTable ||
+        (order.tableNumber !== undefined &&
+          order.tableNumber !== null &&
+          String(order.tableNumber).toLowerCase().includes(normalizedTable));
+      const invoiceId = buildInvoiceId(order).toLowerCase();
+      const invoiceMatch = !normalizedInvoice || invoiceId.includes(normalizedInvoice);
+      return orderIdMatch && tableMatch && invoiceMatch;
+    });
+
+    if (filterStatus === 'all') return matches;
+    return matches.filter((o) => o.status === filterStatus);
+  };
+
+  const toggleCartExpand = (cartId) => {
+    setExpandedCarts((prev) => ({ ...prev, [cartId]: !prev[cartId] }));
+  };
 
   const loadMenu = useCallback(async () => {
     try {
@@ -1065,12 +1360,6 @@ const Orders = () => {
     setCreateError("");
   }, []);
 
-  const tryAccept = (order) => {
-    if (canAccept(order.status)) {
-      changeStatus(order._id, nextStatusOnAccept);
-    }
-  };
-
   return (
     <div>
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
@@ -1178,221 +1467,100 @@ const Orders = () => {
       </div>
 
       <div className="overflow-x-auto bg-white rounded-lg shadow-md">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Details</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredOrders.length === 0 && (
-              <tr>
-                <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
-                  No orders found.
-                </td>
-              </tr>
-            )}
-            {filteredOrders.map((order) => (
-              <React.Fragment key={order._id}>
-                <tr className={`hover:bg-gray-50 ${order.status === 'Pending' ? 'bg-orange-50' : ''}`}>
-                  <td className="px-6 py-4 text-sm">
-                    <button onClick={() => toggleExpand(order._id)} className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-gray-500">{buildInvoiceId(order)}</span>
-                      <span className="text-gray-900 font-medium">{new Date(order.createdAt).toLocaleTimeString()}</span>
-                    </button>
-                    {expanded[order._id] && (
-                      <div className="mt-2 text-xs text-gray-600 space-y-1">
-                        <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
-                        <div>
-                          Invoice:{" "}
-                          <span className="font-mono">{buildInvoiceId(order)}</span>
-                        </div>
-                        <div>
-                          Service Type:{" "}
-                          <span className="font-semibold text-gray-700">
-                            {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
+        {user?.role === 'franchise_admin' && !filterCafeId && ordersByCart ? (
+          // Grouped view by cart for franchise admin
+          <div className="divide-y divide-gray-200">
+            {Object.entries(ordersByCart)
+              .filter(([cartId, { orders: cartOrders }]) => {
+                const filtered = getFilteredOrdersForCart(cartOrders);
+                return filtered.length > 0;
+              })
+              .map(([cartId, { cart, orders: cartOrders }]) => {
+                const filteredCartOrders = getFilteredOrdersForCart(cartOrders);
+                const cartName = cart.cartName || cart.name || cart.cafeName || 'Unknown Cart';
+                const cartCode = cart.cartCode || '';
+                const isExpanded = expandedCarts[cartId] !== false; // Default to expanded
+                
+                return (
+                  <div key={cartId} className="border-b border-gray-300">
+                    {/* Cart Header */}
+                    <div 
+                      className="bg-gray-100 hover:bg-gray-200 cursor-pointer px-6 py-4 flex items-center justify-between"
+                      onClick={() => toggleCartExpand(cartId)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{isExpanded ? '▼' : '▶'}</span>
+                        {cartCode && (
+                          <span className="px-2 py-1 text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded">
+                            {cartCode}
                           </span>
-                        </div>
+                        )}
+                        <h3 className="text-lg font-bold text-gray-800">{cartName}</h3>
+                        <span className="text-sm text-gray-600">({filteredCartOrders.length} orders)</span>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">🪑</span>
-                      <span className="text-lg font-semibold text-gray-700">{order.tableNumber || 'N/A'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-2">
-                      <span className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${getStatusClass(order.status)}`}>
-                        {getStatusIcon(order.status)} {order.status}
-                      </span>
-                      {/* Sequential flow - show only next step + cancel option */}
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {(() => {
-                          const nextStatus = getNextStatus(order.status);
-                          const buttons = [];
-                          
-                          // Show Accept button for Confirmed orders
-                          if (canAccept(order.status)) {
-                            buttons.push(
-                              <button
-                                key="accept"
-                                onClick={() => tryAccept(order)}
-                                className="px-3 py-1 text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
-                              >
-                                ✅ Accept (Preparing)
-                              </button>
-                            );
-                          }
-                          
-                          // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
-                          if (nextStatus && !canAccept(order.status)) {
-                            buttons.push(
-                              <button
-                                key="next"
-                                onClick={() => changeStatus(order._id, nextStatus)}
-                                className="px-3 py-1 text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
-                              >
-                                {nextStatus}
-                              </button>
-                            );
-                          }
-                          
-                          if (canReturn(order.status)) {
-                            buttons.push(
-                              <button
-                                key="return"
-                                onClick={() => changeStatus(order._id, 'Returned')}
-                                className="px-3 py-1 text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
-                              >
-                                ↩️ Return Order
-                              </button>
-                            );
-                          } else if (canCancel(order.status)) {
-                            buttons.push(
-                              <button
-                                key="cancel"
-                                onClick={() => changeStatus(order._id, 'Cancelled')}
-                                className="px-3 py-1 text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
-                              >
-                                ❌ Cancel
-                              </button>
-                            );
-                          }
-                          
-                          return buttons;
-                        })()}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="flex flex-wrap gap-2">
-                    <button 
-                      onClick={() => handleEdit(order)}
-                      className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(order._id)}
-                      className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
-                    >
-                      🗑️ Delete
-                    </button>
                       <button
-                        onClick={() => printOrderInvoice(order)}
-                        disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-                        className={`px-3 py-1 rounded-md border ${
-                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                            ? "text-gray-700 border-gray-200 hover:bg-gray-100"
-                            : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                        }`}
-                        title={
-                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                            ? "Print invoice"
-                            : "Invoice available after order is confirmed"
-                        }
-                      >
-                        🖨️ Print
-                      </button>
-                      <button
-                        onClick={() => downloadOrderInvoice(order)}
-                        disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-                        className={`px-3 py-1 rounded-md border ${
-                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                            ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                            : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                        }`}
-                        title={
-                          ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                            ? "Download invoice PDF"
-                            : "Invoice available after order is confirmed"
-                        }
-                      >
-                        ⬇️ PDF
-                      </button>
-                      <button
-                        onClick={() => {
-                          // Navigate to feedback page with order ID to filter feedback for this order
-                          navigate(`/feedback?orderId=${order._id}`);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/orders?cafeId=${cartId}`);
                         }}
-                        disabled={(order.status || "").toLowerCase() !== "paid"}
-                        className={`px-3 py-1 rounded-md border ${
-                          (order.status || "").toLowerCase() === "paid"
-                            ? "text-green-700 border-green-200 hover:bg-green-50"
-                            : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                        }`}
-                        title={
-                          (order.status || "").toLowerCase() === "paid"
-                            ? "View feedback for this order"
-                            : "Feedback available after payment"
-                        }
+                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
                       >
-                        💬 Feedback
+                        View All
                       </button>
                     </div>
+                    
+                    {/* Orders for this cart */}
+                    {isExpanded && (
+                      <table className="min-w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Details</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {filteredCartOrders.map((order) => (
+                            <React.Fragment key={order._id}>
+                              {renderOrderRow(order)}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                );
+              })}
+            {Object.keys(ordersByCart).length === 0 && (
+              <div className="px-6 py-8 text-center text-gray-500">
+                No orders found for any cart.
+              </div>
+            )}
+          </div>
+        ) : (
+          // Regular flat view
+          <table className="min-w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Details</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                    No orders found.
                   </td>
                 </tr>
-
-                {expanded[order._id] && (
-                  <tr className="bg-gray-50">
-                    <td colSpan="4" className="px-6 py-4">
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Array.isArray(order.kotLines) && order.kotLines.map((kot, idx) => (
-                            <div key={idx} className="bg-white p-4 rounded-lg border shadow-sm">
-                              <div className="flex justify-between items-center mb-2">
-                                <div className="text-lg font-semibold text-gray-800">KOT #{idx + 1}</div>
-                                <div className="text-lg font-bold text-green-600">₹{(kot.totalAmount || kot.total || 0).toString()}</div>
-                              </div>
-                              <div className="space-y-2">
-                                {(kot.items || []).map((item, i) => (
-                                  <div key={i} className="flex justify-between items-center py-1 border-b">
-                                    <div className="flex items-center gap-2">
-                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-bold">
-                                        {item.quantity}x
-                                      </span>
-                                      <span className="text-gray-800">{item.name}</span>
-                                    </div>
-                                    <span className="text-gray-600">₹{((item.price||0)/100 * (item.quantity||1)).toFixed(2)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+              )}
+              {filteredOrders.map((order) => renderOrderRow(order))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {isModalOpen && (

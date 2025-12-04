@@ -44,6 +44,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Suppress password change alerts on mount
+  useEffect(() => {
+    // Suppress any password change related browser alerts
+    if (typeof window !== 'undefined' && window.alert) {
+      const originalAlert = window.alert;
+      window.alert = function(message) {
+        // Suppress password change related alerts
+        if (message && typeof message === 'string' && 
+            (message.toLowerCase().includes('change your password') || 
+             message.toLowerCase().includes('change password') ||
+             message.toLowerCase().includes('password change'))) {
+          console.log('[AuthContext] Suppressed password change alert:', message);
+          return;
+        }
+        // Allow other alerts
+        return originalAlert.call(window, message);
+      };
+    }
+  }, []);
+
   // Load user from localStorage on mount - check all possible storage keys
   useEffect(() => {
     // Prevent multiple initializations

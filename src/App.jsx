@@ -30,13 +30,14 @@ import Carts from './pages/Carts';
 import CartDetails from './pages/CartDetails';
 import RegisterCart from './pages/RegisterCart';
 import EditCart from './pages/EditCart';
-import Reports from './pages/Reports';
+import Revenue from './pages/Revenue';
 import DefaultMenu from './pages/DefaultMenu';
 
 // Super Admin pages
 import Franchises from './pages/Franchises';
 import Users from './pages/Users';
 import RevenueHistory from './pages/RevenueHistory';
+import Reports from './pages/Reports';
 
 // Costing pages
 import CostingLayout from './pages/costing/CostingLayout';
@@ -45,7 +46,6 @@ import Investments from './pages/costing/Investments';
 import DailyExpenses from './pages/costing/DailyExpenses';
 import InventoryCosting from './pages/costing/InventoryCosting';
 import RecipeCosting from './pages/costing/RecipeCosting';
-import CostingReports from './pages/costing/Reports';
 
 function App() {
   const location = useLocation();
@@ -238,9 +238,17 @@ function App() {
               }
             />
             <Route
+              path="/revenue"
+              element={
+                <ProtectedRoute allowedRoles={['franchise_admin']}>
+                  <Revenue />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={['franchise_admin', 'super_admin']}>
+                <ProtectedRoute allowedRoles={['super_admin']}>
                   <Reports />
                 </ProtectedRoute>
               }
@@ -292,7 +300,6 @@ function App() {
                       <Route path="expenses" element={<DailyExpenses />} />
                       <Route path="inventory" element={<InventoryCosting />} />
                       <Route path="recipes" element={<RecipeCosting />} />
-                      <Route path="reports" element={<CostingReports />} />
                       <Route index element={<Navigate to="/costing/dashboard" replace />} />
                     </Route>
                   </Routes>

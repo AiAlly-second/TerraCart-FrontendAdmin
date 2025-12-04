@@ -2,12 +2,28 @@ import React, { useState, useEffect } from 'react';
 import costingApi from '../../services/costingApi';
 import ConfirmModal from '../../components/costing/ConfirmModal';
 import DateRangePicker from '../../components/costing/DateRangePicker';
+import FileUploader from '../../components/costing/FileUploader';
 
 const InventoryCosting = () => {
   const [ingredients, setIngredients] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('ingredients'); // 'ingredients' or 'transactions'
+  const [activeTab, setActiveTab] = useState('ingredients'); // 'ingredients', 'transactions', or 'purchases'
+  const [purchases, setPurchases] = useState([]);
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
+  const [deletePurchaseModal, setDeletePurchaseModal] = useState({ isOpen: false, id: null });
+  const [purchaseFormData, setPurchaseFormData] = useState({
+    outletId: '',
+    franchiseId: '',
+    ingredientId: '',
+    qtyPurchased: '',
+    unit: 'kg',
+    totalCost: '',
+    purchaseDate: new Date().toISOString().split('T')[0],
+    vendor: '',
+    remarks: '',
+  });
+  const [purchaseInvoiceFile, setPurchaseInvoiceFile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState(null);
@@ -35,10 +51,25 @@ const InventoryCosting = () => {
   useEffect(() => {
     if (activeTab === 'ingredients') {
       fetchIngredients();
-    } else {
+    } else if (activeTab === 'transactions') {
       fetchTransactions();
+    } else if (activeTab === 'purchases') {
+      fetchPurchases();
     }
   }, [activeTab, filters]);
+
+  const fetchPurchases = async () => {
+    try {
+      setLoading(true);
+      const response = await costingApi.getIngredientPurchases(filters);
+      setPurchases(response.data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch purchases:', error);
+      alert('Failed to load purchases');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchIngredients = async () => {
     try {
@@ -165,7 +196,7 @@ const InventoryCosting = () => {
     return `₹${(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const units = ['kg', 'g', 'l', 'ml', 'pcs'];
+  const units = ['kg', 'g', 'l', 'ml', 'pcs', 'pack', 'box', 'bottle', 'dozen'];
   const changeTypes = [
     { value: 'purchase', label: 'Purchase' },
     { value: 'adjustment', label: 'Adjustment' },
@@ -203,6 +234,28 @@ const InventoryCosting = () => {
               + Record Adjustment
             </button>
           )}
+          {activeTab === 'purchases' && (
+            <button
+              onClick={() => {
+                setPurchaseFormData({
+                  outletId: '',
+                  franchiseId: '',
+                  ingredientId: '',
+                  qtyPurchased: '',
+                  unit: 'kg',
+                  totalCost: '',
+                  purchaseDate: new Date().toISOString().split('T')[0],
+                  vendor: '',
+                  remarks: '',
+                });
+                setPurchaseInvoiceFile(null);
+                setPurchaseModalOpen(true);
+              }}
+              className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
+            >
+              + Add Purchase
+            </button>
+          )}
         </div>
       </div>
 
@@ -228,6 +281,16 @@ const InventoryCosting = () => {
             }`}
           >
             Transactions
+          </button>
+          <button
+            onClick={() => setActiveTab('purchases')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'purchases'
+                ? 'border-[#d86d2a] text-[#d86d2a]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Ingredient Purchases
           </button>
         </nav>
       </div>
@@ -557,6 +620,291 @@ const InventoryCosting = () => {
         </div>
       )}
 
+      {/* Purchases Tab */}
+      {activeTab === 'purchases' && (
+        <>
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow-md p-4 border border-[#e2c1ac]">
+            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-4">Filters</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <DateRangePicker
+                startDate={filters.startDate}
+                endDate={filters.endDate}
+                onStartDateChange={(date) => setFilters({ ...filters, startDate: date })}
+                onEndDateChange={(date) => setFilters({ ...filters, endDate: date })}
+              />
+              <div>
+                <label className="block text-sm font-medium text-[#6b4423] mb-1">Ingredient</label>
+                <select
+                  value={filters.ingredientId}
+                  onChange={(e) => setFilters({ ...filters, ingredientId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                >
+                  <option value="">All Ingredients</option>
+                  {ingredients.map(ing => (
+                    <option key={ing._id} value={ing._id}>{ing.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Purchases Table */}
+          <div className="bg-white rounded-lg shadow-md border border-[#e2c1ac] overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-[#f5e3d5]">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Purchase ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Ingredient</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Quantity</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Unit Cost</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Total Cost</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Vendor</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {purchases.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                      No purchases found
+                    </td>
+                  </tr>
+                ) : (
+                  purchases.map((purchase) => (
+                    <tr key={purchase._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900">{purchase.purchaseId}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {new Date(purchase.purchaseDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {purchase.ingredientId?.name || '—'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {purchase.qtyPurchased} {purchase.unit}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-[#4a2e1f]">
+                        {formatCurrency(purchase.unitCost || 0)}/{purchase.unit}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-[#4a2e1f]">
+                        {formatCurrency(purchase.totalCost)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{purchase.vendor || '—'}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setPurchaseFormData({
+                                outletId: purchase.outletId?._id || '',
+                                franchiseId: purchase.franchiseId?._id || '',
+                                ingredientId: purchase.ingredientId?._id || '',
+                                qtyPurchased: purchase.qtyPurchased,
+                                unit: purchase.unit,
+                                totalCost: purchase.totalCost,
+                                purchaseDate: new Date(purchase.purchaseDate).toISOString().split('T')[0],
+                                vendor: purchase.vendor || '',
+                                remarks: purchase.remarks || '',
+                              });
+                              setPurchaseInvoiceFile(null);
+                              setPurchaseModalOpen(true);
+                            }}
+                            className="text-[#d86d2a] hover:text-[#b85a1f]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setDeletePurchaseModal({ isOpen: true, id: purchase._id })}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Purchase Create/Edit Modal */}
+      {purchaseModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">Add Ingredient Purchase</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const data = {
+                  ...purchaseFormData,
+                  qtyPurchased: parseFloat(purchaseFormData.qtyPurchased),
+                  totalCost: parseFloat(purchaseFormData.totalCost),
+                  outletId: purchaseFormData.outletId || null,
+                  franchiseId: purchaseFormData.franchiseId || null,
+                };
+                await costingApi.createIngredientPurchase(data, purchaseInvoiceFile);
+                setPurchaseModalOpen(false);
+                fetchPurchases();
+                alert('Purchase created successfully!');
+              } catch (error) {
+                console.error('Failed to create purchase:', error);
+                alert(`Failed to create purchase: ${error.response?.data?.message || error.message}`);
+              }
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Outlet ID *</label>
+                  <input
+                    type="text"
+                    required
+                    value={purchaseFormData.outletId}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, outletId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID</label>
+                  <input
+                    type="text"
+                    value={purchaseFormData.franchiseId}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, franchiseId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Ingredient *</label>
+                  <select
+                    required
+                    value={purchaseFormData.ingredientId}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, ingredientId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  >
+                    <option value="">Select Ingredient</option>
+                    {ingredients.map(ing => (
+                      <option key={ing._id} value={ing._id}>{ing.name} ({ing.unit})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Purchase Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={purchaseFormData.purchaseDate}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, purchaseDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Quantity *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    min="0"
+                    value={purchaseFormData.qtyPurchased}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, qtyPurchased: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Unit *</label>
+                  <select
+                    required
+                    value={purchaseFormData.unit}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, unit: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  >
+                    {units.map(unit => (
+                      <option key={unit} value={unit}>{unit}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Total Cost *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    min="0"
+                    value={purchaseFormData.totalCost}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, totalCost: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Vendor</label>
+                  <input
+                    type="text"
+                    value={purchaseFormData.vendor}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, vendor: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-[#6b4423] mb-1">Remarks</label>
+                  <textarea
+                    value={purchaseFormData.remarks}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, remarks: e.target.value })}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <FileUploader
+                    onFileSelect={setPurchaseInvoiceFile}
+                    currentFile={null}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setPurchaseModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#b85a1f] transition-colors"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Purchase Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deletePurchaseModal.isOpen}
+        onClose={() => setDeletePurchaseModal({ isOpen: false, id: null })}
+        onConfirm={async () => {
+          try {
+            await costingApi.deleteIngredientPurchase(deletePurchaseModal.id);
+            setDeletePurchaseModal({ isOpen: false, id: null });
+            fetchPurchases();
+            alert('Purchase deleted successfully!');
+          } catch (error) {
+            console.error('Failed to delete purchase:', error);
+            alert(`Failed to delete purchase: ${error.response?.data?.message || error.message}`);
+          }
+        }}
+        title="Delete Purchase"
+        message="Are you sure you want to delete this purchase? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger={true}
+      />
+
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={deleteModal.isOpen}
@@ -573,4 +921,7 @@ const InventoryCosting = () => {
 };
 
 export default InventoryCosting;
+
+
+
 

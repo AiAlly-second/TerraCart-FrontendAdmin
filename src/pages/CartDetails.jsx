@@ -512,7 +512,7 @@ const CartDetails = () => {
             </h3>
             <div className="space-y-2">
               <button
-                onClick={() => navigate(`/orders?cartId=${id}`)}
+                onClick={() => navigate(`/orders?cafeId=${id}`)}
                 className="w-full text-left px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
               >
                 📋 View Orders for This Cart
