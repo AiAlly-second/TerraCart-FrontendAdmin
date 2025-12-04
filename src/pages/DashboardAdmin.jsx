@@ -65,9 +65,18 @@ const Dashboard = () => {
     // Fetch initial orders using authenticated API
     api.get("/orders")
       .then((res) => {
-        console.log('[Dashboard] Orders fetched successfully:', res.data?.length || 0, 'orders');
-        setOrders(res.data);
-        updateStats(res.data);
+        // Ensure orders is always an array
+        let ordersData = [];
+        if (Array.isArray(res.data)) {
+          ordersData = res.data;
+        } else if (res.data && Array.isArray(res.data.orders)) {
+          ordersData = res.data.orders;
+        } else if (res.data && Array.isArray(res.data.data)) {
+          ordersData = res.data.data;
+        }
+        console.log('[Dashboard] Orders fetched successfully:', ordersData.length, 'orders');
+        setOrders(ordersData);
+        updateStats(ordersData);
       })
       .catch((error) => {
         console.error("[Dashboard] Error fetching orders:", error);
@@ -84,17 +93,34 @@ const Dashboard = () => {
       try {
         // Fetch all employees for this cart
         const employeesRes = await api.get("/employees");
-        const totalStaff = employeesRes.data?.length || 0;
+        // Ensure employees is always an array
+        let employeesData = [];
+        if (Array.isArray(employeesRes.data)) {
+          employeesData = employeesRes.data;
+        } else if (employeesRes.data && Array.isArray(employeesRes.data.employees)) {
+          employeesData = employeesRes.data.employees;
+        } else if (employeesRes.data && Array.isArray(employeesRes.data.data)) {
+          employeesData = employeesRes.data.data;
+        }
+        const totalStaff = employeesData.length;
 
         // Fetch today's attendance
         const attendanceRes = await api.get("/attendance/today");
-        const todayAttendance = attendanceRes.data || [];
+        // Ensure todayAttendance is always an array
+        let todayAttendance = [];
+        if (Array.isArray(attendanceRes.data)) {
+          todayAttendance = attendanceRes.data;
+        } else if (attendanceRes.data && Array.isArray(attendanceRes.data.attendance)) {
+          todayAttendance = attendanceRes.data.attendance;
+        } else if (attendanceRes.data && Array.isArray(attendanceRes.data.data)) {
+          todayAttendance = attendanceRes.data.data;
+        }
         
         // Count active staff (those who checked in today and haven't checked out, or status is present/late)
-        const activeStaff = todayAttendance.filter(att => {
+        const activeStaff = Array.isArray(todayAttendance) ? todayAttendance.filter(att => {
           // Active if they checked in and haven't checked out, or status is present/late
           return att.checkIn?.time && (!att.checkOut?.time || att.status === 'present' || att.status === 'late');
-        }).length;
+        }).length : 0;
 
         setStaffStats({
           activeToday: activeStaff,
@@ -115,13 +141,21 @@ const Dashboard = () => {
       try {
         // Fetch all tables for this cart
         const tablesRes = await api.get("/tables");
-        const allTables = tablesRes.data || [];
+        // Ensure allTables is always an array
+        let allTables = [];
+        if (Array.isArray(tablesRes.data)) {
+          allTables = tablesRes.data;
+        } else if (tablesRes.data && Array.isArray(tablesRes.data.tables)) {
+          allTables = tablesRes.data.tables;
+        } else if (tablesRes.data && Array.isArray(tablesRes.data.data)) {
+          allTables = tablesRes.data.data;
+        }
         const totalTables = allTables.length;
         
         // Count active tables (not AVAILABLE - i.e., OCCUPIED, RESERVED, CLEANING, MERGED)
-        const activeTables = allTables.filter(table => 
+        const activeTables = Array.isArray(allTables) ? allTables.filter(table => 
           table.status !== "AVAILABLE"
-        ).length;
+        ).length : 0;
 
         setTableStats({
           activeTables: activeTables,
@@ -177,6 +211,12 @@ const Dashboard = () => {
   }, [authLoading, user]);
 
   const updateStats = (ordersData) => {
+    // Ensure ordersData is an array
+    if (!Array.isArray(ordersData)) {
+      console.warn("[Dashboard] ordersData is not an array:", ordersData);
+      ordersData = [];
+    }
+    
     const today = new Date().toISOString().slice(0, 10);
     const todayOrders = ordersData.filter(
       (order) => {
@@ -208,6 +248,12 @@ const Dashboard = () => {
   
   // Calculate average table turnaround time
   const calculateAvgTurnaround = (ordersData) => {
+    // Ensure ordersData is an array
+    if (!Array.isArray(ordersData)) {
+      setAvgTableTurnaround("No data");
+      return;
+    }
+    
     // Filter paid dine-in orders with both createdAt and paidAt timestamps
     const completedDineInOrders = ordersData.filter(order => 
       order.status === "Paid" && 
@@ -259,6 +305,12 @@ const Dashboard = () => {
   
   // Calculate peak order hours
   const calculatePeakHours = (ordersData) => {
+    // Ensure ordersData is an array
+    if (!Array.isArray(ordersData)) {
+      setPeakHours("Insufficient data");
+      return;
+    }
+    
     // Get orders from last 7 days for more accurate peak hours
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -344,6 +396,11 @@ const Dashboard = () => {
 
   // Generate alerts from recent order updates
   const getAlerts = () => {
+    // Ensure orders is an array
+    if (!Array.isArray(orders)) {
+      return [];
+    }
+    
     const recentOrders = [...orders]
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
       .slice(0, 5);
@@ -369,7 +426,7 @@ const Dashboard = () => {
   };
 
   const recentActivities = useMemo(() => {
-    if (!orders?.length) return [];
+    if (!Array.isArray(orders) || !orders.length) return [];
     return [...orders]
       .sort(
         (a, b) =>

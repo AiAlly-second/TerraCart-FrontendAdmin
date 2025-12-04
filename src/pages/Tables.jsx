@@ -148,7 +148,10 @@ const Tables = () => {
   });
 
   const sortedTables = useMemo(
-    () => [...tables].sort((a, b) => a.number - b.number),
+    () => {
+      if (!Array.isArray(tables)) return [];
+      return [...tables].sort((a, b) => a.number - b.number);
+    },
     [tables]
   );
 
@@ -157,10 +160,20 @@ const Tables = () => {
     setError(null);
     try {
       const res = await api.get('/tables');
-      setTables(res.data || []);
+      // Ensure tables is always an array
+      let tablesData = [];
+      if (Array.isArray(res.data)) {
+        tablesData = res.data;
+      } else if (res.data && Array.isArray(res.data.tables)) {
+        tablesData = res.data.tables;
+      } else if (res.data && Array.isArray(res.data.data)) {
+        tablesData = res.data.data;
+      }
+      setTables(tablesData);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || 'Failed to load tables');
+      setTables([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

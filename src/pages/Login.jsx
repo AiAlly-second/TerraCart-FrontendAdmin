@@ -6,33 +6,47 @@ import Logo from '../assets/images/logo_new.jpeg';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const { login, user, loading } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
+    // Redirect to dashboard if already logged in
+    if (user && !loading) {
+      console.log('[Login] User authenticated, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
+
+  // Don't render login form if already authenticated
+  if (user && !loading) {
+    return null; // Will redirect via useEffect
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    setIsSubmitting(true);
 
     try {
       const result = await login(email, password);
       if (result.success) {
-        navigate('/dashboard');
+        console.log('[Login] Login successful, navigating to dashboard');
+        // Navigate directly after successful login
+        // The user state is set in AuthContext, so we can navigate immediately
+        // Use a small delay to ensure state propagation
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 100);
       } else {
         setError(result.message || 'Login failed');
+        setIsSubmitting(false);
       }
     } catch (error) {
+      console.error('[Login] Login error:', error);
       setError('An error occurred during login');
-    } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -81,12 +95,12 @@ const Login = () => {
           )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={isSubmitting || loading}
             className={`w-full px-4 py-2 font-bold text-white ${
-              loading ? 'bg-[#c75b1a] cursor-not-allowed opacity-70' : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
+              (isSubmitting || loading) ? 'bg-[#c75b1a] cursor-not-allowed opacity-70' : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
             } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md`}
           >
-            {loading ? 'Loading...' : 'Login'}
+            {(isSubmitting || loading) ? 'Loading...' : 'Login'}
           </button>
         </form>
       </div>

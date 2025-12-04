@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaBuilding, FaStore, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 // Minimum age as per Indian Labor Laws (18 years for general employment)
 const MINIMUM_WORKING_AGE = 18;
@@ -25,6 +26,7 @@ const getMaxDOBDate = () => {
 };
 
 const EmployeeManagement = () => {
+  const { user } = useAuth();
   const [hierarchy, setHierarchy] = useState([]);
   const [orphanEmployees, setOrphanEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,10 @@ const EmployeeManagement = () => {
   const [selectedCafe, setSelectedCafe] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [cafes, setCafes] = useState([]);
+  
+  // Check if current user is a cart admin
+  const isCartAdmin = user?.role === 'admin';
+  const hasAutoPopulatedRef = useRef(false);
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
@@ -65,6 +71,43 @@ const EmployeeManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Auto-populate franchise and cart for cart admins when modal opens
+  useEffect(() => {
+    if (showModal && isCartAdmin && user && !editingEmployee && !hasAutoPopulatedRef.current) {
+      // Extract franchiseId - handle both object and string formats
+      let userFranchiseId = null;
+      if (user.franchiseId) {
+        if (typeof user.franchiseId === 'object' && user.franchiseId._id) {
+          userFranchiseId = user.franchiseId._id.toString();
+        } else {
+          userFranchiseId = user.franchiseId.toString();
+        }
+      }
+      
+      // Extract cafeId (cart admin's own ID)
+      const userCafeId = user._id ? user._id.toString() : null;
+      
+      // Set franchise if we have it
+      if (userFranchiseId) {
+        setSelectedFranchise(userFranchiseId);
+        setFormData(prev => ({ ...prev, franchiseId: userFranchiseId }));
+      }
+      
+      // Set cart if we have it
+      if (userCafeId) {
+        setSelectedCafe(userCafeId);
+        setFormData(prev => ({ ...prev, cafeId: userCafeId }));
+      }
+      
+      hasAutoPopulatedRef.current = true;
+    }
+    
+    // Reset the ref when modal closes
+    if (!showModal) {
+      hasAutoPopulatedRef.current = false;
+    }
+  }, [showModal, isCartAdmin, user, editingEmployee]);
 
   const fetchData = async () => {
     try {
@@ -180,7 +223,7 @@ const EmployeeManagement = () => {
       name: employee.name || '',
       dateOfBirth: dob,
       mobile: employee.mobile || '',
-      email: employee.email || '', // Get email from employee or linked user
+      email: employee.email || employee.userId?.email || employee.user?.email || '', // Get email from employee, linked user, or user object
       role: employee.employeeRole || employee.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
       franchiseId: employee.franchiseId?._id || '',
       cafeId: employee.cafeId?._id || '',
@@ -232,6 +275,7 @@ const EmployeeManagement = () => {
     setEditingEmployee(null);
     resetForm();
     setShowModal(true);
+    // Note: Auto-population happens in useEffect when modal opens
   };
 
   const filteredHierarchy = hierarchy.filter(franchise => {
@@ -494,6 +538,42 @@ const EmployeeManagement = () => {
             <h2 className="text-2xl font-bold mb-4">
               {editingEmployee ? 'Edit Employee' : 'Create Employee'}
             </h2>
+            {isCartAdmin && !editingEmployee && selectedFranchise && selectedCafe && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start">
+                  <FaStore className="text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-blue-900">
+                      Creating employee for your cart
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Franchise: <span className="font-semibold">
+                        {franchises.find(f => {
+                          const fId = (f._id || f).toString();
+                          return fId === selectedFranchise;
+                        })?.name || 
+                        (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
+                        'Your Franchise'}
+                      </span>
+                      {' • '}
+                      Cart: <span className="font-semibold">
+                        {cafes.find(c => {
+                          const cId = (c._id || c).toString();
+                          return cId === selectedCafe;
+                        })?.cafeName || 
+                        cafes.find(c => {
+                          const cId = (c._id || c).toString();
+                          return cId === selectedCafe;
+                        })?.name || 
+                        user?.cartName || 
+                        user?.cafeName || 
+                        'Your Cart'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -573,33 +653,76 @@ const EmployeeManagement = () => {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
-                  <select
-                    value={selectedFranchise}
-                    onChange={(e) => handleFranchiseChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select Franchise</option>
-                    {franchises.map(franchise => (
-                      <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Franchise
+                    {isCartAdmin && selectedFranchise && (
+                      <span className="ml-2 text-xs text-green-600 font-normal">(Auto-selected: Your Franchise)</span>
+                    )}
+                  </label>
+                  {isCartAdmin && selectedFranchise ? (
+                    <div className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700 font-medium">
+                          {franchises.find(f => {
+                            const fId = (f._id || f).toString();
+                            return fId === selectedFranchise;
+                          })?.name || 
+                          (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
+                          'Your Franchise'}
+                        </span>
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Auto-selected</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">This employee will be associated with your franchise</p>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedFranchise}
+                      onChange={(e) => handleFranchiseChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select Franchise</option>
+                      {franchises.map(franchise => (
+                        <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
-                  <select
-                    value={selectedCafe}
-                    onChange={(e) => handleCafeChange(e.target.value)}
-                    disabled={!selectedFranchise}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                  >
-                    <option value="">Select Cart (Optional)</option>
-                    {cafes
-                      .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
-                      .map(cafe => (
-                        <option key={cafe._id} value={cafe._id}>{cafe.cafeName || cafe.name}</option>
-                      ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cart
+                    {isCartAdmin && selectedCafe && (
+                      <span className="ml-2 text-xs text-green-600 font-normal">(Auto-selected: Your Cart)</span>
+                    )}
+                  </label>
+                  {isCartAdmin && selectedCafe ? (
+                    <div className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700 font-medium">
+                          {cafes.find(c => (c._id || c).toString() === selectedCafe)?.cafeName || 
+                           cafes.find(c => (c._id || c).toString() === selectedCafe)?.name || 
+                           user?.cartName || 
+                           user?.cafeName || 
+                           'Your Cart'}
+                        </span>
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Auto-selected</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">This employee will be associated with your cart</p>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedCafe}
+                      onChange={(e) => handleCafeChange(e.target.value)}
+                      disabled={!selectedFranchise}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    >
+                      <option value="">Select Cart (Optional)</option>
+                      {cafes
+                        .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
+                        .map(cafe => (
+                          <option key={cafe._id} value={cafe._id}>{cafe.cafeName || cafe.name}</option>
+                        ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

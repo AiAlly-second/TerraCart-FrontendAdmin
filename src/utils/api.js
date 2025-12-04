@@ -23,7 +23,19 @@ const getToken = () => {
   const adminToken = localStorage.getItem('adminToken');
   
   // Priority: super_admin > franchise_admin > admin
-  return superAdminToken || franchiseAdminToken || adminToken;
+  const token = superAdminToken || franchiseAdminToken || adminToken;
+  
+  // Debug logging in development
+  if (import.meta.env.DEV && !token) {
+    console.warn('[API] No token found in localStorage', {
+      superAdminToken: !!superAdminToken,
+      franchiseAdminToken: !!franchiseAdminToken,
+      adminToken: !!adminToken,
+      allKeys: Object.keys(localStorage).filter(k => k.includes('Token'))
+    });
+  }
+  
+  return token;
 };
 
 // Get the appropriate storage keys based on user role
@@ -44,14 +56,32 @@ api.interceptors.request.use(
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      // If no token, check if we just logged in - might be a timing issue
+      const loginTimestamp = sessionStorage.getItem('lastLoginTime');
+      const now = Date.now();
+      const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 5000;
+      
+      if (justLoggedIn) {
+        // Try to get token again - it might have been stored by now
+        const retryToken = getToken();
+        if (retryToken) {
+          config.headers.Authorization = `Bearer ${retryToken}`;
+          console.log('[API] Token found on retry after login');
+        } else {
+          console.warn('[API] No token found even after login - request will fail');
+        }
+      } else {
+        console.warn('[API] No token found for request:', config.url);
+      }
     }
     
     // Log request for debugging (can be removed in production)
     if (import.meta.env.DEV) {
       console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
         baseURL: config.baseURL,
-        hasToken: !!token,
-        data: config.data
+        hasToken: !!config.headers.Authorization,
+        tokenLength: token?.length || 0
       });
     }
     
@@ -132,6 +162,17 @@ api.interceptors.response.use(
         message: errorData.message,
       });
 
+      // Check if we just logged in - don't logout if we just logged in
+      const loginTimestamp = sessionStorage.getItem('lastLoginTime');
+      const now = Date.now();
+      const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 30000; // 30 second window
+
+      if (justLoggedIn) {
+        console.warn('[401 Unauthorized] Just logged in - not clearing tokens. This might be a timing issue.');
+        // Don't logout, just return the error
+        return Promise.reject(error);
+      }
+
       // Only force logout for clear auth token issues
       if (
         errorCode === 'TOKEN_EXPIRED' ||
@@ -148,6 +189,7 @@ api.interceptors.response.use(
         localStorage.removeItem('franchiseAdminUser');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminUser');
+        sessionStorage.removeItem('lastLoginTime');
         window.location.href = '/login';
       } else {
         // For other 401s, just show an alert and keep the user on the same page

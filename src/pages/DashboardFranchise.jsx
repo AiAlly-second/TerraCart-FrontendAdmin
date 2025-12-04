@@ -56,6 +56,12 @@ const Dashboard = () => {
   const franchiseName = user?.name || "Franchise Dashboard";
 
   const calculateRevenue = (ordersData) => {
+    // Ensure ordersData is an array
+    if (!Array.isArray(ordersData)) {
+      console.warn("[Dashboard] ordersData is not an array:", ordersData);
+      return { totalRevenue: 0, todayRevenue: 0, todayOrders: 0, totalPaidOrders: 0 };
+    }
+    
     console.log("[Dashboard] Calculating revenue from", ordersData.length, "orders");
     
     const paidOrders = ordersData.filter((order) => order.status === "Paid");
@@ -162,10 +168,20 @@ const Dashboard = () => {
       let allCarts = [];
       try {
         const usersResponse = await api.get("/users");
-        allCarts = (usersResponse.data || []).filter(u => u.role === "admin");
+        // Ensure response is an array
+        let usersData = [];
+        if (Array.isArray(usersResponse.data)) {
+          usersData = usersResponse.data;
+        } else if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+          usersData = usersResponse.data.users;
+        } else if (usersResponse.data && Array.isArray(usersResponse.data.data)) {
+          usersData = usersResponse.data.data;
+        }
+        allCarts = usersData.filter(u => u.role === "admin");
         console.log("[Dashboard] Carts fetched:", allCarts.length);
       } catch (err) {
         console.error("Error fetching users:", err);
+        allCarts = [];
       }
 
       // Fetch orders
@@ -173,12 +189,23 @@ const Dashboard = () => {
       let revenueData = { totalRevenue: 0, todayRevenue: 0, todayOrders: 0 };
       try {
         const ordersResponse = await api.get("/orders");
-        fetchedOrders = ordersResponse.data || [];
+        // Ensure fetchedOrders is always an array
+        if (Array.isArray(ordersResponse.data)) {
+          fetchedOrders = ordersResponse.data;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.orders)) {
+          fetchedOrders = ordersResponse.data.orders;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.data)) {
+          fetchedOrders = ordersResponse.data.data;
+        } else {
+          fetchedOrders = [];
+          console.warn("[Dashboard] Orders response is not an array:", ordersResponse.data);
+        }
         setOrders(fetchedOrders);
         revenueData = calculateRevenue(fetchedOrders);
         console.log("[Dashboard] Orders:", fetchedOrders.length, "Revenue:", revenueData);
       } catch (err) {
         console.error("Failed to fetch orders:", err);
+        fetchedOrders = [];
       }
 
       // Build recent carts list with proper status
@@ -211,14 +238,14 @@ const Dashboard = () => {
         });
 
       const newStats = {
-        totalCarts: cartStats.totalCarts || allCarts.length,
+        totalCarts: cartStats.totalCarts || allCarts.length || 0,
         activeCarts: cartStats.activeCarts || 0,
         inactiveCarts: cartStats.inactiveCarts || 0,
         pendingApproval: cartStats.pendingApproval || 0,
-        totalRevenue: revenueData.totalRevenue,
-        todayRevenue: revenueData.todayRevenue,
-        todayOrders: revenueData.todayOrders,
-        totalOrders: fetchedOrders.length,
+        totalRevenue: revenueData.totalRevenue || 0,
+        todayRevenue: revenueData.todayRevenue || 0,
+        todayOrders: revenueData.todayOrders || 0,
+        totalOrders: Array.isArray(fetchedOrders) ? fetchedOrders.length : 0,
       };
       console.log("[Dashboard] Setting stats:", newStats);
       setStats(newStats);
@@ -240,7 +267,9 @@ const Dashboard = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      fetchedOrders.forEach(order => {
+      // Ensure fetchedOrders is an array before forEach
+      if (Array.isArray(fetchedOrders)) {
+        fetchedOrders.forEach(order => {
         const cartId = order.cartId?.toString() || order.cartId;
         if (cartId && cartOrderMap[cartId]) {
           cartOrderMap[cartId].orders++;
@@ -259,6 +288,7 @@ const Dashboard = () => {
           }
         }
       });
+      }
       
       const cartStats2 = Object.values(cartOrderMap).sort((a, b) => b.orders - a.orders);
       setCartOrderStats(cartStats2);
@@ -436,7 +466,7 @@ const Dashboard = () => {
         />
         <StatCard
           title="Total Orders"
-          value={loading ? "..." : stats.totalOrders.toString()}
+          value={loading ? "..." : (stats.totalOrders || 0).toString()}
           icon="📋"
           clickable
           onClick={() => navigate("/orders")}

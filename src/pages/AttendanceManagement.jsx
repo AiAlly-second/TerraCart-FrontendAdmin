@@ -28,9 +28,19 @@ const AttendanceManagement = () => {
   const fetchEmployees = async () => {
     try {
       const response = await api.get('/employees');
-      setEmployees(response.data);
+      // Ensure employees is always an array
+      let employeesData = [];
+      if (Array.isArray(response.data)) {
+        employeesData = response.data;
+      } else if (response.data && Array.isArray(response.data.employees)) {
+        employeesData = response.data.employees;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        employeesData = response.data.data;
+      }
+      setEmployees(employeesData);
     } catch (error) {
       console.error('Error fetching employees:', error);
+      setEmployees([]);
     }
   };
 
@@ -38,10 +48,20 @@ const AttendanceManagement = () => {
     try {
       setLoading(true);
       const response = await api.get('/attendance/today');
-      setTodayAttendance(response.data);
+      // Ensure todayAttendance is always an array
+      let attendanceData = [];
+      if (Array.isArray(response.data)) {
+        attendanceData = response.data;
+      } else if (response.data && Array.isArray(response.data.attendance)) {
+        attendanceData = response.data.attendance;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        attendanceData = response.data.data;
+      }
+      setTodayAttendance(attendanceData);
     } catch (error) {
       console.error('Error fetching today attendance:', error);
       alert('Failed to fetch today attendance');
+      setTodayAttendance([]);
     } finally {
       setLoading(false);
     }
@@ -56,10 +76,20 @@ const AttendanceManagement = () => {
       if (endDate) params.endDate = endDate;
 
       const response = await api.get('/attendance', { params });
-      setAttendance(response.data);
+      // Ensure attendance is always an array
+      let attendanceData = [];
+      if (Array.isArray(response.data)) {
+        attendanceData = response.data;
+      } else if (response.data && Array.isArray(response.data.attendance)) {
+        attendanceData = response.data.attendance;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        attendanceData = response.data.data;
+      }
+      setAttendance(attendanceData);
     } catch (error) {
       console.error('Error fetching attendance:', error);
       alert('Failed to fetch attendance records');
+      setAttendance([]);
     } finally {
       setLoading(false);
     }
@@ -213,8 +243,8 @@ const AttendanceManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {employees.map((employee) => {
-                      const todayRecord = todayAttendance.find((a) => a.employeeId?._id === employee._id);
+                    {Array.isArray(employees) && employees.map((employee) => {
+                      const todayRecord = Array.isArray(todayAttendance) ? todayAttendance.find((a) => a.employeeId?._id === employee._id) : null;
                       const hasCheckedIn = todayRecord?.checkIn?.time;
                       const hasCheckedOut = todayRecord?.checkOut?.time;
 
@@ -288,7 +318,7 @@ const AttendanceManagement = () => {
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">All Employees</option>
-                    {employees.map((emp) => (
+                    {Array.isArray(employees) && employees.map((emp) => (
                       <option key={emp._id} value={emp._id}>
                         {emp.name}
                       </option>
@@ -339,7 +369,7 @@ const AttendanceManagement = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {attendance.length === 0 ? (
+                      {!Array.isArray(attendance) || attendance.length === 0 ? (
                         <tr>
                           <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                             No attendance records found
@@ -381,7 +411,7 @@ const AttendanceManagement = () => {
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">All Employees</option>
-                    {employees.map((emp) => (
+                    {Array.isArray(employees) && employees.map((emp) => (
                       <option key={emp._id} value={emp._id}>
                         {emp.name}
                       </option>

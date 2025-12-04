@@ -2,11 +2,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import api from "../utils/api";
 
+// Helper: get API base URL with protocol ensured
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+  // If URL doesn't start with http:// or https://, add http://
+  if (envUrl && !envUrl.match(/^https?:\/\//)) {
+    return `http://${envUrl}`;
+  }
+  return envUrl;
+};
+
 // Helper function to normalize image URLs
-// Converts absolute URLs from the same API server to relative URLs
+// Converts absolute URLs from the same API server to proper URLs
 // Then prepends API base URL to relative paths
-const nodeApiBase =
-  import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+const nodeApiBase = getApiBaseUrl();
 const normalizedApiBase = nodeApiBase.replace(/\/$/, "");
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
@@ -357,9 +366,17 @@ const MenuManager = () => {
 
             <div className="space-y-3">
               {categoriesSorted.map((category) => (
-                <button
+                <div
                   key={category._id}
                   onClick={() => setSelectedCategoryId(category._id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedCategoryId(category._id);
+                    }
+                  }}
                   className={`w-full text-left px-4 py-3 border rounded-lg transition ${
                     selectedCategoryId === category._id
                       ? "border-blue-500 bg-blue-50 text-blue-700"
@@ -406,7 +423,7 @@ const MenuManager = () => {
                       Delete
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
 
               {categoriesSorted.length === 0 && (

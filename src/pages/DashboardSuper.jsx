@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FaBuilding, FaUsers, FaRupeeSign, FaChartLine, FaSpinner } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import io from 'socket.io-client';
 
 const nodeApi = import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001';
 const socket = io(nodeApi);
 
 const Dashboard = () => {
+  const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     franchises: { title: 'Total Franchises', value: '0', icon: FaBuilding, color: 'bg-blue-500', loading: true },
     users: { title: 'Total Users', value: '0', icon: FaUsers, color: 'bg-green-500', loading: true },
@@ -58,8 +60,33 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []); // Only run once on mount
+    // Wait for authentication to complete and ensure token is available
+    if (!authLoading && user) {
+      // Check if token exists before making API calls
+      const token = localStorage.getItem('superAdminToken') || 
+                   localStorage.getItem('franchiseAdminToken') || 
+                   localStorage.getItem('adminToken');
+      
+      if (token) {
+        console.log('[DashboardSuper] User authenticated, token available, fetching data');
+        fetchDashboardData();
+      } else {
+        console.warn('[DashboardSuper] User authenticated but no token found, waiting...');
+        // Wait a bit for token to be set
+        const timer = setTimeout(() => {
+          const retryToken = localStorage.getItem('superAdminToken') || 
+                           localStorage.getItem('franchiseAdminToken') || 
+                           localStorage.getItem('adminToken');
+          if (retryToken) {
+            fetchDashboardData();
+          } else {
+            console.error('[DashboardSuper] Token still not available after wait');
+          }
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [authLoading, user]); // Run when auth state changes
 
   useEffect(() => {
     // Set up socket listeners - they will use activeFranchiseIds from state
@@ -131,16 +158,24 @@ const Dashboard = () => {
       // Refetch all orders and filter by active franchises
       try {
         const ordersResponse = await api.get('/orders');
-        const fetchedOrders = ordersResponse.data || [];
+        // Ensure fetchedOrders is always an array
+        let fetchedOrders = [];
+        if (Array.isArray(ordersResponse.data)) {
+          fetchedOrders = ordersResponse.data;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.orders)) {
+          fetchedOrders = ordersResponse.data.orders;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.data)) {
+          fetchedOrders = ordersResponse.data.data;
+        }
         
         // Get current active franchise IDs
         const currentIds = activeFranchiseIds;
         
         // Filter to only active franchises
-        const activeOrders = fetchedOrders.filter(order => {
+        const activeOrders = Array.isArray(fetchedOrders) ? fetchedOrders.filter(order => {
           const franchiseId = order.franchiseId?.toString() || order.franchiseId;
           return franchiseId && currentIds.has(franchiseId);
-        });
+        }) : [];
         
         setOrders(activeOrders);
         // Recalculate total revenue from active franchises only
@@ -155,16 +190,24 @@ const Dashboard = () => {
       // Refetch all orders and filter by active franchises
       try {
         const ordersResponse = await api.get('/orders');
-        const fetchedOrders = ordersResponse.data || [];
+        // Ensure fetchedOrders is always an array
+        let fetchedOrders = [];
+        if (Array.isArray(ordersResponse.data)) {
+          fetchedOrders = ordersResponse.data;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.orders)) {
+          fetchedOrders = ordersResponse.data.orders;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.data)) {
+          fetchedOrders = ordersResponse.data.data;
+        }
         
         // Get current active franchise IDs
         const currentIds = activeFranchiseIds;
         
         // Filter to only active franchises
-        const activeOrders = fetchedOrders.filter(order => {
+        const activeOrders = Array.isArray(fetchedOrders) ? fetchedOrders.filter(order => {
           const franchiseId = order.franchiseId?.toString() || order.franchiseId;
           return franchiseId && currentIds.has(franchiseId);
-        });
+        }) : [];
         
         setOrders(activeOrders);
         // Recalculate total revenue from active franchises only
@@ -195,10 +238,21 @@ const Dashboard = () => {
       let users = [];
       try {
         const usersResponse = await api.get('/users');
-        users = usersResponse.data || [];
+        // Ensure users is always an array
+        if (Array.isArray(usersResponse.data)) {
+          users = usersResponse.data;
+        } else if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+          users = usersResponse.data.users;
+        } else if (usersResponse.data && Array.isArray(usersResponse.data.data)) {
+          users = usersResponse.data.data;
+        } else {
+          users = [];
+          console.warn('[DashboardSuper] Users response is not an array:', usersResponse.data);
+        }
       } catch (err) {
         console.error('Error fetching users:', err);
         // Continue even if users fetch fails
+        users = [];
       }
       
       // Count ACTIVE franchises only (users with franchise_admin role AND isActive !== false)
@@ -233,13 +287,23 @@ const Dashboard = () => {
         
         // Also fetch orders for real-time updates and as fallback
         const ordersResponse = await api.get('/orders');
-        fetchedOrders = ordersResponse.data || [];
+        // Ensure fetchedOrders is always an array
+        if (Array.isArray(ordersResponse.data)) {
+          fetchedOrders = ordersResponse.data;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.orders)) {
+          fetchedOrders = ordersResponse.data.orders;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.data)) {
+          fetchedOrders = ordersResponse.data.data;
+        } else {
+          fetchedOrders = [];
+          console.warn('[DashboardSuper] Orders response is not an array:', ordersResponse.data);
+        }
         
         // Filter orders to only include those from ACTIVE franchises
-        const activeOrders = fetchedOrders.filter(order => {
+        const activeOrders = Array.isArray(fetchedOrders) ? fetchedOrders.filter(order => {
           const franchiseId = order.franchiseId?.toString() || order.franchiseId;
           return franchiseId && activeFranchiseIdsSet.has(franchiseId);
-        });
+        }) : [];
         
         // If revenue API failed, calculate from active orders only
         if (totalRevenue === 0) {

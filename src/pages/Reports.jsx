@@ -31,24 +31,48 @@ const Reports = () => {
       
       // Fetch users
       const usersResponse = await api.get('/users');
-      const users = usersResponse.data || [];
+      // Ensure users is always an array
+      let users = [];
+      if (Array.isArray(usersResponse.data)) {
+        users = usersResponse.data;
+      } else if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+        users = usersResponse.data.users;
+      } else if (usersResponse.data && Array.isArray(usersResponse.data.data)) {
+        users = usersResponse.data.data;
+      }
       
       // Fetch orders
       let orders = [];
       try {
         const ordersResponse = await api.get('/orders');
-        orders = ordersResponse.data || [];
+        // Ensure orders is always an array
+        if (Array.isArray(ordersResponse.data)) {
+          orders = ordersResponse.data;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.orders)) {
+          orders = ordersResponse.data.orders;
+        } else if (ordersResponse.data && Array.isArray(ordersResponse.data.data)) {
+          orders = ordersResponse.data.data;
+        }
       } catch (err) {
         console.log('Could not fetch orders:', err);
+        orders = [];
       }
       
       // Fetch payments
       let payments = [];
       try {
         const paymentsResponse = await api.get('/payments');
-        payments = paymentsResponse.data || [];
+        // Ensure payments is always an array
+        if (Array.isArray(paymentsResponse.data)) {
+          payments = paymentsResponse.data;
+        } else if (paymentsResponse.data && Array.isArray(paymentsResponse.data.payments)) {
+          payments = paymentsResponse.data.payments;
+        } else if (paymentsResponse.data && Array.isArray(paymentsResponse.data.data)) {
+          payments = paymentsResponse.data.data;
+        }
       } catch (err) {
         console.log('Could not fetch payments:', err);
+        payments = [];
       }
 
       // Fetch current revenue with franchise and cart breakdown
@@ -63,10 +87,10 @@ const Reports = () => {
       }
 
       // Calculate statistics
-      const franchises = users.filter(u => u.role === 'franchise_admin');
-      const carts = users.filter(u => u.role === 'admin');
-      const paidPayments = payments.filter(p => p.status === 'PAID');
-      const pendingPayments = payments.filter(p => p.status === 'PENDING' || p.status === 'CASH_PENDING');
+      const franchises = Array.isArray(users) ? users.filter(u => u.role === 'franchise_admin') : [];
+      const carts = Array.isArray(users) ? users.filter(u => u.role === 'admin') : [];
+      const paidPayments = Array.isArray(payments) ? payments.filter(p => p.status === 'PAID') : [];
+      const pendingPayments = Array.isArray(payments) ? payments.filter(p => p.status === 'PENDING' || p.status === 'CASH_PENDING') : [];
       const totalRevenue = revenueData.totalRevenue || paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
       // Group users by role
@@ -76,9 +100,9 @@ const Reports = () => {
       }, {});
 
       // Get recent orders
-      const recentOrders = orders
+      const recentOrders = Array.isArray(orders) ? orders
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 10);
+        .slice(0, 10) : [];
 
       // Build franchise-cart mapping for the hierarchical view
       const franchiseCartMap = {};
