@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaBuilding, FaStore, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,7 @@ const getMaxDOBDate = () => {
 
 const EmployeeManagement = () => {
   const { user } = useAuth();
+
   const userRole = user?.role;
   const isCartAdmin = userRole === 'admin';
   const [hierarchy, setHierarchy] = useState([]);
@@ -41,11 +42,17 @@ const EmployeeManagement = () => {
   const [selectedCafe, setSelectedCafe] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [cafes, setCafes] = useState([]);
+  
+  // Check if current user is a cart admin
+  const isCartAdmin = user?.role === 'admin';
+  const hasAutoPopulatedRef = useRef(false);
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
     mobile: '',
-    employeeRole: 'waiter',
+    email: '', // Add email field for user creation
+    password: '', // Add password field for user creation
+    role: 'waiter', // Use role instead of employeeRole
     franchiseId: '',
     cafeId: '',
     kycVerified: false,
@@ -67,6 +74,43 @@ const EmployeeManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Auto-populate franchise and cart for cart admins when modal opens
+  useEffect(() => {
+    if (showModal && isCartAdmin && user && !editingEmployee && !hasAutoPopulatedRef.current) {
+      // Extract franchiseId - handle both object and string formats
+      let userFranchiseId = null;
+      if (user.franchiseId) {
+        if (typeof user.franchiseId === 'object' && user.franchiseId._id) {
+          userFranchiseId = user.franchiseId._id.toString();
+        } else {
+          userFranchiseId = user.franchiseId.toString();
+        }
+      }
+      
+      // Extract cafeId (cart admin's own ID)
+      const userCafeId = user._id ? user._id.toString() : null;
+      
+      // Set franchise if we have it
+      if (userFranchiseId) {
+        setSelectedFranchise(userFranchiseId);
+        setFormData(prev => ({ ...prev, franchiseId: userFranchiseId }));
+      }
+      
+      // Set cart if we have it
+      if (userCafeId) {
+        setSelectedCafe(userCafeId);
+        setFormData(prev => ({ ...prev, cafeId: userCafeId }));
+      }
+      
+      hasAutoPopulatedRef.current = true;
+    }
+    
+    // Reset the ref when modal closes
+    if (!showModal) {
+      hasAutoPopulatedRef.current = false;
+    }
+  }, [showModal, isCartAdmin, user, editingEmployee]);
 
   const fetchData = async () => {
     try {
@@ -149,7 +193,9 @@ const EmployeeManagement = () => {
         ...formData,
         dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
         franchiseId: selectedFranchise || undefined,
-        cafeId: selectedCafe || undefined
+        cafeId: selectedCafe || undefined,
+        employeeRole: formData.role, // Map role to employeeRole for Employee model compatibility
+        role: formData.role // Also send role for User creation
       };
 
       if (editingEmployee) {
@@ -220,7 +266,9 @@ const EmployeeManagement = () => {
       name: '',
       dateOfBirth: '',
       mobile: '',
-      employeeRole: 'waiter',
+      email: '',
+      password: '',
+      role: 'waiter',
       franchiseId: '',
       cafeId: isCartAdmin ? (user?._id || '') : '', // Auto-set for cart admin
       kycVerified: false,
@@ -237,6 +285,7 @@ const EmployeeManagement = () => {
     setEditingEmployee(null);
     resetForm();
     setShowModal(true);
+    // Note: Auto-population happens in useEffect when modal opens
   };
 
   const filteredHierarchy = hierarchy.filter(franchise => {
@@ -252,21 +301,12 @@ const EmployeeManagement = () => {
     return franchiseMatch || cafeMatch || employeeMatch;
   });
 
+  // Unified roles for employee creation (matches User model roles)
   const employeeRoles = [
-    { value: 'waiter', label: 'Waiter' },
-    { value: 'chef', label: 'Chef' },
     { value: 'manager', label: 'Manager' },
-    { value: 'cashier', label: 'Cashier' },
-    { value: 'cleaner', label: 'Cleaner' },
-    { value: 'franchise_manager', label: 'Franchise Manager' },
-    { value: 'area_manager', label: 'Area Manager' },
-    { value: 'supervisor', label: 'Supervisor' },
-    { value: 'accountant', label: 'Accountant' },
-    { value: 'hr_manager', label: 'HR Manager' },
-    { value: 'operations_manager', label: 'Operations Manager' },
-    { value: 'quality_auditor', label: 'Quality Auditor' },
-    { value: 'training_coordinator', label: 'Training Coordinator' },
-    { value: 'other', label: 'Other' }
+    { value: 'captain', label: 'Captain' },
+    { value: 'waiter', label: 'Waiter' },
+    { value: 'cook', label: 'Cook' }
   ];
 
   if (loading) {
@@ -381,7 +421,7 @@ const EmployeeManagement = () => {
                               <div className="flex-1">
                                 <div className="font-medium">{employee.name}</div>
                                 <div className="text-sm text-gray-600">
-                                  {employee.employeeRole} • {employee.mobile}
+                                  {employee.employeeRole || employee.role || 'N/A'} • {employee.mobile}
                                 </div>
                               </div>
                               <div className="flex items-center space-x-2">
@@ -423,7 +463,7 @@ const EmployeeManagement = () => {
                                       <div className="flex-1">
                                         <div className="font-medium">{employee.name}</div>
                                         <div className="text-sm text-gray-600">
-                                          {employee.employeeRole} • {employee.mobile}
+                                          {employee.employeeRole || employee.role || 'N/A'} • {employee.mobile}
                                         </div>
                                       </div>
                                       <div className="flex items-center space-x-2">
@@ -572,6 +612,42 @@ const EmployeeManagement = () => {
             <h2 className="text-2xl font-bold mb-4">
               {editingEmployee ? 'Edit Employee' : 'Create Employee'}
             </h2>
+            {isCartAdmin && !editingEmployee && selectedFranchise && selectedCafe && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start">
+                  <FaStore className="text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-blue-900">
+                      Creating employee for your cart
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Franchise: <span className="font-semibold">
+                        {franchises.find(f => {
+                          const fId = (f._id || f).toString();
+                          return fId === selectedFranchise;
+                        })?.name || 
+                        (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
+                        'Your Franchise'}
+                      </span>
+                      {' • '}
+                      Cart: <span className="font-semibold">
+                        {cafes.find(c => {
+                          const cId = (c._id || c).toString();
+                          return cId === selectedCafe;
+                        })?.cafeName || 
+                        cafes.find(c => {
+                          const cId = (c._id || c).toString();
+                          return cId === selectedCafe;
+                        })?.name || 
+                        user?.cartName || 
+                        user?.cafeName || 
+                        'Your Cart'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -611,17 +687,80 @@ const EmployeeManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee Role *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
                   <select
                     required
-                    value={formData.employeeRole}
-                    onChange={(e) => setFormData({ ...formData, employeeRole: e.target.value })}
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {employeeRoles.map(role => (
                       <option key={role.value} value={role.value}>{role.label}</option>
                     ))}
                   </select>
+                </div>
+<<<<<<< HEAD
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email {!editingEmployee && '*'}</label>
+                  <input
+                    type="email"
+                    required={!editingEmployee}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="employee@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Required for login access</p>
+                </div>
+                {!editingEmployee && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Min 6 characters"
+                      minLength={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Franchise
+                    {isCartAdmin && selectedFranchise && (
+                      <span className="ml-2 text-xs text-green-600 font-normal">(Auto-selected: Your Franchise)</span>
+                    )}
+                  </label>
+                  {isCartAdmin && selectedFranchise ? (
+                    <div className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700 font-medium">
+                          {franchises.find(f => {
+                            const fId = (f._id || f).toString();
+                            return fId === selectedFranchise;
+                          })?.name || 
+                          (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
+                          'Your Franchise'}
+                        </span>
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Auto-selected</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">This employee will be associated with your franchise</p>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedFranchise}
+                      onChange={(e) => handleFranchiseChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select Franchise</option>
+                      {franchises.map(franchise => (
+                        <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 {!isCartAdmin && (
                   <>
