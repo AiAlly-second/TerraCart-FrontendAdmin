@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaBuilding, FaStore, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -42,9 +42,6 @@ const EmployeeManagement = () => {
   const [selectedCafe, setSelectedCafe] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [cafes, setCafes] = useState([]);
-  
-  // Check if current user is a cart admin
-  const isCartAdmin = user?.role === 'admin';
   const hasAutoPopulatedRef = useRef(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -70,10 +67,6 @@ const EmployeeManagement = () => {
     },
     isActive: true
   });
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   // Auto-populate franchise and cart for cart admins when modal opens
   useEffect(() => {
@@ -112,7 +105,7 @@ const EmployeeManagement = () => {
     }
   }, [showModal, isCartAdmin, user, editingEmployee]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -139,7 +132,11 @@ const EmployeeManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isCartAdmin]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const toggleFranchise = (franchiseId) => {
     const newExpanded = new Set(expandedFranchises);
@@ -234,9 +231,12 @@ const EmployeeManagement = () => {
       name: employee.name || '',
       dateOfBirth: dob,
       mobile: employee.mobile || '',
-      employeeRole: employee.employeeRole || 'waiter',
-      franchiseId: isCartAdmin ? '' : (employee.franchiseId?._id || ''),
-      cafeId: isCartAdmin ? (user?._id || '') : (employee.cafeId?._id || ''),
+
+      email: employee.email || employee.userId?.email || employee.user?.email || '', // Get email from employee, linked user, or user object
+      role: employee.employeeRole || employee.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
+      franchiseId: employee.franchiseId?._id || '',
+      cafeId: employee.cafeId?._id || '',
+
       kycVerified: employee.kycVerified || false,
       disability: employee.disability || { hasDisability: false, type: '' },
       deviceIssued: employee.deviceIssued || { smartwatch: false, tracker: false },
@@ -698,69 +698,6 @@ const EmployeeManagement = () => {
                       <option key={role.value} value={role.value}>{role.label}</option>
                     ))}
                   </select>
-                </div>
-<<<<<<< HEAD
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email {!editingEmployee && '*'}</label>
-                  <input
-                    type="email"
-                    required={!editingEmployee}
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="employee@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Required for login access</p>
-                </div>
-                {!editingEmployee && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                    <input
-                      type="password"
-                      required
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Min 6 characters"
-                      minLength={6}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Franchise
-                    {isCartAdmin && selectedFranchise && (
-                      <span className="ml-2 text-xs text-green-600 font-normal">(Auto-selected: Your Franchise)</span>
-                    )}
-                  </label>
-                  {isCartAdmin && selectedFranchise ? (
-                    <div className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-700 font-medium">
-                          {franchises.find(f => {
-                            const fId = (f._id || f).toString();
-                            return fId === selectedFranchise;
-                          })?.name || 
-                          (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
-                          'Your Franchise'}
-                        </span>
-                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Auto-selected</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">This employee will be associated with your franchise</p>
-                    </div>
-                  ) : (
-                    <select
-                      value={selectedFranchise}
-                      onChange={(e) => handleFranchiseChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select Franchise</option>
-                      {franchises.map(franchise => (
-                        <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
-                      ))}
-                    </select>
-                  )}
                 </div>
                 {!isCartAdmin && (
                   <>
