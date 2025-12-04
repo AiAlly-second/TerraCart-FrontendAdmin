@@ -709,27 +709,41 @@ const Franchises = () => {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Franchise Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-white flex justify-between items-center">
-              <h2 className="text-lg font-bold">
-                {editingFranchise ? 'Edit Franchise' : 'Create New Franchise'}
-              </h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col">
+            {/* Modal header */}
+            <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-5 py-4 text-white flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold tracking-wide">
+                  {editingFranchise ? 'Edit Franchise' : 'Create New Franchise'}
+                </h2>
+                <p className="text-xs text-orange-100 mt-1">
+                  Primary details for the franchise owner. You can add carts later.
+                </p>
+              </div>
               <button 
                 onClick={() => {
                   setShowModal(false);
                   setEditingFranchise(null);
                 }}
-                className="p-1 hover:bg-white/20 rounded"
+                className="p-1 hover:bg-white/15 rounded-full transition-colors"
               >
                 <FaTimes size={16} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
+            {/* Modal body */}
+            <form
+              onSubmit={handleSubmit}
+              className="flex-1 overflow-y-auto px-5 py-4 space-y-5"
+            >
+              <div className="bg-white/80 rounded-xl border border-orange-100 shadow-sm p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-orange-700 mb-1">
+                  Franchise Owner Details
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Franchise Name *</label>
                   <input
                     type="text"
@@ -739,8 +753,8 @@ const Franchises = () => {
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter franchise name"
                   />
-                </div>
-                <div className="col-span-2">
+                  </div>
+                  <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Email *</label>
                   <input
                     type="email"
@@ -750,8 +764,8 @@ const Franchises = () => {
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="email@example.com"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Mobile</label>
                   <input
                     type="tel"
@@ -771,33 +785,46 @@ const Franchises = () => {
                     placeholder="29ABCDE1234F1Z5"
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Password {editingFranchise && <span className="font-normal text-gray-400">(leave blank to keep)</span>}
-                    {!editingFranchise && ' *'}
-                  </label>
-                  <input
-                    type="password"
-                    required={!editingFranchise}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="••••••••"
-                  />
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Password{" "}
+                      {editingFranchise && (
+                        <span className="font-normal text-gray-400">
+                          (leave blank to keep)
+                        </span>
+                      )}
+                      {!editingFranchise && " *"}
+                    </label>
+                    <input
+                      type="password"
+                      required={!editingFranchise}
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      placeholder="••••••••"
+                    />
+                  </div>
                 </div>
               </div>
               
               {!editingFranchise && (
-                <div className="border-t pt-4">
-                  <h3 className="text-xs font-semibold text-gray-700 mb-3">Documents (Optional)</h3>
-                  <div className="space-y-2">
+                <div className="bg-white/70 rounded-xl border border-dashed border-orange-200 p-4 mt-1">
+                  <h3 className="text-xs font-semibold text-gray-700 mb-1">
+                    Documents (Optional)
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mb-3">
+                    You can onboard the franchise now and upload compliance documents later.
+                  </p>
+                  <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">Udyam Certificate</label>
                       <input
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png,.webp"
                         onChange={(e) => setFiles({ ...files, udyamCertificate: e.target.files[0] })}
-                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
                     </div>
                     <div>
@@ -806,7 +833,7 @@ const Franchises = () => {
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png,.webp"
                         onChange={(e) => setFiles({ ...files, aadharCard: e.target.files[0] })}
-                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
                     </div>
                     <div>
@@ -815,14 +842,15 @@ const Franchises = () => {
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png,.webp"
                         onChange={(e) => setFiles({ ...files, panCard: e.target.files[0] })}
-                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
                     </div>
                   </div>
                 </div>
               )}
             </form>
-            <div className="p-4 border-t bg-gray-50 flex gap-2">
+            {/* Modal footer */}
+            <div className="px-5 py-3 border-t bg-gradient-to-r from-white via-[#fff7eb] to-white flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -836,7 +864,7 @@ const Franchises = () => {
               <button
                 type="submit"
                 onClick={handleSubmit}
-                className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                className="flex-1 px-4 py-2 text-sm bg-[#b45309] text-white rounded-lg hover:bg-[#92400e] transition-colors font-semibold shadow-sm"
               >
                 {editingFranchise ? 'Update' : 'Create'}
               </button>

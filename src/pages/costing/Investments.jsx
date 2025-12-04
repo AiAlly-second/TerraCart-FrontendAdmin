@@ -13,9 +13,9 @@ const Investments = () => {
   const [activeTab, setActiveTab] = useState('investments'); // 'investments' or 'assets'
   const [assets, setAssets] = useState([]);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null);
   const [deleteAssetModal, setDeleteAssetModal] = useState({ isOpen: false, id: null });
   const [assetFormData, setAssetFormData] = useState({
-    outletId: '',
     franchiseId: '',
     assetType: '',
     assetName: '',
@@ -192,8 +192,8 @@ const Investments = () => {
         {activeTab === 'assets' && (
           <button
             onClick={() => {
+              setEditingAsset(null);
               setAssetFormData({
-                outletId: '',
                 franchiseId: '',
                 assetType: '',
                 assetName: '',
@@ -551,8 +551,8 @@ const Investments = () => {
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
+                              setEditingAsset(asset);
                               setAssetFormData({
-                                outletId: asset.outletId?._id || '',
                                 franchiseId: asset.franchiseId?._id || '',
                                 assetType: asset.assetType,
                                 assetName: asset.assetName,
@@ -588,7 +588,9 @@ const Investments = () => {
           {assetModalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">Add Outlet Asset</h3>
+                <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">
+                  {editingAsset ? 'Edit Outlet Asset' : 'Add Outlet Asset'}
+                </h3>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   try {
@@ -596,37 +598,33 @@ const Investments = () => {
                       ...assetFormData,
                       purchaseCost: parseFloat(assetFormData.purchaseCost),
                       usefulLifeMonths: parseInt(assetFormData.usefulLifeMonths),
-                      outletId: assetFormData.outletId || null,
                       franchiseId: assetFormData.franchiseId || null,
                     };
-                    await costingApi.createOutletAsset(data, assetInvoiceFile);
+                    if (editingAsset) {
+                      await costingApi.updateOutletAsset(editingAsset._id, data, assetInvoiceFile);
+                      alert('Asset updated successfully!');
+                    } else {
+                      await costingApi.createOutletAsset(data, assetInvoiceFile);
+                      alert('Asset created successfully!');
+                    }
                     setAssetModalOpen(false);
+                    setEditingAsset(null);
                     fetchAssets();
-                    alert('Asset created successfully!');
                   } catch (error) {
-                    console.error('Failed to create asset:', error);
-                    alert(`Failed to create asset: ${error.response?.data?.message || error.message}`);
+                    console.error('Failed to save asset:', error);
+                    alert(`Failed to ${editingAsset ? 'update' : 'create'} asset: ${error.response?.data?.message || error.message}`);
                   }
                 }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Outlet ID *</label>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID *</label>
                       <input
                         type="text"
                         required
-                        value={assetFormData.outletId}
-                        onChange={(e) => setAssetFormData({ ...assetFormData, outletId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID</label>
-                      <input
-                        type="text"
                         value={assetFormData.franchiseId}
                         onChange={(e) => setAssetFormData({ ...assetFormData, franchiseId: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
-                        placeholder="Optional"
+                        placeholder="Enter Franchise ID or Code"
                       />
                     </div>
                     <div>

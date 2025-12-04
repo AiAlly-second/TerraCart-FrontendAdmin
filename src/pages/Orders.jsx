@@ -105,6 +105,13 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   // Get franchise GST number
   const franchiseGST = franchiseData?.gstNumber || "—";
 
+  // Payment mode display (fallback to CASH if not available)
+  const paymentMethod =
+    order.paymentMethod ||
+    order.paymentMode ||
+    (order.payment && order.payment.method) ||
+    "CASH";
+
   const rows =
     aggregatedItems.length > 0
       ? aggregatedItems
@@ -231,6 +238,10 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
+          </div>
+          <div class="invoice-line" style="margin-top: 6px;">
+            <span>Payment Mode</span>
+            <span>${String(paymentMethod).toUpperCase()}</span>
           </div>
         </div>
       </div>
@@ -666,69 +677,37 @@ const Orders = () => {
         </td>
         <td className="px-6 py-4 text-sm">
           <div className="flex flex-wrap gap-2">
+          {/* Modify Order button - only show for unpaid orders */}
+          {order.status !== "Paid" && order.status !== "Cancelled" && order.status !== "Returned" && (
+            <button 
+              onClick={() => handleEdit(order)}
+              className="px-3 py-1 text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium"
+              title="Add more items to this order"
+            >
+              ➕ Modify Order
+            </button>
+          )}
           <button 
             onClick={() => handleEdit(order)}
             className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
           >
             ✏️ Edit
           </button>
-          <button 
-            onClick={() => handleDelete(order._id)}
-            className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+          {user?.role !== "admin" && (
+            <button 
+              onClick={() => handleDelete(order._id)}
+              className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+            >
+              🗑️ Delete
+            </button>
+          )}
+          <button
+            onClick={() => printOrderInvoice(order)}
+            className="px-3 py-1 rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100"
+            title="Print invoice"
           >
-            🗑️ Delete
+            🖨️ Print
           </button>
-            <button
-              onClick={() => printOrderInvoice(order)}
-              disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-              className={`px-3 py-1 rounded-md border ${
-                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                  ? "text-gray-700 border-gray-200 hover:bg-gray-100"
-                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-              }`}
-              title={
-                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                  ? "Print invoice"
-                  : "Invoice available after order is confirmed"
-              }
-            >
-              🖨️ Print
-            </button>
-            <button
-              onClick={() => downloadOrderInvoice(order)}
-              disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-              className={`px-3 py-1 rounded-md border ${
-                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                  ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-              }`}
-              title={
-                ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                  ? "Download invoice PDF"
-                  : "Invoice available after order is confirmed"
-              }
-            >
-              ⬇️ PDF
-            </button>
-            <button
-              onClick={() => {
-                // Navigate to feedback page with order ID to filter feedback for this order
-                navigate(`/feedback?orderId=${order._id}`);
-              }}
-              disabled={(order.status || "").toLowerCase() !== "paid"}
-              className={`px-3 py-1 rounded-md border ${
-                (order.status || "").toLowerCase() === "paid"
-                  ? "text-green-700 border-green-200 hover:bg-green-50"
-                  : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-              }`}
-              title={
-                (order.status || "").toLowerCase() === "paid"
-                  ? "View feedback for this order"
-                  : "Feedback available after payment"
-              }
-            >
-              💬 Feedback
-            </button>
           </div>
         </td>
       </tr>
@@ -1099,6 +1078,8 @@ const Orders = () => {
     }
     
     const grouped = {};
+    const orderIdsSeen = new Set(); // Track orders we've already added to prevent duplicates
+    
     carts.forEach(cart => {
       const cartId = cart._id?.toString() || cart._id;
       grouped[cartId] = {
@@ -1108,6 +1089,12 @@ const Orders = () => {
     });
     
     orders.forEach(order => {
+      // Skip if we've already processed this order
+      const orderId = order._id?.toString() || order._id;
+      if (!orderId || orderIdsSeen.has(orderId)) {
+        return;
+      }
+      
       let orderCartId = order.cafeId || order.cartId;
       if (orderCartId && typeof orderCartId === 'object') {
         orderCartId = orderCartId._id || orderCartId;
@@ -1122,12 +1109,14 @@ const Orders = () => {
       const cartIdStr = orderCartId?.toString();
       if (cartIdStr && grouped[cartIdStr]) {
         grouped[cartIdStr].orders.push(order);
+        orderIdsSeen.add(orderId);
       } else if (cartIdStr) {
         // Cart not in our list, create entry
         grouped[cartIdStr] = {
           cart: { _id: cartIdStr, name: 'Unknown Cart', cartName: 'Unknown Cart' },
           orders: [order]
         };
+        orderIdsSeen.add(orderId);
       }
     });
     
@@ -1142,7 +1131,16 @@ const Orders = () => {
     // STRICT: Only show DINE_IN orders, filter out any TAKEAWAY orders that might have slipped in
     const dineInOrders = orders.filter((order) => order.serviceType === "DINE_IN");
 
-    const matches = dineInOrders.filter((order) => {
+    // Deduplicate orders by _id to prevent duplicate keys
+    const uniqueOrders = new Map();
+    dineInOrders.forEach(order => {
+      const orderId = order._id?.toString() || order._id;
+      if (orderId && !uniqueOrders.has(orderId)) {
+        uniqueOrders.set(orderId, order);
+      }
+    });
+
+    const matches = Array.from(uniqueOrders.values()).filter((order) => {
       const orderIdMatch = !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
       const tableMatch =
         !normalizedTable ||
@@ -1164,7 +1162,16 @@ const Orders = () => {
     const normalizedTable = searchTable.trim().toLowerCase();
     const normalizedInvoice = searchInvoice.trim().toLowerCase();
 
-    const matches = cartOrders.filter((order) => {
+    // Deduplicate orders by _id to prevent duplicate keys
+    const uniqueOrders = new Map();
+    cartOrders.forEach(order => {
+      const orderId = order._id?.toString() || order._id;
+      if (orderId && !uniqueOrders.has(orderId)) {
+        uniqueOrders.set(orderId, order);
+      }
+    });
+
+    const matches = Array.from(uniqueOrders.values()).filter((order) => {
       const orderIdMatch = !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
       const tableMatch =
         !normalizedTable ||
@@ -1521,11 +1528,7 @@ const Orders = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {filteredCartOrders.map((order) => (
-                            <React.Fragment key={order._id}>
-                              {renderOrderRow(order)}
-                            </React.Fragment>
-                          ))}
+                          {filteredCartOrders.map((order) => renderOrderRow(order))}
                         </tbody>
                       </table>
                     )}
@@ -1855,9 +1858,26 @@ const Orders = () => {
 
                   {/* Add Items Section */}
                   <div className="border-t pt-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
                       Add Items to Order
                     </h3>
+                    {currentOrder?.status === "Paid" ? (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800">
+                          ⚠️ This order has been paid. Items cannot be added to paid orders. Please create a new order instead.
+                        </p>
+                      </div>
+                    ) : currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned" ? (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800">
+                          ⚠️ This order is {currentOrder.status.toLowerCase()}. Items cannot be added.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600 mb-4">
+                        You can add more items to this order until payment is completed. Selected items will be added as a new KOT.
+                      </p>
+                    )}
                     {menuItems.length === 0 && !menuLoading && !menuError && (
                       <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-sm text-yellow-800">
@@ -1957,7 +1977,7 @@ const Orders = () => {
                                     <button
                                       type="button"
                                       onClick={() => adjustItemQuantity(item, -1)}
-                                      disabled={quantity === 0}
+                                      disabled={quantity === 0 || currentOrder?.status === "Paid" || currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned"}
                                       className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       -
@@ -1968,7 +1988,8 @@ const Orders = () => {
                                     <button
                                       type="button"
                                       onClick={() => adjustItemQuantity(item, 1)}
-                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                      disabled={currentOrder?.status === "Paid" || currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned"}
+                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       +
                                     </button>
@@ -1984,7 +2005,11 @@ const Orders = () => {
                           <h3 className="text-lg font-semibold text-gray-800 mb-3">
                             New Items Summary
                           </h3>
-                          {draftItemsArray.length === 0 ? (
+                          {currentOrder?.status === "Paid" || currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned" ? (
+                            <p className="text-sm text-red-600 font-medium">
+                              ⚠️ Cannot add items to {currentOrder?.status.toLowerCase()} orders. Items can only be added to unpaid orders.
+                            </p>
+                          ) : draftItemsArray.length === 0 ? (
                             <p className="text-sm text-gray-500">
                               No new items selected. Select items from the menu to add them to this order.
                             </p>

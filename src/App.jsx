@@ -39,13 +39,19 @@ import Users from './pages/Users';
 import RevenueHistory from './pages/RevenueHistory';
 import Reports from './pages/Reports';
 
-// Costing pages
-import CostingLayout from './pages/costing/CostingLayout';
-import CostingDashboard from './pages/costing/Dashboard';
-import Investments from './pages/costing/Investments';
-import DailyExpenses from './pages/costing/DailyExpenses';
-import InventoryCosting from './pages/costing/InventoryCosting';
-import RecipeCosting from './pages/costing/RecipeCosting';
+// Costing v2 pages
+import CostingV2Layout from './pages/costing-v2/CostingV2Layout';
+import CostingV2Dashboard from './pages/costing-v2/Dashboard';
+import Ingredients from './pages/costing-v2/Ingredients';
+import Suppliers from './pages/costing-v2/Suppliers';
+import Purchases from './pages/costing-v2/Purchases';
+import Recipes from './pages/costing-v2/Recipes';
+import MenuItems from './pages/costing-v2/MenuItems';
+import Inventory from './pages/costing-v2/Inventory';
+import Waste from './pages/costing-v2/Waste';
+import LabourOverhead from './pages/costing-v2/LabourOverhead';
+import Expenses from './pages/costing-v2/Expenses';
+import CostingV2Reports from './pages/costing-v2/Reports';
 
 function App() {
   const location = useLocation();
@@ -288,19 +294,25 @@ function App() {
               }
             />
 
-            {/* Costing routes (Super Admin only, feature flag protected) */}
+            {/* Costing v2 routes (Super Admin, Franchise Admin, Admin) */}
             <Route
-              path="/costing/*"
+              path="/costing-v2/*"
               element={
-                <ProtectedRoute allowedRoles={['super_admin']}>
+                <ProtectedRoute allowedRoles={['super_admin', 'franchise_admin', 'admin']}>
                   <Routes>
-                    <Route element={<CostingLayout />}>
-                      <Route path="dashboard" element={<CostingDashboard />} />
-                      <Route path="investments" element={<Investments />} />
-                      <Route path="expenses" element={<DailyExpenses />} />
-                      <Route path="inventory" element={<InventoryCosting />} />
-                      <Route path="recipes" element={<RecipeCosting />} />
-                      <Route index element={<Navigate to="/costing/dashboard" replace />} />
+                    <Route element={<CostingV2Layout />}>
+                      <Route path="dashboard" element={<CostingV2Dashboard />} />
+                      <Route path="ingredients" element={<Ingredients />} />
+                      <Route path="suppliers" element={<Suppliers />} />
+                      <Route path="purchases" element={<Purchases />} />
+                      <Route path="recipes" element={<Recipes />} />
+                      <Route path="menu-items" element={<MenuItems />} />
+                      <Route path="inventory" element={<Inventory />} />
+                      <Route path="waste" element={<Waste />} />
+                      <Route path="labour-overhead" element={<LabourOverhead />} />
+                      <Route path="expenses" element={<Expenses />} />
+                      <Route path="reports" element={<CostingV2Reports />} />
+                      <Route index element={<Navigate to="/costing-v2/dashboard" replace />} />
                     </Route>
                   </Routes>
                 </ProtectedRoute>

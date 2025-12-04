@@ -104,6 +104,13 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   // Get franchise GST number
   const franchiseGST = franchiseData?.gstNumber || "—";
 
+  // Payment mode display (fallback to CASH if not available on order)
+  const paymentMethod =
+    order.paymentMethod ||
+    order.paymentMode ||
+    (order.payment && order.payment.method) ||
+    "CASH";
+
   const rows =
     aggregatedItems.length > 0
       ? aggregatedItems
@@ -231,6 +238,10 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
           </div>
+          <div class="invoice-line" style="margin-top: 6px;">
+            <span>Payment Mode</span>
+            <span>${String(paymentMethod).toUpperCase()}</span>
+          </div>
         </div>
       </div>
       <div class="invoice-footer">
@@ -243,37 +254,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
 const printOrderInvoice = async (order) => {
   if (!order) return;
 
-  // Fetch franchise and cart data
-  let franchiseData = null;
-  let cartData = null;
-
-  try {
-    // Fetch franchise data if franchiseId exists
-    if (order.franchiseId) {
-      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
-      if (franchiseRes.data) {
-        franchiseData = {
-          gstNumber: franchiseRes.data.gstNumber || null,
-          name: franchiseRes.data.name || null,
-        };
-      }
-    }
-
-    // Fetch cart data if cartId exists
-    if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`);
-      if (cartRes.data) {
-        cartData = {
-          address: cartRes.data.address || cartRes.data.location || null,
-          cartName: cartRes.data.cartName || cartRes.data.name || null,
-        };
-      }
-    }
-  } catch (err) {
-    console.error("Failed to load franchise/cart data:", err);
-  }
-
-  const html = buildInvoiceMarkup(order, franchiseData, cartData);
+  // For takeaway orders in cart admin panel, avoid extra user lookups that can 403
+  // due to access-control on /users/:id. Use the order data only.
+  const html = buildInvoiceMarkup(order, null, null);
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
@@ -439,6 +422,12 @@ const downloadOrderInvoice = async (order) => {
 const TakeawayOrders = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState("");
+  const [draftSelections, setDraftSelections] = useState({});
+  const [draftSearch, setDraftSearch] = useState("");
+  const [draftCategory, setDraftCategory] = useState("all");
   const [searchOrderId, setSearchOrderId] = useState("");
   const [searchTable, setSearchTable] = useState("");
   const [searchInvoice, setSearchInvoice] = useState("");
@@ -471,6 +460,33 @@ const TakeawayOrders = () => {
     [setOrders]
   );
 
+  // Load menu items for "Modify Order" (add items) flow
+  const loadMenu = useCallback(async () => {
+    try {
+      setMenuLoading(true);
+      setMenuError("");
+      const res = await api.get("/menu");
+      const data = Array.isArray(res.data) ? res.data : [];
+
+      const items = [];
+      data.forEach((cat) => {
+        (cat.items || []).forEach((item) => {
+          items.push({
+            ...item,
+            category: cat.name || item.category || "Uncategorized",
+          });
+        });
+      });
+
+      setMenuItems(items);
+    } catch (err) {
+      console.error("Failed to load menu for takeaway modify flow", err);
+      setMenuError("Failed to load menu items. Please try again.");
+    } finally {
+      setMenuLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -498,6 +514,7 @@ const TakeawayOrders = () => {
     };
 
     fetchOrders();
+    loadMenu();
 
     const socket = io(nodeApi);
     socketRef.current = socket;
@@ -511,7 +528,12 @@ const TakeawayOrders = () => {
     };
 
     const handleOrderDeleted = ({ id }) => {
-      setOrders((prev) => prev.filter((order) => order._id !== id));
+      // Remove the order from the list if it exists
+      setOrders((prev) => prev.filter((order) => {
+        const orderId = normalizeId(order._id);
+        const deletedId = normalizeId(id);
+        return orderId !== deletedId;
+      }));
     };
 
     socket.on("newOrder", handleNewOrder);
@@ -527,7 +549,68 @@ const TakeawayOrders = () => {
         socketRef.current.disconnect();
       }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [loadMenu]); // Load once on mount
+
+  const getItemKey = (item) => item.id || item._id || item.name;
+
+  const draftItemsArray = useMemo(
+    () =>
+      Object.values(draftSelections).map(({ item, quantity }) => ({
+        id: getItemKey(item),
+        name: item.name,
+        quantity,
+        price: Number(item.price) || 0,
+        item,
+      })),
+    [draftSelections]
+  );
+
+  const draftTotals = useMemo(() => {
+    const subtotal = draftItemsArray.reduce(
+      (sum, entry) => sum + entry.price * entry.quantity,
+      0
+    );
+    const gst = subtotal * 0.05;
+    const total = subtotal + gst;
+    const totalItems = draftItemsArray.reduce(
+      (sum, entry) => sum + entry.quantity,
+      0
+    );
+    return {
+      subtotal,
+      gst,
+      total,
+      totalItems,
+    };
+  }, [draftItemsArray]);
+
+  const filteredMenuItems = useMemo(() => {
+    const normalizedSearch = draftSearch.trim().toLowerCase();
+    return menuItems.filter((item) => {
+      const matchesCategory =
+        draftCategory === "all" || item.category === draftCategory;
+      const matchesSearch =
+        !normalizedSearch ||
+        item.name.toLowerCase().includes(normalizedSearch) ||
+        (item.description || "").toLowerCase().includes(normalizedSearch);
+      return matchesCategory && matchesSearch;
+    });
+  }, [menuItems, draftCategory, draftSearch]);
+
+  const adjustItemQuantity = useCallback((menuItem, delta) => {
+    setDraftSelections((prev) => {
+      const key = getItemKey(menuItem);
+      const next = { ...prev };
+      const existing = next[key] || { item: menuItem, quantity: 0 };
+      const updatedQuantity = existing.quantity + delta;
+      if (updatedQuantity <= 0) {
+        delete next[key];
+      } else {
+        next[key] = { item: menuItem, quantity: updatedQuantity };
+      }
+      return next;
+    });
+  }, []);
 
   const changeStatus = async (orderId, newStatus) => {
     try {
@@ -540,8 +623,20 @@ const TakeawayOrders = () => {
     }
   };
 
+  const handleNewTakeawayOrder = () => {
+    setDraftSelections({});
+    setCurrentOrder({
+      serviceType: "TAKEAWAY",
+      status: "Confirmed",
+      isNew: true,
+    });
+    setIsModalOpen(true);
+  };
+
   const handleEdit = (order) => {
-    setCurrentOrder(order);
+    // Reset draft selections each time we open the modal
+    setDraftSelections({});
+    setCurrentOrder({ ...order, isNew: false });
     setIsModalOpen(true);
   };
 
@@ -559,19 +654,85 @@ const TakeawayOrders = () => {
         await api.patch(`/orders/${currentOrder._id}/status`, { status: newStatus });
       }
 
+      // Only allow adding items for unpaid orders (same rule as dine-in Orders panel)
+      const isFinal =
+        currentOrder.status === "Paid" ||
+        currentOrder.status === "Cancelled" ||
+        currentOrder.status === "Returned";
+
+      if (!isFinal && draftItemsArray.length > 0) {
+        const itemsToAdd = draftItemsArray.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        }));
+        await api.post(`/orders/${currentOrder._id}/add-items`, {
+          items: itemsToAdd,
+        });
+      }
+
       // Refresh orders list by fetching again
       const ordersRes = await api.get("/orders");
       const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-      const takeawayOrders = allOrders.filter((o) => o.serviceType === "TAKEAWAY");
-      
+      const takeawayOrders = allOrders.filter(
+        (o) => o.serviceType === "TAKEAWAY"
+      );
+
       setOrders(takeawayOrders);
 
       setIsModalOpen(false);
       setCurrentOrder(null);
+      setDraftSelections({});
       alert("Order updated successfully!");
     } catch (err) {
       console.error("Save failed:", err);
       const errorMessage = err.response?.data?.message || "Failed to update order. Please try again.";
+      alert(errorMessage);
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+
+    if (draftItemsArray.length === 0) {
+      alert("Please select at least one item to create a takeaway order.");
+      return;
+    }
+
+    try {
+      const itemsPayload = draftItemsArray.map((entry) => ({
+        name: entry.name,
+        quantity: entry.quantity,
+        price: entry.price,
+      }));
+
+      const payload = {
+        serviceType: "TAKEAWAY",
+        items: itemsPayload,
+      };
+
+      const res = await api.post("/orders", payload);
+      const created = res.data;
+
+      // Refresh takeaway orders list
+      const ordersRes = await api.get("/orders");
+      const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+      const takeawayOrders = allOrders.filter(
+        (o) => o.serviceType === "TAKEAWAY"
+      );
+
+      setOrders(takeawayOrders);
+
+      setIsModalOpen(false);
+      setCurrentOrder(null);
+      setDraftSelections({});
+      alert("Takeaway order created successfully!");
+    } catch (err) {
+      console.error("Failed to create takeaway order", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to create takeaway order. Please try again.";
       alert(errorMessage);
     }
   };
@@ -714,6 +875,13 @@ const TakeawayOrders = () => {
             className="border border-gray-200 text-gray-600 hover:bg-gray-100 py-2 px-3 rounded-lg text-sm"
           >
             Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleNewTakeawayOrder}
+            className="bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700"
+          >
+            ➕ New Takeaway Order
           </button>
         </div>
       </div>
@@ -901,6 +1069,18 @@ const TakeawayOrders = () => {
               </td>
               <td className="px-6 py-4 text-sm">
                 <div className="flex flex-wrap gap-2">
+                  {/* Modify Order button - only show for unpaid orders */}
+                  {order.status !== "Paid" &&
+                    order.status !== "Cancelled" &&
+                    order.status !== "Returned" && (
+                      <button
+                        onClick={() => handleEdit(order)}
+                        className="px-3 py-1 text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium"
+                        title="Add more items to this takeaway order"
+                      >
+                        ➕ Modify Order
+                      </button>
+                    )}
                   <button 
                     onClick={() => handleEdit(order)}
                     className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
@@ -915,54 +1095,10 @@ const TakeawayOrders = () => {
                   </button>
                   <button
                     onClick={() => printOrderInvoice(order)}
-                    disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-                    className={`px-3 py-1 rounded-md border ${
-                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                        ? "text-gray-700 border-gray-200 hover:bg-gray-100"
-                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                    }`}
-                    title={
-                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                        ? "Print invoice"
-                        : "Invoice available after order is confirmed"
-                    }
+                    className="px-3 py-1 rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100"
+                    title="Print invoice"
                   >
                     🖨️ Print
-                  </button>
-                  <button
-                    onClick={() => downloadOrderInvoice(order)}
-                    disabled={!["paid", "confirmed"].includes((order.status || "").toLowerCase())}
-                    className={`px-3 py-1 rounded-md border ${
-                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                        ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                    }`}
-                    title={
-                      ["paid", "confirmed"].includes((order.status || "").toLowerCase())
-                        ? "Download invoice PDF"
-                        : "Invoice available after order is confirmed"
-                    }
-                  >
-                    ⬇️ PDF
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Navigate to feedback page with order ID to filter feedback for this order
-                      navigate(`/feedback?orderId=${order._id}`);
-                    }}
-                    disabled={(order.status || "").toLowerCase() !== "paid"}
-                    className={`px-3 py-1 rounded-md border ${
-                      (order.status || "").toLowerCase() === "paid"
-                        ? "text-green-700 border-green-200 hover:bg-green-50"
-                        : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-                    }`}
-                    title={
-                      (order.status || "").toLowerCase() === "paid"
-                        ? "View feedback for this order"
-                        : "Feedback available after payment"
-                    }
-                  >
-                    💬 Feedback
                   </button>
                 </div>
               </td>
@@ -1025,7 +1161,7 @@ const TakeawayOrders = () => {
           <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl m-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-800">
-                Edit Takeaway Order
+                {currentOrder?.isNew ? "Create Takeaway Order" : "Edit Takeaway Order"}
               </h2>
               <button 
                 onClick={() => {
@@ -1038,27 +1174,384 @@ const TakeawayOrders = () => {
               </button>
             </div>
             <form
-              onSubmit={handleSave}
+              onSubmit={currentOrder?.isNew ? handleCreate : handleSave}
               className="space-y-6"
             >
-              <div>
-                <label className="block text-gray-700 text-sm font-semibold mb-2">
-                  Order Status {getStatusIcon(currentOrder?.status || "Pending")}
-                </label>
-                <select
-                  name="status"
-                  defaultValue={currentOrder?.status || "Pending"}
-                  className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                >
-                  <option value="Pending">⏳ Pending</option>
-                  <option value="Confirmed">👨‍🍳 Confirmed</option>
-                  <option value="Preparing">🔥 Preparing</option>
-                  <option value="Ready">🍽️ Ready</option>
-                  <option value="Paid">✅ Paid</option>
-                  <option value="Cancelled">❌ Cancelled</option>
-                  <option value="Returned">↩️ Returned</option>
-                </select>
-              </div>
+              {currentOrder?.isNew ? (
+                <>
+                  {/* New takeaway order - only menu selection & summary */}
+                  <div className="border-t border-gray-200 pt-1 space-y-4">
+                    <p className="text-xs text-gray-500">
+                      Build a new takeaway order by selecting items from the menu
+                      below. This will create a new TAKEAWAY order.
+                    </p>
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                      <div className="xl:col-span-2 space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                          <input
+                            type="text"
+                            value={draftSearch}
+                            onChange={(e) => setDraftSearch(e.target.value)}
+                            placeholder="Search menu items..."
+                            className="flex-1 shadow-sm border border-gray-300 rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setDraftCategory("all")}
+                              className={`px-3 py-1 text-sm rounded-full border transition ${
+                                draftCategory === "all"
+                                  ? "bg-blue-600 text-white border-blue-600 shadow"
+                                  : "border-gray-300 text-gray-600 hover:border-blue-400"
+                              }`}
+                            >
+                              All
+                            </button>
+                            {Array.from(
+                              new Set(menuItems.map((it) => it.category))
+                            ).map((category) => (
+                              <button
+                                type="button"
+                                key={category || "uncategorized"}
+                                onClick={() =>
+                                  setDraftCategory(category || "Uncategorized")
+                                }
+                                className={`px-3 py-1 text-sm rounded-full border transition ${
+                                  draftCategory ===
+                                  (category || "Uncategorized")
+                                    ? "bg-blue-600 text-white border-blue-600 shadow"
+                                    : "border-gray-300 text-gray-600 hover:border-blue-400"
+                                }`}
+                              >
+                                {category || "Uncategorized"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y">
+                          {menuLoading ? (
+                            <div className="p-4 text-sm text-gray-500">
+                              Loading menu…
+                            </div>
+                          ) : menuError ? (
+                            <div className="p-4 text-sm text-red-600">
+                              {menuError}
+                            </div>
+                          ) : filteredMenuItems.length === 0 ? (
+                            <div className="p-4 text-sm text-gray-500">
+                              No menu items match your filters.
+                            </div>
+                          ) : (
+                            filteredMenuItems.map((item) => {
+                              const quantity =
+                                draftSelections[getItemKey(item)]?.quantity ||
+                                0;
+                              return (
+                                <div
+                                  key={getItemKey(item)}
+                                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50"
+                                >
+                                  <div>
+                                    <div className="text-sm font-semibold text-gray-800">
+                                      {item.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      ₹{formatMoney(item.price)} ·{" "}
+                                      {item.category}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        adjustItemQuantity(item, -1)
+                                      }
+                                      disabled={quantity === 0}
+                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                      {quantity}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        adjustItemQuantity(item, 1)
+                                      }
+                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                          <h3 className="text-md font-semibold text-gray-800 mb-3">
+                            Order Summary
+                          </h3>
+                          {draftItemsArray.length === 0 ? (
+                            <p className="text-sm text-gray-500">
+                              No items selected yet. Use the menu on the left to
+                              build the order.
+                            </p>
+                          ) : (
+                            <div className="space-y-2 text-sm text-gray-700">
+                              {draftItemsArray.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="flex justify-between items-center"
+                                >
+                                  <span>
+                                    {entry.name} × {entry.quantity}
+                                  </span>
+                                  <span>
+                                    ₹
+                                    {formatMoney(
+                                      entry.price * entry.quantity
+                                    )}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="mt-4 space-y-1 text-sm text-gray-600">
+                            <div className="flex justify-between">
+                              <span>Items</span>
+                              <span>{draftTotals.totalItems}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Subtotal</span>
+                              <span>
+                                ₹{formatMoney(draftTotals.subtotal)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>GST (5%)</span>
+                              <span>₹{formatMoney(draftTotals.gst)}</span>
+                            </div>
+                            <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
+                              <span>Total</span>
+                              <span>₹{formatMoney(draftTotals.total)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Status section */}
+                  <div>
+                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                      Order Status{" "}
+                      {getStatusIcon(currentOrder?.status || "Pending")}
+                    </label>
+                    <select
+                      name="status"
+                      defaultValue={currentOrder?.status || "Pending"}
+                      className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                    >
+                      <option value="Pending">⏳ Pending</option>
+                      <option value="Confirmed">👨‍🍳 Confirmed</option>
+                      <option value="Preparing">🔥 Preparing</option>
+                      <option value="Ready">🍽️ Ready</option>
+                      <option value="Paid">✅ Paid</option>
+                      <option value="Cancelled">❌ Cancelled</option>
+                      <option value="Returned">↩️ Returned</option>
+                    </select>
+                  </div>
+
+                  {/* Add items section (Modify Order logic) */}
+                  <div className="border-t border-gray-200 pt-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Add Items to Takeaway Order
+                    </h3>
+                    {["Paid", "Cancelled", "Returned"].includes(
+                      currentOrder?.status || ""
+                    ) ? (
+                      <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                        You cannot add items to this order because it is{" "}
+                        <strong>{currentOrder?.status}</strong>. Items can only
+                        be added to unpaid takeaway orders.
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-gray-500">
+                          Select items from the menu below to add more items to
+                          this takeaway order. These will be added as a new KOT.
+                        </p>
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                          <div className="xl:col-span-2 space-y-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                              <input
+                                type="text"
+                                value={draftSearch}
+                                onChange={(e) => setDraftSearch(e.target.value)}
+                                placeholder="Search menu items..."
+                                className="flex-1 shadow-sm border border-gray-300 rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setDraftCategory("all")}
+                                  className={`px-3 py-1 text-sm rounded-full border transition ${
+                                    draftCategory === "all"
+                                      ? "bg-blue-600 text-white border-blue-600 shadow"
+                                      : "border-gray-300 text-gray-600 hover:border-blue-400"
+                                  }`}
+                                >
+                                  All
+                                </button>
+                                {Array.from(
+                                  new Set(menuItems.map((it) => it.category))
+                                ).map((category) => (
+                                  <button
+                                    type="button"
+                                    key={category || "uncategorized"}
+                                    onClick={() =>
+                                      setDraftCategory(
+                                        category || "Uncategorized"
+                                      )
+                                    }
+                                    className={`px-3 py-1 text-sm rounded-full border transition ${
+                                      draftCategory ===
+                                      (category || "Uncategorized")
+                                        ? "bg-blue-600 text-white border-blue-600 shadow"
+                                        : "border-gray-300 text-gray-600 hover:border-blue-400"
+                                    }`}
+                                  >
+                                    {category || "Uncategorized"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y">
+                              {menuLoading ? (
+                                <div className="p-4 text-sm text-gray-500">
+                                  Loading menu…
+                                </div>
+                              ) : menuError ? (
+                                <div className="p-4 text-sm text-red-600">
+                                  {menuError}
+                                </div>
+                              ) : filteredMenuItems.length === 0 ? (
+                                <div className="p-4 text-sm text-gray-500">
+                                  No menu items match your filters.
+                                </div>
+                              ) : (
+                                filteredMenuItems.map((item) => {
+                                  const quantity =
+                                    draftSelections[getItemKey(item)]
+                                      ?.quantity || 0;
+                                  return (
+                                    <div
+                                      key={getItemKey(item)}
+                                      className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50"
+                                    >
+                                      <div>
+                                        <div className="text-sm font-semibold text-gray-800">
+                                          {item.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          ₹{formatMoney(item.price)} ·{" "}
+                                          {item.category}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            adjustItemQuantity(item, -1)
+                                          }
+                                          disabled={quantity === 0}
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                          {quantity}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            adjustItemQuantity(item, 1)
+                                          }
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                              <h3 className="text-md font-semibold text-gray-800 mb-3">
+                                New Items Summary
+                              </h3>
+                              {draftItemsArray.length === 0 ? (
+                                <p className="text-sm text-gray-500">
+                                  No items selected yet. Use the menu on the
+                                  left to add items.
+                                </p>
+                              ) : (
+                                <div className="space-y-2 text-sm text-gray-700">
+                                  {draftItemsArray.map((entry) => (
+                                    <div
+                                      key={entry.id}
+                                      className="flex justify-between items-center"
+                                    >
+                                      <span>
+                                        {entry.name} × {entry.quantity}
+                                      </span>
+                                      <span>
+                                        ₹
+                                        {formatMoney(
+                                          entry.price * entry.quantity
+                                        )}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-4 space-y-1 text-sm text-gray-600">
+                                <div className="flex justify-between">
+                                  <span>Items</span>
+                                  <span>{draftTotals.totalItems}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Subtotal</span>
+                                  <span>
+                                    ₹{formatMoney(draftTotals.subtotal)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>GST (5%)</span>
+                                  <span>₹{formatMoney(draftTotals.gst)}</span>
+                                </div>
+                                <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
+                                  <span>Total</span>
+                                  <span>₹{formatMoney(draftTotals.total)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end gap-3">
                 <button
@@ -1066,6 +1559,7 @@ const TakeawayOrders = () => {
                   onClick={() => {
                     setIsModalOpen(false);
                     setCurrentOrder(null);
+                    setDraftSelections({});
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                 >
@@ -1075,7 +1569,7 @@ const TakeawayOrders = () => {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Save Changes
+                  {currentOrder?.isNew ? "Create Order" : "Save Changes"}
                 </button>
               </div>
             </form>

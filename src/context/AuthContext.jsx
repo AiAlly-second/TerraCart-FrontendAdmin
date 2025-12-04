@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
 
@@ -27,8 +27,6 @@ const ALLOWED_ROLES = ['admin', 'franchise_admin', 'super_admin', 'cart_admin'];
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const isLoggingInRef = useRef(false);
-  const hasInitializedRef = useRef(false);
 
   // Get storage keys based on role
   const getStorageKeys = (role) => {
@@ -66,22 +64,6 @@ export const AuthProvider = ({ children }) => {
 
   // Load user from localStorage on mount - check all possible storage keys
   useEffect(() => {
-    // Prevent multiple initializations
-    if (hasInitializedRef.current) {
-      return;
-    }
-    hasInitializedRef.current = true;
-
-    // Check if we just logged in (within last 10 seconds) - skip verification
-    const loginTimestamp = sessionStorage.getItem('lastLoginTime');
-    const now = Date.now();
-    const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 10000;
-    
-    if (justLoggedIn) {
-      console.log('[AuthContext] Just logged in - skipping token verification');
-      sessionStorage.removeItem('lastLoginTime');
-    }
-
     // Try to find existing user from any role
     let storedUser = null;
     let token = null;
@@ -114,13 +96,7 @@ export const AuthProvider = ({ children }) => {
 
     if (storedUser && token && ALLOWED_ROLES.includes(storedUser.role)) {
       setUser(storedUser);
-      // Only verify token if we didn't just log in AND we're not currently logging in
-      if (!justLoggedIn && !isLoggingInRef.current) {
-        verifyToken(token, storedUser.role);
-      } else {
-        console.log('[AuthContext] Skipping token verification - just logged in or logging in');
-        setLoading(false);
-      }
+      verifyToken(token, storedUser.role);
     } else {
       setLoading(false);
     }
@@ -128,11 +104,7 @@ export const AuthProvider = ({ children }) => {
 
   // Login function - handles all admin roles
   const login = async (email, password) => {
-    // Set flag to prevent token verification during login
-    isLoggingInRef.current = true;
-    
     try {
-      console.log('[AuthContext] Starting login process');
       const response = await fetch(`${nodeApi}/api/admin/login`, {
         method: 'POST',
         headers: {
@@ -145,7 +117,6 @@ export const AuthProvider = ({ children }) => {
 
       // Check if user has an allowed role
       if (!response.ok || !data?.token || !ALLOWED_ROLES.includes(data?.user?.role)) {
-        isLoggingInRef.current = false;
         throw new Error(data?.message || 'Login failed or not authorized as admin');
       }
 
@@ -155,41 +126,13 @@ export const AuthProvider = ({ children }) => {
       // Store user and token with role-specific keys
       localStorage.setItem(storageKeys.token, data.token);
       localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
-      
-      // Verify token was stored
-      const storedToken = localStorage.getItem(storageKeys.token);
-      if (!storedToken || storedToken !== data.token) {
-        console.error('[AuthContext] Token storage failed!');
-        throw new Error('Failed to store authentication token');
-      }
-      
+      setUser(data.user);
+
       console.log('[AuthContext] Login successful, role:', userRole);
       console.log('[AuthContext] Token stored in:', storageKeys.token);
-      console.log('[AuthContext] Token length:', data.token.length);
-      console.log('[AuthContext] User data:', data.user);
-      
-      // Mark that we just logged in (use sessionStorage to persist across component remounts)
-      // Use a longer window (30 seconds) to prevent any verification attempts
-      sessionStorage.setItem('lastLoginTime', Date.now().toString());
-      
-      // Set user state and loading BEFORE returning
-      // This ensures the state is updated synchronously
-      setUser(data.user);
-      setLoading(false);
-
-      console.log('[AuthContext] User state set, loading set to false');
-      console.log('[AuthContext] Token verified in storage:', !!localStorage.getItem(storageKeys.token));
-
-      // Reset the flag after a delay to allow navigation
-      setTimeout(() => {
-        isLoggingInRef.current = false;
-        console.log('[AuthContext] Login process completed, flag reset');
-      }, 2000);
 
       return { success: true };
     } catch (error) {
-      isLoggingInRef.current = false;
-      console.error('[AuthContext] Login failed:', error);
       return {
         success: false,
         message: error.message || 'Login failed',
@@ -199,48 +142,20 @@ export const AuthProvider = ({ children }) => {
 
   // Verify token
   const verifyToken = async (token, expectedRole) => {
-    // NEVER verify token if we're currently logging in
-    if (isLoggingInRef.current) {
-      console.log('[AuthContext] Skipping verifyToken - currently logging in');
-      setLoading(false);
-      return;
-    }
-
-    // Check if we just logged in - don't verify if we just got a fresh token
-    const loginTimestamp = sessionStorage.getItem('lastLoginTime');
-    const now = Date.now();
-    const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 30000; // 30 second window
-    
-    if (justLoggedIn) {
-      console.log('[AuthContext] Skipping verifyToken - just logged in');
-      setLoading(false);
-      return;
-    }
-
     try {
-      console.log('[AuthContext] Verifying token for role:', expectedRole);
       const response = await fetch(`${nodeApi}/api/admin/verify`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      // Handle network errors - don't clear user on network failures
-      if (!response.ok && response.status === 0) {
-        console.warn('[AuthContext] Network error during token verification - keeping user logged in');
-        setLoading(false);
-        return;
-      }
-
       const data = await response.json();
-      console.log('[AuthContext] Verify response:', { status: response.status, success: data?.success });
 
     // Check for deactivation or authorization errors
     if (response.status === 403) {
       const errorMessage =
         data?.message ||
         'Your account has been deactivated or is not authorized. Please contact TerraCart Support.';
-      console.error('[AuthContext] Account deactivated:', errorMessage);
       alert(errorMessage);
       logout();
       return;
@@ -248,69 +163,23 @@ export const AuthProvider = ({ children }) => {
 
     // Verify returns { success, user: { ... } }
     if (!response.ok || !data?.success || !ALLOWED_ROLES.includes(data?.user?.role)) {
-      console.error('[AuthContext] Token verification failed:', {
-        ok: response.ok,
-        success: data?.success,
-        role: data?.user?.role,
-        allowed: ALLOWED_ROLES.includes(data?.user?.role)
-      });
-      // Only logout on actual auth failures (401), not network errors
-      if (response.status === 401) {
-        console.warn('[AuthContext] Token invalid - logging out');
-        logout();
-      } else {
-        // For other errors (500, network issues), keep user logged in
-        console.warn('[AuthContext] Verification error but keeping user logged in');
-        setLoading(false);
-      }
-      return;
+      throw new Error('Token invalid or not authorized');
     }
 
     // Update storage with verified user data
     const storageKeys = getStorageKeys(data.user.role);
     setUser(data.user);
     localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
-    console.log('[AuthContext] Token verified successfully, user updated');
-    setLoading(false);
     } catch (error) {
-      // Only logout on actual errors, not network failures
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        console.warn('[AuthContext] Network error during verification - keeping user logged in:', error.message);
-        setLoading(false);
-      } else {
-        console.error('[AuthContext] Token verification failed:', error);
-        // Don't logout on unknown errors - might be temporary
-        setLoading(false);
-      }
+      console.error('Token verification failed:', error);
+      logout();
     } finally {
-      // Ensure loading is set to false (already set in most branches, but ensure it here too)
       setLoading(false);
     }
   };
 
   // Logout function - clears all admin tokens
-  // force: if true, logout even if just logged in (for explicit user logout)
-  const logout = (force = false) => {
-    console.log('[AuthContext] Logout called', { force });
-    
-    // NEVER logout if we're currently logging in
-    if (isLoggingInRef.current && !force) {
-      console.warn('[AuthContext] Prevented logout - currently logging in');
-      return;
-    }
-
-    // Check if we just logged in - don't logout if we just logged in (unless forced)
-    if (!force) {
-      const loginTimestamp = sessionStorage.getItem('lastLoginTime');
-      const now = Date.now();
-      const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 30000; // 30 second window
-      
-      if (justLoggedIn) {
-        console.warn('[AuthContext] Prevented logout - user just logged in. Use logout(true) to force.');
-        return;
-      }
-    }
-    
+  const logout = () => {
     // Clear all possible tokens
     localStorage.removeItem('superAdminToken');
     localStorage.removeItem('superAdminUser');
@@ -318,10 +187,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('franchiseAdminUser');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
-    sessionStorage.removeItem('lastLoginTime');
     setUser(null);
-    setLoading(false); // Ensure loading is set to false on logout
-    console.log('[AuthContext] Logout completed');
   };
 
   return (

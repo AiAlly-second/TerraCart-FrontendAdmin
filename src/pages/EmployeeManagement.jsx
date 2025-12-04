@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaBuilding, FaStore, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,6 @@ const getMaxDOBDate = () => {
 
 const EmployeeManagement = () => {
   const { user } = useAuth();
-
   const userRole = user?.role;
   const isCartAdmin = userRole === 'admin';
   const [hierarchy, setHierarchy] = useState([]);
@@ -42,7 +41,6 @@ const EmployeeManagement = () => {
   const [selectedCafe, setSelectedCafe] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [cafes, setCafes] = useState([]);
-  const hasAutoPopulatedRef = useRef(false);
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
@@ -68,44 +66,11 @@ const EmployeeManagement = () => {
     isActive: true
   });
 
-  // Auto-populate franchise and cart for cart admins when modal opens
   useEffect(() => {
-    if (showModal && isCartAdmin && user && !editingEmployee && !hasAutoPopulatedRef.current) {
-      // Extract franchiseId - handle both object and string formats
-      let userFranchiseId = null;
-      if (user.franchiseId) {
-        if (typeof user.franchiseId === 'object' && user.franchiseId._id) {
-          userFranchiseId = user.franchiseId._id.toString();
-        } else {
-          userFranchiseId = user.franchiseId.toString();
-        }
-      }
-      
-      // Extract cafeId (cart admin's own ID)
-      const userCafeId = user._id ? user._id.toString() : null;
-      
-      // Set franchise if we have it
-      if (userFranchiseId) {
-        setSelectedFranchise(userFranchiseId);
-        setFormData(prev => ({ ...prev, franchiseId: userFranchiseId }));
-      }
-      
-      // Set cart if we have it
-      if (userCafeId) {
-        setSelectedCafe(userCafeId);
-        setFormData(prev => ({ ...prev, cafeId: userCafeId }));
-      }
-      
-      hasAutoPopulatedRef.current = true;
-    }
-    
-    // Reset the ref when modal closes
-    if (!showModal) {
-      hasAutoPopulatedRef.current = false;
-    }
-  }, [showModal, isCartAdmin, user, editingEmployee]);
+    fetchData();
+  }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       
@@ -132,11 +97,7 @@ const EmployeeManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [isCartAdmin]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  };
 
   const toggleFranchise = (franchiseId) => {
     const newExpanded = new Set(expandedFranchises);
@@ -231,12 +192,11 @@ const EmployeeManagement = () => {
       name: employee.name || '',
       dateOfBirth: dob,
       mobile: employee.mobile || '',
-
-      email: employee.email || employee.userId?.email || employee.user?.email || '', // Get email from employee, linked user, or user object
+      email: employee.email || '', // Get email from employee or linked user
       role: employee.employeeRole || employee.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
-      franchiseId: employee.franchiseId?._id || '',
-      cafeId: employee.cafeId?._id || '',
-
+      employeeRole: employee.employeeRole || 'waiter',
+      franchiseId: isCartAdmin ? '' : (employee.franchiseId?._id || ''),
+      cafeId: isCartAdmin ? (user?._id || '') : (employee.cafeId?._id || ''),
       kycVerified: employee.kycVerified || false,
       disability: employee.disability || { hasDisability: false, type: '' },
       deviceIssued: employee.deviceIssued || { smartwatch: false, tracker: false },
@@ -285,7 +245,6 @@ const EmployeeManagement = () => {
     setEditingEmployee(null);
     resetForm();
     setShowModal(true);
-    // Note: Auto-population happens in useEffect when modal opens
   };
 
   const filteredHierarchy = hierarchy.filter(franchise => {
@@ -612,42 +571,6 @@ const EmployeeManagement = () => {
             <h2 className="text-2xl font-bold mb-4">
               {editingEmployee ? 'Edit Employee' : 'Create Employee'}
             </h2>
-            {isCartAdmin && !editingEmployee && selectedFranchise && selectedCafe && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start">
-                  <FaStore className="text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-blue-900">
-                      Creating employee for your cart
-                    </p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Franchise: <span className="font-semibold">
-                        {franchises.find(f => {
-                          const fId = (f._id || f).toString();
-                          return fId === selectedFranchise;
-                        })?.name || 
-                        (user.franchiseId && typeof user.franchiseId === 'object' ? user.franchiseId.name : null) ||
-                        'Your Franchise'}
-                      </span>
-                      {' • '}
-                      Cart: <span className="font-semibold">
-                        {cafes.find(c => {
-                          const cId = (c._id || c).toString();
-                          return cId === selectedCafe;
-                        })?.cafeName || 
-                        cafes.find(c => {
-                          const cId = (c._id || c).toString();
-                          return cId === selectedCafe;
-                        })?.name || 
-                        user?.cartName || 
-                        user?.cafeName || 
-                        'Your Cart'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -699,6 +622,33 @@ const EmployeeManagement = () => {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email {!editingEmployee && '*'}</label>
+                  <input
+                    type="email"
+                    required={!editingEmployee}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="employee@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Required for login access</p>
+                </div>
+                {!editingEmployee && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Min 6 characters"
+                      minLength={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
+                  </div>
+                )}
                 {!isCartAdmin && (
                   <>
                     <div>

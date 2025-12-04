@@ -16,9 +16,9 @@ const DailyExpenses = () => {
   const [activeTab, setActiveTab] = useState('expenses'); // 'expenses' or 'opex'
   const [opexList, setOpexList] = useState([]);
   const [opexModalOpen, setOpexModalOpen] = useState(false);
+  const [editingOpex, setEditingOpex] = useState(null);
   const [deleteOpexModal, setDeleteOpexModal] = useState({ isOpen: false, id: null });
   const [opexFormData, setOpexFormData] = useState({
-    outletId: '',
     franchiseId: '',
     costCategory: '',
     amount: '',
@@ -261,8 +261,8 @@ const DailyExpenses = () => {
           {activeTab === 'opex' && (
             <button
               onClick={() => {
+                setEditingOpex(null);
                 setOpexFormData({
-                  outletId: '',
                   franchiseId: '',
                   costCategory: '',
                   amount: '',
@@ -664,7 +664,7 @@ const DailyExpenses = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Amount</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Period</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Outlet</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Franchise</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">Actions</th>
                 </tr>
               </thead>
@@ -687,14 +687,14 @@ const DailyExpenses = () => {
                         {new Date(opex.periodStartDate).toLocaleDateString()} - {new Date(opex.periodEndDate).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        {opex.outletId?.cartName || opex.outletId?.name || '—'}
+                        {opex.franchiseId?.name || '—'}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
+                              setEditingOpex(opex);
                               setOpexFormData({
-                                outletId: opex.outletId?._id || '',
                                 franchiseId: opex.franchiseId?._id || '',
                                 costCategory: opex.costCategory,
                                 amount: opex.amount,
@@ -728,44 +728,42 @@ const DailyExpenses = () => {
           {opexModalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">Add Outlet OPEX</h3>
+                <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">
+                  {editingOpex ? 'Edit Outlet OPEX' : 'Add Outlet OPEX'}
+                </h3>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   try {
                     const data = {
                       ...opexFormData,
                       amount: parseFloat(opexFormData.amount),
-                      outletId: opexFormData.outletId || null,
                       franchiseId: opexFormData.franchiseId || null,
                     };
-                    await costingApi.createOutletOPEX(data, opexInvoiceFile);
+                    if (editingOpex) {
+                      await costingApi.updateOutletOPEX(editingOpex._id, data, opexInvoiceFile);
+                      alert('OPEX updated successfully!');
+                    } else {
+                      await costingApi.createOutletOPEX(data, opexInvoiceFile);
+                      alert('OPEX created successfully!');
+                    }
                     setOpexModalOpen(false);
+                    setEditingOpex(null);
                     fetchOPEX();
-                    alert('OPEX created successfully!');
                   } catch (error) {
-                    console.error('Failed to create OPEX:', error);
-                    alert(`Failed to create OPEX: ${error.response?.data?.message || error.message}`);
+                    console.error('Failed to save OPEX:', error);
+                    alert(`Failed to ${editingOpex ? 'update' : 'create'} OPEX: ${error.response?.data?.message || error.message}`);
                   }
                 }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Outlet ID *</label>
+                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID *</label>
                       <input
                         type="text"
                         required
-                        value={opexFormData.outletId}
-                        onChange={(e) => setOpexFormData({ ...opexFormData, outletId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#6b4423] mb-1">Franchise ID</label>
-                      <input
-                        type="text"
                         value={opexFormData.franchiseId}
                         onChange={(e) => setOpexFormData({ ...opexFormData, franchiseId: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
-                        placeholder="Optional"
+                        placeholder="Enter Franchise ID"
                       />
                     </div>
                     <div>

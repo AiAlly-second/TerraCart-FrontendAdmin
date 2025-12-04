@@ -69,7 +69,7 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
-const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData) => {
+const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData, paymentMethod) => {
   if (!order) return "";
   const invoiceNumber = (() => {
     const date = new Date(order.createdAt || Date.now()).toISOString().slice(0, 10).replace(/-/g, "");
@@ -81,6 +81,9 @@ const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData
   const cartAddress = cartData?.address || "—";
   // Get franchise GST number
   const franchiseGST = franchiseData?.gstNumber || "—";
+
+  // Payment mode display (fallback to CASH if not provided)
+  const resolvedPaymentMethod = paymentMethod || "CASH";
 
   const rows =
     invoiceItems.length > 0
@@ -209,6 +212,10 @@ const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
           </div>
+          <div class="invoice-line" style="margin-top: 6px;">
+            <span>Payment Mode</span>
+            <span>${String(resolvedPaymentMethod).toUpperCase()}</span>
+          </div>
         </div>
       </div>
       <div class="invoice-footer">
@@ -254,43 +261,16 @@ const Invoices = () => {
   };
 
   const loadFranchiseAndCartData = async (order) => {
+    // To avoid 403 errors from protected /users/:id endpoint for other cafes,
+    // we no longer fetch user profiles here. Invoices will use generic
+    // address/GST placeholders or any data already attached to the order.
     if (!order) {
       setFranchiseData(null);
       setCartData(null);
       return;
     }
-
-    try {
-      // Fetch franchise data if franchiseId exists
-      if (order.franchiseId) {
-        const franchiseRes = await api.get(`/users/${order.franchiseId}`);
-        if (franchiseRes.data) {
-          setFranchiseData({
-            gstNumber: franchiseRes.data.gstNumber || null,
-            name: franchiseRes.data.name || null,
-          });
-        }
-      } else {
-        setFranchiseData(null);
-      }
-
-      // Fetch cart data if cartId exists
-      if (order.cartId) {
-        const cartRes = await api.get(`/users/${order.cartId}`);
-        if (cartRes.data) {
-          setCartData({
-            address: cartRes.data.address || cartRes.data.location || null,
-            cartName: cartRes.data.cartName || cartRes.data.name || null,
-          });
-        }
-      } else {
-        setCartData(null);
-      }
-    } catch (err) {
-      console.error("Failed to load franchise/cart data:", err);
-      setFranchiseData(null);
-      setCartData(null);
-    }
+    setFranchiseData(null);
+    setCartData(null);
   };
 
   const loadPayments = async () => {
@@ -344,6 +324,14 @@ const Invoices = () => {
     () => (selected ? paymentsByOrder[selected._id] || [] : []),
     [selected, paymentsByOrder]
   );
+
+  // Primary payment method for selected order (for invoice header/footer)
+  const selectedPaymentMethod = useMemo(() => {
+    if (!selectedPayments || selectedPayments.length === 0) return null;
+    // Prefer a PAID payment record; otherwise fall back to the first record
+    const paid = selectedPayments.find((p) => p.status === "PAID");
+    return (paid || selectedPayments[0]).method || null;
+  }, [selectedPayments]);
 
   const getInvoiceNumber = (order) => {
     const date = new Date(order.createdAt || Date.now()).toISOString().slice(0,10).replace(/-/g,'');
@@ -597,7 +585,14 @@ const Invoices = () => {
                   ref={printRef} 
                   className="bg-white rounded-lg shadow border"
                   dangerouslySetInnerHTML={{
-                    __html: buildInvoiceMarkup(selected, selectedInvoiceItems, selectedTotals, franchiseData, cartData)
+                    __html: buildInvoiceMarkup(
+                      selected,
+                      selectedInvoiceItems,
+                      selectedTotals,
+                      franchiseData,
+                      cartData,
+                      selectedPaymentMethod
+                    )
                   }}
                 />
               </div>
