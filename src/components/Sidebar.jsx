@@ -122,7 +122,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/table-dashboard", icon: "📊", label: "Table Dashboard" },
         { path: "/feedback", icon: "💬", label: "Feedback" },
         { path: "/customers", icon: "👥", label: "Customers" },
-        { path: "/inventory", icon: "📦", label: "Inventory" },
       ];
       if (isCostingEnabled) {
         items.push({ path: "/costing-v2", icon: "💰", label: "Costing" });

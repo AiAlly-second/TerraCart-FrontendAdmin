@@ -15,7 +15,15 @@ const CostingV2Layout = () => {
     return <Outlet />;
   }
 
-  // For franchise admin and cart admin, show full sidebar
+  // For franchise admin, only show dashboard (no sidebar)
+  if (user?.role === "franchise_admin") {
+    if (location.pathname !== "/costing-v2/dashboard") {
+      return <Navigate to="/costing-v2/dashboard" replace />;
+    }
+    return <Outlet />;
+  }
+
+  // For cart admin, show full sidebar
   const menuItems = [
     { path: "/costing-v2/dashboard", label: "Dashboard", icon: "📊" },
     { path: "/costing-v2/ingredients", label: "Ingredients", icon: "🥘" },

@@ -6,12 +6,16 @@ import {
   createOverhead,
 } from "../../services/costingV2Api";
 import { FaPlus } from "react-icons/fa";
+import OutletFilter from "../../components/costing-v2/OutletFilter";
+import { useAuth } from "../../context/AuthContext";
 
 const LabourOverhead = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("labour");
   const [labourCosts, setLabourCosts] = useState([]);
   const [overheads, setOverheads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     periodFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -24,14 +28,15 @@ const LabourOverhead = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedOutlet, activeTab]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
       const [labourRes, overheadRes] = await Promise.all([
-        getLabourCosts(),
-        getOverheads(),
+        getLabourCosts(params),
+        getOverheads(params),
       ]);
       if (labourRes.data.success) setLabourCosts(labourRes.data.data);
       if (overheadRes.data.success) setOverheads(overheadRes.data.data);
@@ -82,14 +87,19 @@ const LabourOverhead = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Labour & Overhead</h1>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
-        >
-          <FaPlus /> Add {activeTab === "labour" ? "Labour Cost" : "Overhead"}
-        </button>
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold text-gray-800">Labour & Overhead</h1>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
+          >
+            <FaPlus /> Add {activeTab === "labour" ? "Labour Cost" : "Overhead"}
+          </button>
+        </div>
+        <div className="flex justify-end">
+          <OutletFilter selectedOutlet={selectedOutlet} onOutletChange={setSelectedOutlet} />
+        </div>
       </div>
 
       <div className="mb-4 flex gap-2 border-b">
@@ -267,5 +277,6 @@ const LabourOverhead = () => {
 };
 
 export default LabourOverhead;
+
 
 

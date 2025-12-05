@@ -5,11 +5,15 @@ import {
   getIngredients,
 } from "../../services/costingV2Api";
 import { FaPlus } from "react-icons/fa";
+import OutletFilter from "../../components/costing-v2/OutletFilter";
+import { useAuth } from "../../context/AuthContext";
 
 const Waste = () => {
+  const { user } = useAuth();
   const [wasteRecords, setWasteRecords] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     ingredientId: "",
@@ -21,13 +25,14 @@ const Waste = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedOutlet]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
       const [wasteRes, ingredientsRes] = await Promise.all([
-        getWaste(),
+        getWaste(params),
         getIngredients(),
       ]);
       if (wasteRes.data.success) setWasteRecords(wasteRes.data.data);
@@ -215,5 +220,6 @@ const Waste = () => {
 };
 
 export default Waste;
+
 
 

@@ -11,6 +11,7 @@ import {
 } from "../../services/costingV2Api";
 import { useAuth } from "../../context/AuthContext";
 import { FaPlus, FaEdit, FaTrash, FaDownload, FaLink, FaSync } from "react-icons/fa";
+import OutletFilter from "../../components/costing-v2/OutletFilter";
 
 const MenuItems = () => {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ const MenuItems = () => {
   const [recipes, setRecipes] = useState([]);
   const [defaultMenuItems, setDefaultMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -37,13 +39,14 @@ const MenuItems = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedOutlet]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
       const [menuItemsRes, recipesRes, defaultMenuRes] = await Promise.all([
-        getMenuItems(),
+        getMenuItems(params),
         getRecipes(),
         getDefaultMenuItems(),
       ]);
@@ -199,18 +202,19 @@ const MenuItems = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Menu Items</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={handleSyncFromDefault}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            title="Sync prices from default menu"
-          >
-            <FaSync /> Sync Prices
-          </button>
-          <button
-            onClick={() => {
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold text-gray-800">Menu Items</h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSyncFromDefault}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              title="Sync prices from default menu"
+            >
+              <FaSync /> Sync Prices
+            </button>
+            <button
+              onClick={() => {
               setImportModalOpen(true);
               setSelectedDefaultItems(new Set());
               setImportRecipeId("");
@@ -236,6 +240,10 @@ const MenuItems = () => {
           >
             <FaPlus /> Add Menu Item
           </button>
+        </div>
+        </div>
+        <div className="flex justify-end">
+          <OutletFilter selectedOutlet={selectedOutlet} onOutletChange={setSelectedOutlet} />
         </div>
       </div>
 

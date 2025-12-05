@@ -7,12 +7,16 @@ import {
   getIngredients,
 } from "../../services/costingV2Api";
 import { FaPlus, FaCheck } from "react-icons/fa";
+import OutletFilter from "../../components/costing-v2/OutletFilter";
+import { useAuth } from "../../context/AuthContext";
 
 const Purchases = () => {
+  const { user } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     supplierId: "",
@@ -23,13 +27,14 @@ const Purchases = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedOutlet]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
       const [purchasesRes, suppliersRes, ingredientsRes] = await Promise.all([
-        getPurchases(),
+        getPurchases(params),
         getSuppliers(),
         getIngredients(),
       ]);
@@ -305,5 +310,6 @@ const Purchases = () => {
 };
 
 export default Purchases;
+
 
 

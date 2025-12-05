@@ -36,12 +36,12 @@ const Dashboard = () => {
       };
       if (selectedOutlet) params.outletId = selectedOutlet;
 
-      if (user?.role === "super_admin") {
-        // Super admin gets hierarchical data
+      if (user?.role === "super_admin" || user?.role === "franchise_admin") {
+        // Super admin and franchise admin get hierarchical data
         const hierarchicalRes = await getHierarchicalCosting(params);
         if (hierarchicalRes.data.success) {
           setHierarchicalData(hierarchicalRes.data.data);
-          // Auto-expand all franchises
+          // Auto-expand all franchises/kiosks
           const franchiseIds = hierarchicalRes.data.data.franchises.map(f => f.franchiseId.toString());
           setExpandedFranchises(new Set(franchiseIds));
         }
@@ -85,14 +85,19 @@ const Dashboard = () => {
     );
   }
 
-  // Super Admin View - Hierarchical Dashboard
-  if (user?.role === "super_admin" && hierarchicalData) {
+  // Super Admin & Franchise Admin View - Hierarchical Dashboard
+  if ((user?.role === "super_admin" || user?.role === "franchise_admin") && hierarchicalData) {
+    const isFranchiseAdmin = user?.role === "franchise_admin";
     return (
       <div className="p-6 bg-gray-50 min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Costing Overview</h1>
-          <p className="text-gray-600">Hierarchical view of all franchises and kiosks</p>
+          <p className="text-gray-600">
+            {isFranchiseAdmin 
+              ? "Kiosk-by-kiosk view of your franchise" 
+              : "Hierarchical view of all franchises and kiosks"}
+          </p>
         </div>
 
         {/* Date Range Selector */}
@@ -122,8 +127,8 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Grand Totals */}
-        {hierarchicalData.grandTotals && (
+        {/* Grand Totals - Only show for super admin */}
+        {!isFranchiseAdmin && hierarchicalData.grandTotals && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
               <div className="flex items-center justify-between mb-2">
@@ -164,10 +169,108 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Franchise List */}
+        {/* Franchise List (or Kiosk List for Franchise Admin) */}
         <div className="space-y-4">
           {hierarchicalData.franchises.map((franchise) => {
             const isExpanded = expandedFranchises.has(franchise.franchiseId.toString());
+            // For franchise admin, always show kiosks expanded (no franchise header needed)
+            if (isFranchiseAdmin) {
+              return (
+                <div key={franchise.franchiseId} className="space-y-3">
+                  {/* Franchise Summary Card (non-expandable for franchise admin) */}
+                  <div className="bg-gradient-to-r from-[#6b4423] to-[#8b5a3c] text-white p-4 rounded-lg shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FaBuilding className="text-2xl" />
+                        <div>
+                          <h3 className="text-xl font-bold">{franchise.franchiseName}</h3>
+                          {franchise.franchiseCode && (
+                            <p className="text-sm opacity-90">Code: {franchise.franchiseCode}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6 text-right">
+                        <div>
+                          <p className="text-xs opacity-90">Total Sales</p>
+                          <p className="text-lg font-bold">₹{Number(franchise.totals.sales || 0).toLocaleString("en-IN")}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-90">Total Profit</p>
+                          <p className={`text-lg font-bold ${franchise.totals.profit >= 0 ? "text-green-200" : "text-red-200"}`}>
+                            ₹{Number(franchise.totals.profit || 0).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-90">Profit Margin</p>
+                          <p className="text-lg font-bold">{Number(franchise.totals.profitMargin || 0).toFixed(2)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-90">Kiosks</p>
+                          <p className="text-lg font-bold">{franchise.kiosks.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Kiosks List - Always visible for franchise admin */}
+                  <div className="space-y-3">
+                    {franchise.kiosks.length === 0 ? (
+                      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">No kiosks found</div>
+                    ) : (
+                      franchise.kiosks.map((kiosk) => (
+                        <div key={kiosk.kioskId} className="bg-white rounded-lg shadow-lg p-4 hover:shadow-xl transition-shadow">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <FaStore className="text-[#d86d2a] text-xl" />
+                              <div>
+                                <h4 className="font-semibold text-gray-800 text-lg">{kiosk.kioskName}</h4>
+                                <p className="text-xs text-gray-500 font-mono">Code: {kiosk.kioskCode || kiosk.kioskId.toString().slice(-8)}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-5 gap-4 text-sm">
+                              <div className="text-center">
+                                <p className="text-gray-600 text-xs mb-1">Sales</p>
+                                <p className="font-semibold text-green-600">
+                                  ₹{Number(kiosk.sales || 0).toLocaleString("en-IN")}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-600 text-xs mb-1">Food Cost</p>
+                                <p className="font-semibold text-red-600">
+                                  ₹{Number(kiosk.foodCost || 0).toLocaleString("en-IN")}
+                                </p>
+                                <p className="text-xs text-gray-500">{Number(kiosk.foodCostPercent || 0).toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-600 text-xs mb-1">Labour</p>
+                                <p className="font-semibold text-orange-600">
+                                  ₹{Number(kiosk.labourCost || 0).toLocaleString("en-IN")}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-600 text-xs mb-1">Overhead</p>
+                                <p className="font-semibold text-yellow-600">
+                                  ₹{Number(kiosk.overheadCost || 0).toLocaleString("en-IN")}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-600 text-xs mb-1">Profit</p>
+                                <p className={`font-semibold ${kiosk.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                  ₹{Number(kiosk.profit || 0).toLocaleString("en-IN")}
+                                </p>
+                                <p className="text-xs text-gray-500">{Number(kiosk.profitMargin || 0).toFixed(1)}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            
+            // Super admin view - expandable franchise cards
             return (
               <div key={franchise.franchiseId} className="bg-white rounded-lg shadow-lg overflow-hidden">
                 {/* Franchise Header */}

@@ -7,6 +7,7 @@ import {
 } from "../../services/costingV2Api";
 import { FaDownload, FaFileCsv, FaFilePdf } from "react-icons/fa";
 import * as XLSX from "xlsx";
+import OutletFilter from "../../components/costing-v2/OutletFilter";
 
 const Reports = () => {
   const [activeReport, setActiveReport] = useState("food-cost");
@@ -19,15 +20,20 @@ const Reports = () => {
   const [priceHistoryData, setPriceHistoryData] = useState([]);
   const [pnlData, setPnlData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
 
   useEffect(() => {
     fetchReport();
-  }, [activeReport, dateRange]);
+  }, [activeReport, dateRange, selectedOutlet]);
 
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const params = { from: dateRange.from, to: dateRange.to };
+      const params = { 
+        from: dateRange.from, 
+        to: dateRange.to,
+        ...(selectedOutlet && { outletId: selectedOutlet })
+      };
 
       switch (activeReport) {
         case "food-cost":
@@ -101,21 +107,26 @@ const Reports = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Reports</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExportCSV}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
-          >
-            <FaFileCsv /> Export CSV
-          </button>
-          <button
-            onClick={handleExportPDF}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2"
-          >
-            <FaFilePdf /> Export PDF
-          </button>
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold text-gray-800">Reports</h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExportCSV}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
+              <FaFileCsv /> Export CSV
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2"
+            >
+              <FaFilePdf /> Export PDF
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <OutletFilter selectedOutlet={selectedOutlet} onOutletChange={setSelectedOutlet} />
         </div>
       </div>
 
@@ -290,5 +301,6 @@ const Reports = () => {
 };
 
 export default Reports;
+
 
 

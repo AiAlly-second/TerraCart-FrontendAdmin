@@ -83,7 +83,25 @@ const EmployeeManagement = () => {
       if (!isCartAdmin) {
         const usersResponse = await api.get('/users');
         const allUsers = usersResponse.data || [];
-        setFranchises(allUsers.filter(u => u.role === 'franchise_admin'));
+        const allFranchises = allUsers.filter(u => u.role === 'franchise_admin');
+        
+        // For franchise admin, ensure their own franchise is in the list
+        if (userRole === 'franchise_admin' && user?._id) {
+          const currentFranchise = allFranchises.find(f => 
+            f._id?.toString() === user._id?.toString() || 
+            f._id === user._id
+          );
+          // If current franchise not found in list, add it
+          if (!currentFranchise) {
+            allFranchises.push({
+              _id: user._id,
+              name: user.name || user.franchiseName || 'My Franchise',
+              email: user.email
+            });
+          }
+        }
+        
+        setFranchises(allFranchises);
         setCafes(allUsers.filter(u => u.role === 'admin'));
       }
       
@@ -120,14 +138,16 @@ const EmployeeManagement = () => {
   };
 
   const handleFranchiseChange = (franchiseId) => {
-    setSelectedFranchise(franchiseId);
+    const franchiseIdStr = franchiseId?.toString() || franchiseId || '';
+    setSelectedFranchise(franchiseIdStr);
     setSelectedCafe(''); // Reset cafe selection
-    setFormData({ ...formData, franchiseId, cafeId: '' });
+    setFormData({ ...formData, franchiseId: franchiseIdStr, cafeId: '' });
   };
 
   const handleCafeChange = (cafeId) => {
-    setSelectedCafe(cafeId);
-    setFormData({ ...formData, cafeId });
+    const cafeIdStr = cafeId?.toString() || cafeId || '';
+    setSelectedCafe(cafeIdStr);
+    setFormData({ ...formData, cafeId: cafeIdStr });
   };
 
   const handleSubmit = async (e) => {
@@ -174,7 +194,7 @@ const EmployeeManagement = () => {
     }
   };
 
-  const handleEdit = (employee) => {
+  const handleEdit = async (employee) => {
     setEditingEmployee(employee);
     // Cart admin cannot see/edit franchise info
     if (!isCartAdmin) {
@@ -185,23 +205,36 @@ const EmployeeManagement = () => {
       setSelectedCafe(user?._id || '');
     }
     
+    // Fetch full employee details to get email (now stored in Employee model)
+    let fullEmployeeData = employee;
+    
+    try {
+      // Fetch full employee details from backend (includes email if stored)
+      const employeeResponse = await api.get(`/employees/${employee._id}`);
+      fullEmployeeData = employeeResponse.data || employee;
+    } catch (error) {
+      console.warn('Could not fetch full employee details, using provided data:', error);
+      // Use the employee data we already have
+      fullEmployeeData = employee;
+    }
+    
     // Format date for input
-    const dob = employee.dateOfBirth ? new Date(employee.dateOfBirth).toISOString().split('T')[0] : '';
+    const dob = fullEmployeeData.dateOfBirth ? new Date(fullEmployeeData.dateOfBirth).toISOString().split('T')[0] : '';
     
     setFormData({
-      name: employee.name || '',
+      name: fullEmployeeData.name || '',
       dateOfBirth: dob,
-      mobile: employee.mobile || '',
-      email: employee.email || '', // Get email from employee or linked user
-      role: employee.employeeRole || employee.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
-      employeeRole: employee.employeeRole || 'waiter',
-      franchiseId: isCartAdmin ? '' : (employee.franchiseId?._id || ''),
-      cafeId: isCartAdmin ? (user?._id || '') : (employee.cafeId?._id || ''),
-      kycVerified: employee.kycVerified || false,
-      disability: employee.disability || { hasDisability: false, type: '' },
-      deviceIssued: employee.deviceIssued || { smartwatch: false, tracker: false },
-      imei: employee.imei || { device: '', phone: '' },
-      isActive: employee.isActive !== false
+      mobile: fullEmployeeData.mobile || '',
+      email: fullEmployeeData.email || '', // Email is now stored in Employee model
+      role: fullEmployeeData.employeeRole || fullEmployeeData.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
+      employeeRole: fullEmployeeData.employeeRole || 'waiter',
+      franchiseId: isCartAdmin ? '' : (fullEmployeeData.franchiseId?._id || ''),
+      cafeId: isCartAdmin ? (user?._id || '') : (fullEmployeeData.cafeId?._id || ''),
+      kycVerified: fullEmployeeData.kycVerified || false,
+      disability: fullEmployeeData.disability || { hasDisability: false, type: '' },
+      deviceIssued: fullEmployeeData.deviceIssued || { smartwatch: false, tracker: false },
+      imei: fullEmployeeData.imei || { device: '', phone: '' },
+      isActive: fullEmployeeData.isActive !== false
     });
     setShowModal(true);
   };
@@ -222,6 +255,10 @@ const EmployeeManagement = () => {
   };
 
   const resetForm = () => {
+    const isFranchiseAdmin = userRole === 'franchise_admin';
+    const franchiseId = isFranchiseAdmin ? (user?._id?.toString() || user?._id || '') : '';
+    const cafeId = isCartAdmin ? (user?._id?.toString() || user?._id || '') : '';
+    
     setFormData({
       name: '',
       dateOfBirth: '',
@@ -229,16 +266,23 @@ const EmployeeManagement = () => {
       email: '',
       password: '',
       role: 'waiter',
-      franchiseId: '',
-      cafeId: isCartAdmin ? (user?._id || '') : '', // Auto-set for cart admin
+      franchiseId: franchiseId, // Auto-set for franchise admin
+      cafeId: cafeId, // Auto-set for cart admin
       kycVerified: false,
       disability: { hasDisability: false, type: '' },
       deviceIssued: { smartwatch: false, tracker: false },
       imei: { device: '', phone: '' },
       isActive: true
     });
-    setSelectedFranchise('');
-    setSelectedCafe(isCartAdmin ? (user?._id || '') : '');
+    
+    // Pre-populate franchise for franchise admin (ensure it's a string for comparison)
+    if (isFranchiseAdmin) {
+      setSelectedFranchise(franchiseId);
+    } else {
+      setSelectedFranchise('');
+    }
+    
+    setSelectedCafe(cafeId);
   };
 
   const openCreateModal = () => {
@@ -627,12 +671,16 @@ const EmployeeManagement = () => {
                   <input
                     type="email"
                     required={!editingEmployee}
-                    value={formData.email}
+                    value={formData.email || ''}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="employee@example.com"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Required for login access</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {editingEmployee 
+                      ? 'Update email if employee has a login account' 
+                      : 'Required for login access'}
+                  </p>
                 </div>
                 {!editingEmployee && (
                   <div>
@@ -654,15 +702,24 @@ const EmployeeManagement = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
                       <select
-                        value={selectedFranchise}
+                        value={selectedFranchise?.toString() || ''}
                         onChange={(e) => handleFranchiseChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        disabled={userRole === 'franchise_admin'} // Disable for franchise admin (they can only add to their own franchise)
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-600"
                       >
                         <option value="">Select Franchise</option>
                         {franchises.map(franchise => (
-                          <option key={franchise._id} value={franchise._id}>{franchise.name}</option>
+                          <option 
+                            key={franchise._id?.toString() || franchise._id} 
+                            value={franchise._id?.toString() || franchise._id}
+                          >
+                            {franchise.name || franchise.franchiseName || 'Unnamed Franchise'}
+                          </option>
                         ))}
                       </select>
+                      {userRole === 'franchise_admin' && (
+                        <p className="text-xs text-gray-500 mt-1">Your franchise is automatically selected</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cart</label>
@@ -674,11 +731,30 @@ const EmployeeManagement = () => {
                       >
                         <option value="">Select Cart (Optional)</option>
                         {cafes
-                          .filter(cafe => !selectedFranchise || (cafe.franchiseId && (cafe.franchiseId._id || cafe.franchiseId).toString() === selectedFranchise))
+                          .filter(cafe => {
+                            // For franchise admin, only show carts under their franchise
+                            if (userRole === 'franchise_admin') {
+                              const franchiseId = user?._id?.toString() || user?._id;
+                              const cafeFranchiseId = cafe.franchiseId?._id?.toString() || cafe.franchiseId?._id || cafe.franchiseId?.toString() || cafe.franchiseId;
+                              return cafeFranchiseId && cafeFranchiseId.toString() === franchiseId.toString();
+                            }
+                            // For super admin, filter by selected franchise
+                            if (!selectedFranchise) return true;
+                            const cafeFranchiseId = cafe.franchiseId?._id?.toString() || cafe.franchiseId?._id || cafe.franchiseId?.toString() || cafe.franchiseId;
+                            return cafeFranchiseId && cafeFranchiseId.toString() === selectedFranchise.toString();
+                          })
                           .map(cafe => (
-                            <option key={cafe._id} value={cafe._id}>{cafe.cafeName || cafe.name}</option>
+                            <option 
+                              key={cafe._id?.toString() || cafe._id} 
+                              value={cafe._id?.toString() || cafe._id}
+                            >
+                              {cafe.cafeName || cafe.name}
+                            </option>
                           ))}
                       </select>
+                      {userRole === 'franchise_admin' && selectedFranchise && (
+                        <p className="text-xs text-gray-500 mt-1">Showing carts under your franchise</p>
+                      )}
                     </div>
                   </>
                 )}
