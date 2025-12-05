@@ -439,9 +439,22 @@ const TakeawayOrders = () => {
   const socketRef = React.useRef(null);
   const upsertOrder = React.useCallback(
     (incoming, { prepend = false } = {}) => {
-      if (!incoming || incoming.serviceType !== "TAKEAWAY") return;
+      console.log('[TakeawayOrders] upsertOrder called with:', incoming);
+      if (!incoming) {
+        console.log('[TakeawayOrders] upsertOrder: incoming is null/undefined');
+        return;
+      }
+      if (incoming.serviceType !== "TAKEAWAY") {
+        console.log(`[TakeawayOrders] upsertOrder: filtering out order - serviceType is ${incoming.serviceType}, expected TAKEAWAY`);
+        return;
+      }
       const incomingId = normalizeId(incoming._id);
-      if (!incomingId) return;
+      if (!incomingId) {
+        console.log('[TakeawayOrders] upsertOrder: no order ID found');
+        return;
+      }
+
+      console.log(`[TakeawayOrders] upsertOrder: processing takeaway order ${incomingId}`);
 
       setOrders((prev) => {
         const list = Array.isArray(prev) ? [...prev] : [];
@@ -450,10 +463,12 @@ const TakeawayOrders = () => {
         );
 
         if (index >= 0) {
+          console.log(`[TakeawayOrders] upsertOrder: updating existing order at index ${index}`);
           list[index] = incoming;
           return list;
         }
 
+        console.log(`[TakeawayOrders] upsertOrder: adding new order (prepend: ${prepend})`);
         return prepend ? [incoming, ...list] : [...list, incoming];
       });
     },
@@ -494,16 +509,40 @@ const TakeawayOrders = () => {
       try {
         // Use authenticated API to get orders filtered by cartId for cart admins
         const res = await api.get("/orders");
-        const data = res.data || [];
+        console.log('[TakeawayOrders] API Response:', res);
+        console.log('[TakeawayOrders] Response data:', res.data);
+        
+        // Handle both response formats: direct array or { success: true, data: [...] }
+        let data = [];
+        if (Array.isArray(res.data)) {
+          data = res.data;
+        } else if (res.data && res.data.success && Array.isArray(res.data.data)) {
+          data = res.data.data;
+        } else if (res.data && Array.isArray(res.data.data)) {
+          data = res.data.data;
+        }
+        
+        console.log(`[TakeawayOrders] Parsed ${data.length} total orders from response`);
+        
         if (!active) return;
+        
         // Filter for takeaway orders only
-        const takeawayOrders = (Array.isArray(data) ? data : []).filter(
-          (order) => order.serviceType === "TAKEAWAY"
+        const takeawayOrders = data.filter(
+          (order) => {
+            const isTakeaway = order.serviceType === "TAKEAWAY";
+            if (!isTakeaway) {
+              console.log(`[TakeawayOrders] Order ${order._id} filtered out - serviceType: ${order.serviceType}`);
+            }
+            return isTakeaway;
+          }
         );
+        
         console.log(`[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`);
+        console.log(`[TakeawayOrders] Takeaway orders:`, takeawayOrders);
         setOrders(takeawayOrders);
       } catch (err) {
         console.error("Failed to load takeaway orders:", err);
+        console.error("Error details:", err.response?.data || err.message);
         // Show user-friendly error message
         if (err.response?.status === 401) {
           console.warn("Authentication failed - user may need to login again");
@@ -520,14 +559,17 @@ const TakeawayOrders = () => {
     socketRef.current = socket;
 
     const handleNewOrder = (order) => {
+      console.log('[TakeawayOrders] Socket: newOrder event received:', order);
       upsertOrder(order, { prepend: true });
     };
 
     const handleOrderUpdated = (order) => {
+      console.log('[TakeawayOrders] Socket: orderUpdated event received:', order);
       upsertOrder(order);
     };
 
     const handleOrderDeleted = ({ id }) => {
+      console.log('[TakeawayOrders] Socket: orderDeleted event received:', id);
       // Remove the order from the list if it exists
       setOrders((prev) => prev.filter((order) => {
         const orderId = normalizeId(order._id);
@@ -536,15 +578,46 @@ const TakeawayOrders = () => {
       }));
     };
 
+    // Listen for new Socket.IO events (room-based)
+    const handleOrderCreated = (order) => {
+      console.log('[TakeawayOrders] Socket: order:created event received:', order);
+      upsertOrder(order, { prepend: true });
+    };
+
+    const handleOrderStatusUpdated = (order) => {
+      console.log('[TakeawayOrders] Socket: order:status:updated event received:', order);
+      upsertOrder(order);
+    };
+
     socket.on("newOrder", handleNewOrder);
     socket.on("orderUpdated", handleOrderUpdated);
     socket.on("orderDeleted", handleOrderDeleted);
+    socket.on("order:created", handleOrderCreated);
+    socket.on("order:status:updated", handleOrderStatusUpdated);
+
+    // Join cafe room for real-time updates (if user is logged in)
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('franchiseAdminToken') || localStorage.getItem('superAdminToken');
+    if (token) {
+      try {
+        // Decode token to get user info (basic decode, not verification)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userId = payload.id;
+        if (userId) {
+          socket.emit('join:cafe', userId);
+          console.log('[TakeawayOrders] Socket: Joined cafe room:', userId);
+        }
+      } catch (e) {
+        console.warn('[TakeawayOrders] Could not decode token for socket room:', e);
+      }
+    }
 
     return () => {
       active = false;
       socket.off("newOrder", handleNewOrder);
       socket.off("orderUpdated", handleOrderUpdated);
       socket.off("orderDeleted", handleOrderDeleted);
+      socket.off("order:created", handleOrderCreated);
+      socket.off("order:status:updated", handleOrderStatusUpdated);
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
@@ -711,16 +784,31 @@ const TakeawayOrders = () => {
         items: itemsPayload,
       };
 
+      console.log('[TakeawayOrders] Creating order with payload:', payload);
+      console.log('[TakeawayOrders] Items count:', itemsPayload.length);
+
       const res = await api.post("/orders", payload);
       const created = res.data;
 
+      console.log('[TakeawayOrders] Order created successfully:', created);
+
       // Refresh takeaway orders list
       const ordersRes = await api.get("/orders");
-      const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+      console.log('[TakeawayOrders] Refreshed orders list:', ordersRes.data);
+      
+      // Handle both response formats
+      let allOrders = [];
+      if (Array.isArray(ordersRes.data)) {
+        allOrders = ordersRes.data;
+      } else if (ordersRes.data && Array.isArray(ordersRes.data.data)) {
+        allOrders = ordersRes.data.data;
+      }
+      
       const takeawayOrders = allOrders.filter(
         (o) => o.serviceType === "TAKEAWAY"
       );
 
+      console.log('[TakeawayOrders] Filtered takeaway orders:', takeawayOrders.length);
       setOrders(takeawayOrders);
 
       setIsModalOpen(false);
@@ -729,11 +817,14 @@ const TakeawayOrders = () => {
       alert("Takeaway order created successfully!");
     } catch (err) {
       console.error("Failed to create takeaway order", err);
+      console.error("Error response:", err.response?.data);
+      console.error("Error status:", err.response?.status);
       const errorMessage =
         err.response?.data?.message ||
+        err.response?.data?.error ||
         err.message ||
         "Failed to create takeaway order. Please try again.";
-      alert(errorMessage);
+      alert(`Error: ${errorMessage}\n\nCheck console for details.`);
     }
   };
 

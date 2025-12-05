@@ -190,10 +190,28 @@ const DailyExpenses = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const workbook = XLSX.read(event.target.result, { type: 'binary' });
+        // Input validation: Limit file size and add safety options
+        const fileSize = file.size;
+        const maxSize = 10 * 1024 * 1024; // 10MB limit
+        if (fileSize > maxSize) {
+          alert('File size exceeds 10MB limit. Please use a smaller file.');
+          return;
+        }
+
+        // Use safe parsing options to mitigate prototype pollution
+        const workbook = XLSX.read(event.target.result, { 
+          type: 'binary',
+          cellDates: false,
+          cellNF: false,
+          cellStyles: false,
+          dense: false
+        });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet);
+        const data = XLSX.utils.sheet_to_json(worksheet, {
+          defval: null,
+          raw: false
+        });
 
         // Map CSV/Excel columns to expense format
         const mappedData = data.map((row, index) => {

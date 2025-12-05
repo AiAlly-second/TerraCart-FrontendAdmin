@@ -13,6 +13,7 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 
 // Use Vite environment variable if available, fallback to localhost:5001
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
@@ -605,12 +606,17 @@ const Orders = () => {
             </div>
           )}
         </td>
-        <td className="px-6 py-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🪑</span>
-            <span className="text-lg font-semibold text-gray-700">{order.tableNumber || 'N/A'}</span>
-          </div>
-        </td>
+         <td className="px-6 py-4">
+           <div className="flex items-center gap-2">
+             <img 
+               src={tableIcon} 
+               alt="Table" 
+               title="Table"
+               className="w-6 h-6 object-contain"
+             />
+             <span className="text-lg font-semibold text-gray-700">{order.tableNumber || 'N/A'}</span>
+           </div>
+         </td>
         <td className="px-6 py-4">
           <div className="flex flex-col gap-2">
             <span className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${getStatusClass(order.status)}`}>
@@ -1627,9 +1633,14 @@ const Orders = () => {
                     </div>
                     {draftServiceType === "DINE_IN" && (
                       <div>
-                        <label className="block text-gray-700 text-sm font-semibold mb-2">
-                          Choose Table 🪑
-                        </label>
+                         <label className="block text-gray-700 text-sm font-semibold mb-2 flex items-center gap-2">
+                           <img 
+                             src={tableIcon} 
+                             alt="Table" 
+                             className="w-5 h-5 object-contain"
+                           />
+                           Choose Table
+                         </label>
                         <div className="flex flex-col md:flex-row md:items-center gap-3">
                           <select
                             value={selectedTableId}
@@ -1816,12 +1827,17 @@ const Orders = () => {
                   {/* Order Info Section */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label
-                        htmlFor="tableNumber"
-                        className="block text-gray-700 text-sm font-bold mb-2"
-                      >
-                        Table Number 🪑
-                      </label>
+                       <label
+                         htmlFor="tableNumber"
+                         className="block text-gray-700 text-sm font-bold mb-2 flex items-center gap-2"
+                       >
+                         <img 
+                           src={tableIcon} 
+                           alt="Table" 
+                           className="w-5 h-5 object-contain"
+                         />
+                         Table Number
+                       </label>
                       <input
                         type="text"
                         id="tableNumber"

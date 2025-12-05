@@ -181,12 +181,16 @@ const Ingredients = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{ing.uom}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {ing.qtyOnHand} {ing.uom}
+                  <span className="font-medium">
+                    {typeof ing.qtyOnHand === 'number' ? ing.qtyOnHand.toFixed(2) : '0.00'} {ing.uom}
+                  </span>
                   {ing.qtyOnHand <= ing.reorderLevel && (
                     <span className="ml-2 text-red-600 text-xs">⚠ Low Stock</span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">{ing.reorderLevel} {ing.uom}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {typeof ing.reorderLevel === 'number' ? ing.reorderLevel.toFixed(2) : '0.00'} {ing.uom}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">₹{ing.currentCostPerBaseUnit.toFixed(2)}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 rounded text-xs ${ing.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>

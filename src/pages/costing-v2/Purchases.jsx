@@ -144,8 +144,21 @@ const Purchases = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{purchase.invoiceNo || "N/A"}</td>
                 <td className="px-6 py-4">
-                  <div className="text-sm">
-                    {purchase.items?.length || 0} item(s)
+                  <div className="text-sm space-y-1">
+                    {purchase.items && purchase.items.length > 0 ? (
+                      purchase.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {item.ingredientId?.name || 'Unknown Ingredient'}:
+                          </span>
+                          <span className="text-gray-700 font-semibold">
+                            {typeof item.qty === 'number' ? item.qty.toFixed(2) : item.qty} {item.uom || 'kg'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-gray-400">No items</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap font-semibold">
