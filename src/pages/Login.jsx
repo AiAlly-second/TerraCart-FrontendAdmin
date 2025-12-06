@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Input from '../components/Input';
 import Logo from '../assets/images/logo_new.jpeg';
 
 const Login = () => {
@@ -64,32 +65,29 @@ const Login = () => {
         </div>
         <h2 className="text-2xl font-bold text-center text-[#4a2e1f]">Login</h2>
         <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="text-sm font-semibold text-[#4a2e1f]">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 mt-2 text-[#4a2e1f] bg-[#fef4ec] border border-[#e2c1ac] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
-              placeholder="admin@terra.cart"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="text-sm font-semibold text-[#4a2e1f]">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 mt-2 text-[#4a2e1f] bg-[#fef4ec] border border-[#e2c1ac] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
-              placeholder="********"
-              required
-            />
-          </div>
-          {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-300 rounded-lg">
+          <Input
+            label="Email"
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="admin@terra.cart"
+            required
+            error={error && error.includes('email') ? error : null}
+          />
+          <Input
+            label="Password"
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="********"
+            required
+            error={error && !error.includes('email') ? error : null}
+          />
+          {error && !error.includes('email') && (
+            <div className="p-3 text-sm text-[#991b1b] bg-[#fef2f2] border-2 border-[#ef4444] rounded-lg flex items-center gap-2">
+              <span className="text-[#ef4444]">⚠</span>
               {error}
             </div>
           )}

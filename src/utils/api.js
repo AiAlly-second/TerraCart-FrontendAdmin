@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { alert } from './alert';
 
 // Ensure URL has protocol (http:// or https://)
 const getApiUrl = () => {
@@ -150,7 +151,7 @@ api.interceptors.response.use(
       const errorMessage = responseData.message || responseData.error || 'Invalid request. Please check your input and try again.';
       
       if (!error.config?.skipErrorAlert) {
-        alert(`Error: ${errorMessage}\n\nCheck console for full details.`);
+        alert(`Error: ${errorMessage}\n\nCheck console for full details.`, 'error');
       }
     } else if (error.response?.status === 401) {
       // Unauthorized - token invalid or expired
@@ -196,7 +197,7 @@ api.interceptors.response.use(
         const message =
           errorData.message ||
           'You are not authorized to perform this action. Please check your permissions or login again.';
-        alert(message);
+        alert(message, 'warning');
       }
     } else if (error.response?.status === 403) {
       // Forbidden - check if it's account deactivation
@@ -216,12 +217,12 @@ api.interceptors.response.use(
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminUser');
         
-        alert(errorData.message || 'Your account has been deactivated. Please contact admin.');
+        alert(errorData.message || 'Your account has been deactivated. Please contact admin.', 'error');
         window.location.href = '/login';
       }
     } else if (error.response?.status === 500) {
       console.error('[500 Server Error]', errorDetails);
-      alert('Server error. Please try again later.');
+      alert('Server error. Please try again later.', 'error');
     } else if (!error.response) {
       // Network error
       console.error('[Network Error]', {
@@ -229,7 +230,7 @@ api.interceptors.response.use(
         url: error.config?.url,
         baseURL: error.config?.baseURL
       });
-      alert('Network error. Please check if the backend server is running.');
+      alert('Network error. Please check if the backend server is running.', 'error');
     }
     
     return Promise.reject(error);

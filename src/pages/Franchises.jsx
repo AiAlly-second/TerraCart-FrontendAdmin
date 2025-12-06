@@ -6,6 +6,7 @@ import {
   FaIdCard, FaCalendarAlt, FaEye, FaTimes, FaUsers
 } from 'react-icons/fa';
 import api from '../utils/api';
+import { confirmFranchiseDelete } from '../utils/confirm';
 
 const Franchises = () => {
   const [franchises, setFranchises] = useState([]);
@@ -256,26 +257,20 @@ const Franchises = () => {
     const franchise = franchises.find(f => f._id === franchiseId);
     const franchiseName = franchise?.name || 'this franchise';
     
-    const confirmMessage = `⚠️ WARNING: PERMANENTLY DELETE FRANCHISE\n\n` +
-      `You are about to PERMANENTLY DELETE "${franchiseName}".\n\n` +
-      `This will PERMANENTLY DELETE:\n` +
-      `• The franchise account and login\n` +
-      `• ALL carts under this franchise\n` +
-      `• ALL cart login credentials\n` +
-      `• ALL employees (franchise and cart level)\n` +
-      `• ALL menu items and categories\n` +
-      `• ALL tables and waitlist entries\n` +
-      `• ALL non-paid orders and payments\n` +
-      `• Paid orders will be PRESERVED for revenue tracking\n\n` +
-      `⚠️ This action CANNOT be undone!\n\n` +
-      `Type "DELETE" to confirm:`;
+    const items = [
+      'The franchise account and login',
+      'ALL carts under this franchise',
+      'ALL cart login credentials',
+      'ALL employees (franchise and cart level)',
+      'ALL menu items and categories',
+      'ALL tables and waitlist entries',
+      'ALL non-paid orders and payments',
+      'Paid orders will be PRESERVED for revenue tracking'
+    ];
     
-    const userInput = window.prompt(confirmMessage);
+    const confirmed = await confirmFranchiseDelete(franchiseName);
     
-    if (userInput !== 'DELETE') {
-      if (userInput !== null) {
-        alert('Action cancelled. You must type "DELETE" exactly to confirm.');
-      }
+    if (!confirmed) {
       return;
     }
     
@@ -288,12 +283,13 @@ const Franchises = () => {
           ? `${response.data.preservedPaidOrders} paid orders preserved for revenue tracking.\n\n`
           : ''
         ) +
-        `All associated carts, employees, and data have been removed.`
+        `All associated carts, employees, and data have been removed.`,
+        'success'
       );
       fetchFranchises();
     } catch (error) {
       console.error('Error deleting franchise:', error);
-      alert(error.response?.data?.message || 'Failed to delete franchise. Please try again.');
+      alert(error.response?.data?.message || 'Failed to delete franchise. Please try again.', 'error');
     }
   };
 

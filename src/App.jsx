@@ -1,6 +1,10 @@
 import React from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { AlertProvider } from './context/AlertContext';
+import { ConfirmProvider } from './context/ConfirmContext';
+import AlertInitializer from './components/AlertInitializer';
+import ConfirmInitializer from './components/ConfirmInitializer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
@@ -68,8 +72,12 @@ function App() {
   };
 
   return (
-    <div className="bg-[#f5e3d5] min-h-screen font-sans">
-      {showLayout && <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />}
+    <AlertProvider>
+      <ConfirmProvider>
+        <AlertInitializer />
+        <ConfirmInitializer />
+        <div className="bg-[#f5e3d5] min-h-screen font-sans">
+        {showLayout && <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />}
 
       <div
         className={
@@ -324,7 +332,9 @@ function App() {
           </Routes>
         </main>
       </div>
-    </div>
+      </div>
+      </ConfirmProvider>
+    </AlertProvider>
   );
 }
 

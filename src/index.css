@@ -1,2 +1,72 @@
 @import "tailwindcss";
 
+/* Alert animations */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-out {
+  animation: slide-out 0.3s ease-in;
+}
+
+/* Form Input States - Matching Website UI */
+.input-error {
+  @apply border-[#ef4444] focus:ring-2 focus:ring-[#ef4444] focus:border-[#ef4444];
+}
+
+.input-warning {
+  @apply border-[#d86d2a] focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a];
+}
+
+.input-success {
+  @apply border-[#10b981] focus:ring-2 focus:ring-[#10b981] focus:border-[#10b981];
+}
+
+.input-default {
+  @apply border-[#e2c1ac] focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a];
+}
+
+/* Form Message Styles */
+.form-error {
+  @apply text-sm text-[#991b1b] mt-1 flex items-center gap-1;
+}
+
+.form-warning {
+  @apply text-sm text-[#92400e] mt-1 flex items-center gap-1;
+}
+
+.form-success {
+  @apply text-sm text-[#065f46] mt-1 flex items-center gap-1;
+}
+
+/* Input Base Styles */
+.input-base {
+  @apply w-full px-4 py-2 text-[#4a2e1f] bg-[#fef4ec] border rounded-lg transition-colors focus:outline-none;
+}
+
+.input-base:disabled {
+  @apply bg-[#f5e3d5] cursor-not-allowed opacity-60;
+}
+
