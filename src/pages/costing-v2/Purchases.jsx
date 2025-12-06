@@ -9,6 +9,7 @@ import {
 import { FaPlus, FaCheck } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Purchases = () => {
   const { user } = useAuth();
@@ -22,7 +23,7 @@ const Purchases = () => {
     supplierId: "",
     date: new Date().toISOString().split("T")[0],
     invoiceNo: "",
-    items: [{ ingredientId: "", qty: 0, uom: "kg", unitPrice: 0 }],
+    items: [{ ingredientId: "", qty: "", uom: "kg", unitPrice: "" }],
   });
 
   useEffect(() => {
@@ -52,14 +53,23 @@ const Purchases = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createPurchase(formData);
+      // Convert empty strings to 0 for qty and unitPrice before submission
+      const submitData = {
+        ...formData,
+        items: formData.items.map(item => ({
+          ...item,
+          qty: item.qty === "" || item.qty === null || item.qty === undefined ? 0 : parseFloat(item.qty) || 0,
+          unitPrice: item.unitPrice === "" || item.unitPrice === null || item.unitPrice === undefined ? 0 : parseFloat(item.unitPrice) || 0,
+        }))
+      };
+      await createPurchase(submitData);
       alert("Purchase order created successfully!");
       setModalOpen(false);
       setFormData({
         supplierId: "",
         date: new Date().toISOString().split("T")[0],
         invoiceNo: "",
-        items: [{ ingredientId: "", qty: 0, uom: "kg", unitPrice: 0 }],
+        items: [{ ingredientId: "", qty: "", uom: "kg", unitPrice: "" }],
       });
       fetchData();
     } catch (error) {
@@ -81,7 +91,7 @@ const Purchases = () => {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { ingredientId: "", qty: 0, uom: "kg", unitPrice: 0 }],
+      items: [...formData.items, { ingredientId: "", qty: "", uom: "kg", unitPrice: "" }],
     });
   };
 
@@ -152,7 +162,7 @@ const Purchases = () => {
                             {item.ingredientId?.name || 'Unknown Ingredient'}:
                           </span>
                           <span className="text-gray-700 font-semibold">
-                            {typeof item.qty === 'number' ? item.qty.toFixed(2) : item.qty} {item.uom || 'kg'}
+                            {formatUnit(item.qty, item.uom || 'kg')}
                           </span>
                         </div>
                       ))
@@ -262,8 +272,8 @@ const Purchases = () => {
                       min="0"
                       step="0.01"
                       placeholder="Qty"
-                      value={item.qty}
-                      onChange={(e) => updateItem(index, "qty", parseFloat(e.target.value))}
+                      value={item.qty === "" || item.qty === null || item.qty === undefined ? "" : item.qty}
+                      onChange={(e) => updateItem(index, "qty", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
                       className="px-3 py-2 border border-gray-300 rounded-lg"
                     />
                     <select
@@ -277,6 +287,10 @@ const Purchases = () => {
                       <option value="l">l</option>
                       <option value="ml">ml</option>
                       <option value="pcs">pcs</option>
+                      <option value="pack">pack</option>
+                      <option value="box">box</option>
+                      <option value="bottle">bottle</option>
+                      <option value="dozen">dozen</option>
                     </select>
                     <input
                       type="number"
@@ -284,8 +298,8 @@ const Purchases = () => {
                       min="0"
                       step="0.01"
                       placeholder="Unit Price"
-                      value={item.unitPrice}
-                      onChange={(e) => updateItem(index, "unitPrice", parseFloat(e.target.value))}
+                      value={item.unitPrice === "" || item.unitPrice === null || item.unitPrice === undefined ? "" : item.unitPrice}
+                      onChange={(e) => updateItem(index, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
                       className="px-3 py-2 border border-gray-300 rounded-lg"
                     />
                     <button

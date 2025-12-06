@@ -8,6 +8,7 @@ import {
   getIngredients,
 } from "../../services/costingV2Api";
 import { FaPlus, FaEdit, FaTrash, FaCalculator } from "react-icons/fa";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Recipes = () => {
   const [recipes, setRecipes] = useState([]);
@@ -20,7 +21,7 @@ const Recipes = () => {
     yieldPercent: 100,
     portions: 1,
     instructions: "",
-    ingredients: [{ ingredientId: "", qty: 0, uom: "kg" }],
+    ingredients: [{ ingredientId: "", qty: "", uom: "kg" }],
     isActive: true,
   });
 
@@ -48,11 +49,19 @@ const Recipes = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Convert empty strings to 0 for qty before submission
+      const submitData = {
+        ...formData,
+        ingredients: formData.ingredients.map(ing => ({
+          ...ing,
+          qty: ing.qty === "" || ing.qty === null || ing.qty === undefined ? 0 : parseFloat(ing.qty) || 0,
+        }))
+      };
       if (editing) {
-        await updateRecipe(editing._id, formData);
+        await updateRecipe(editing._id, submitData);
         alert("Recipe updated successfully!");
       } else {
-        await createRecipe(formData);
+        await createRecipe(submitData);
         alert("Recipe created successfully!");
       }
       setModalOpen(false);
@@ -70,7 +79,7 @@ const Recipes = () => {
       yieldPercent: 100,
       portions: 1,
       instructions: "",
-      ingredients: [{ ingredientId: "", qty: 0, uom: "kg" }],
+      ingredients: [{ ingredientId: "", qty: "", uom: "kg" }],
       isActive: true,
     });
   };
@@ -82,7 +91,10 @@ const Recipes = () => {
       yieldPercent: recipe.yieldPercent,
       portions: recipe.portions,
       instructions: recipe.instructions || "",
-      ingredients: recipe.ingredients || [{ ingredientId: "", qty: 0, uom: "kg" }],
+      ingredients: recipe.ingredients ? recipe.ingredients.map(ing => ({
+        ...ing,
+        qty: ing.qty || ""
+      })) : [{ ingredientId: "", qty: "", uom: "kg" }],
       isActive: recipe.isActive !== undefined ? recipe.isActive : true,
     });
     setModalOpen(true);
@@ -112,7 +124,7 @@ const Recipes = () => {
   const addIngredient = () => {
     setFormData({
       ...formData,
-      ingredients: [...formData.ingredients, { ingredientId: "", qty: 0, uom: "kg" }],
+      ingredients: [...formData.ingredients, { ingredientId: "", qty: "", uom: "kg" }],
     });
   };
 
@@ -292,8 +304,8 @@ const Recipes = () => {
                       min="0"
                       step="0.01"
                       placeholder="Quantity"
-                      value={ing.qty}
-                      onChange={(e) => updateIngredient(index, "qty", parseFloat(e.target.value))}
+                      value={ing.qty === "" || ing.qty === null || ing.qty === undefined ? "" : ing.qty}
+                      onChange={(e) => updateIngredient(index, "qty", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
                       className="px-3 py-2 border border-gray-300 rounded-lg"
                     />
                     <select
@@ -307,6 +319,10 @@ const Recipes = () => {
                       <option value="l">l</option>
                       <option value="ml">ml</option>
                       <option value="pcs">pcs</option>
+                      <option value="pack">pack</option>
+                      <option value="box">box</option>
+                      <option value="bottle">bottle</option>
+                      <option value="dozen">dozen</option>
                     </select>
                     <button
                       type="button"

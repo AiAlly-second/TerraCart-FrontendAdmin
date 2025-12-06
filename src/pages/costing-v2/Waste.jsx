@@ -7,6 +7,7 @@ import {
 import { FaPlus } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
+import { formatUnit, convertUnit, areUnitsCompatible } from "../../utils/unitConverter";
 
 const Waste = () => {
   const { user } = useAuth();
@@ -17,11 +18,13 @@ const Waste = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     ingredientId: "",
-    qty: 0,
+    qty: "",
     uom: "kg",
     reason: "spoilage",
     reasonDetails: "",
   });
+  const [selectedIngredient, setSelectedIngredient] = useState(null);
+  const [convertedQty, setConvertedQty] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -45,19 +48,87 @@ const Waste = () => {
     }
   };
 
+  const handleIngredientChange = (ingredientId) => {
+    const ingredient = ingredients.find(ing => ing._id === ingredientId);
+    if (ingredient) {
+      setSelectedIngredient(ingredient);
+      setFormData(prev => ({
+        ...prev,
+        ingredientId,
+        uom: ingredient.uom || prev.uom,
+      }));
+      setConvertedQty(null);
+    } else {
+      setSelectedIngredient(null);
+      setFormData(prev => ({ ...prev, ingredientId }));
+      setConvertedQty(null);
+    }
+  };
+
+  const handleUomChange = (newUom) => {
+    if (!formData.qty || formData.qty === "" || formData.qty === 0) {
+      setFormData(prev => ({ ...prev, uom: newUom }));
+      setConvertedQty(null);
+      return;
+    }
+
+    const currentQty = parseFloat(formData.qty);
+    if (isNaN(currentQty)) {
+      setFormData(prev => ({ ...prev, uom: newUom }));
+      setConvertedQty(null);
+      return;
+    }
+
+    // Check if units are compatible
+    if (areUnitsCompatible(formData.uom, newUom)) {
+      try {
+        const converted = convertUnit(currentQty, formData.uom, newUom);
+        setFormData(prev => ({ ...prev, uom: newUom, qty: converted.toFixed(2) }));
+        setConvertedQty(null);
+      } catch (error) {
+        console.error("Conversion error:", error);
+        setFormData(prev => ({ ...prev, uom: newUom }));
+        setConvertedQty(null);
+      }
+    } else {
+      // Units not compatible - show warning but allow change
+      alert(`Warning: Cannot convert from ${formData.uom} to ${newUom}. Please enter a new quantity.`);
+      setFormData(prev => ({ ...prev, uom: newUom, qty: "" }));
+      setConvertedQty(null);
+    }
+  };
+
+  const handleQtyChange = (newQty) => {
+    setFormData(prev => ({ ...prev, qty: newQty }));
+    setConvertedQty(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await recordWaste(formData);
+      // Ensure qty is a number
+      const submitData = {
+        ...formData,
+        qty: parseFloat(formData.qty) || 0,
+      };
+      
+      if (submitData.qty <= 0) {
+        alert("Please enter a valid quantity greater than 0");
+        return;
+      }
+
+      await recordWaste(submitData);
       alert("Waste recorded successfully!");
       setModalOpen(false);
       setFormData({
         ingredientId: "",
-        qty: 0,
+        qty: "",
         uom: "kg",
         reason: "spoilage",
         reasonDetails: "",
       });
+      setSelectedIngredient(null);
+      setConvertedQty(null);
       fetchData();
     } catch (error) {
       alert(`Failed to record waste: ${error.response?.data?.message || error.message}`);
@@ -105,7 +176,7 @@ const Waste = () => {
                   {waste.ingredientId?.name || "N/A"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {waste.qty} {waste.uom}
+                  {formatUnit(waste.qty, waste.uom)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
@@ -132,14 +203,26 @@ const Waste = () => {
                 <select
                   required
                   value={formData.ingredientId}
-                  onChange={(e) => setFormData({ ...formData, ingredientId: e.target.value })}
+                  onChange={(e) => handleIngredientChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Select Ingredient</option>
                   {ingredients.map((ing) => (
-                    <option key={ing._id} value={ing._id}>{ing.name}</option>
+                    <option key={ing._id} value={ing._id}>
+                      {ing.name} ({ing.uom || 'N/A'})
+                    </option>
                   ))}
                 </select>
+                {selectedIngredient && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Ingredient UOM: <strong>{selectedIngredient.uom}</strong>
+                    {selectedIngredient.uom !== formData.uom && (
+                      <span className="ml-2 text-orange-600">
+                        (UOM changed to {formData.uom})
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -150,16 +233,22 @@ const Waste = () => {
                     min="0"
                     step="0.01"
                     value={formData.qty}
-                    onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) })}
+                    onChange={(e) => handleQtyChange(e.target.value)}
+                    placeholder="Enter quantity"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   />
+                  {convertedQty !== null && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Converted: {formatUnit(convertedQty, formData.uom, { autoConvert: false })}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">UOM *</label>
                   <select
                     required
                     value={formData.uom}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
+                    onChange={(e) => handleUomChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="kg">kg</option>
@@ -167,7 +256,16 @@ const Waste = () => {
                     <option value="l">l</option>
                     <option value="ml">ml</option>
                     <option value="pcs">pcs</option>
+                    <option value="pack">pack</option>
+                    <option value="box">box</option>
+                    <option value="bottle">bottle</option>
+                    <option value="dozen">dozen</option>
                   </select>
+                  {selectedIngredient && formData.qty && formData.qty !== "" && areUnitsCompatible(selectedIngredient.uom, formData.uom) && selectedIngredient.uom !== formData.uom && (
+                    <p className="mt-1 text-xs text-blue-600">
+                      {formatUnit(parseFloat(formData.qty), formData.uom)} = {formatUnit(convertUnit(parseFloat(formData.qty), formData.uom, selectedIngredient.uom), selectedIngredient.uom)}
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
@@ -199,7 +297,18 @@ const Waste = () => {
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => {
+                    setModalOpen(false);
+                    setFormData({
+                      ingredientId: "",
+                      qty: "",
+                      uom: "kg",
+                      reason: "spoilage",
+                      reasonDetails: "",
+                    });
+                    setSelectedIngredient(null);
+                    setConvertedQty(null);
+                  }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Cancel

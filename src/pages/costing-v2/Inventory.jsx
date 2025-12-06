@@ -6,6 +6,7 @@ import {
 } from "../../services/costingV2Api";
 import { FaPlus, FaFilter, FaSearch, FaExclamationTriangle } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Inventory = () => {
   const [ingredients, setIngredients] = useState([]);
@@ -278,10 +279,10 @@ const Inventory = () => {
                                 <td className="px-4 py-3 whitespace-nowrap">{ing.uom}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   <span className={isLowStock ? "text-red-600 font-semibold" : ""}>
-                                    {ing.qtyOnHand.toFixed(2)} {ing.uom}
+                                    {formatUnit(ing.qtyOnHand, ing.uom)}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">{ing.reorderLevel} {ing.uom}</td>
+                                <td className="px-4 py-3 whitespace-nowrap">{formatUnit(ing.reorderLevel, ing.uom)}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">₹{ing.currentCostPerBaseUnit.toFixed(2)}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">₹{stockValue.toFixed(2)}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
@@ -361,7 +362,7 @@ const Inventory = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {txn.qty} {txn.uom}
+                          {formatUnit(txn.qty, txn.uom)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           ₹{Number(txn.costAllocated || 0).toFixed(2)}

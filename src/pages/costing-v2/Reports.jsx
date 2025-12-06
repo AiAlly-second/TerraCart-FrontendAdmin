@@ -8,6 +8,7 @@ import {
 import { FaDownload, FaFileCsv, FaFilePdf } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Reports = () => {
   const [activeReport, setActiveReport] = useState("food-cost");
@@ -252,7 +253,7 @@ const Reports = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">{item.supplierName}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{item.ingredientName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{item.qty} {item.uom}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{formatUnit(item.qty, item.uom)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">₹{Number(item.unitPrice || 0).toFixed(2)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">₹{Number(item.total || 0).toLocaleString("en-IN")}</td>
                   </tr>

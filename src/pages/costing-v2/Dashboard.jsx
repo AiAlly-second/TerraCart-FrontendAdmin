@@ -8,6 +8,7 @@ import {
 import { FaExclamationTriangle, FaChartLine, FaRupeeSign, FaBuilding, FaStore, FaChevronDown, FaChevronRight, FaCalendarAlt } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -448,7 +449,7 @@ const Dashboard = () => {
             <ul className="list-disc list-inside text-sm text-yellow-700">
               {lowStock.slice(0, 5).map((item) => (
                 <li key={item._id}>
-                  {item.name}: {item.qtyOnHand} {item.uom} (Reorder: {item.reorderLevel} {item.uom})
+                  {item.name}: {formatUnit(item.qtyOnHand, item.uom)} (Reorder: {formatUnit(item.reorderLevel, item.uom)})
                 </li>
               ))}
             </ul>

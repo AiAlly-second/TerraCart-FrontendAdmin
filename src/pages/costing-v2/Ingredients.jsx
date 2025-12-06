@@ -7,6 +7,7 @@ import {
   getFIFOLayers,
 } from "../../services/costingV2Api";
 import { FaPlus, FaEdit, FaTrash, FaEye } from "react-icons/fa";
+import { formatUnit } from "../../utils/unitConverter";
 
 const Ingredients = () => {
   const [ingredients, setIngredients] = useState([]);
@@ -20,8 +21,7 @@ const Ingredients = () => {
     uom: "kg",
     baseUnit: "kg",
     reorderLevel: 0,
-    leadTimeDays: 7,
-    currentCostPerBaseUnit: 0,
+    shelfTimeDays: 7,
     qtyOnHand: 0,
     isActive: true,
   });
@@ -67,8 +67,7 @@ const Ingredients = () => {
         uom: "kg",
         baseUnit: "kg",
         reorderLevel: 0,
-        leadTimeDays: 7,
-        currentCostPerBaseUnit: 0,
+        shelfTimeDays: 7,
         qtyOnHand: 0,
         isActive: true,
       });
@@ -87,8 +86,7 @@ const Ingredients = () => {
       uom: ingredient.uom,
       baseUnit: ingredient.baseUnit,
       reorderLevel: ingredient.reorderLevel,
-      leadTimeDays: ingredient.leadTimeDays,
-      currentCostPerBaseUnit: ingredient.currentCostPerBaseUnit,
+      shelfTimeDays: ingredient.shelfTimeDays,
       qtyOnHand: ingredient.qtyOnHand,
       isActive: ingredient.isActive,
     });
@@ -141,8 +139,7 @@ const Ingredients = () => {
               uom: "kg",
               baseUnit: "kg",
               reorderLevel: 0,
-              leadTimeDays: 7,
-              currentCostPerBaseUnit: 0,
+              shelfTimeDays: 7,
               qtyOnHand: 0,
               isActive: true,
             });
@@ -182,14 +179,14 @@ const Ingredients = () => {
                 <td className="px-6 py-4 whitespace-nowrap">{ing.uom}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="font-medium">
-                    {typeof ing.qtyOnHand === 'number' ? ing.qtyOnHand.toFixed(2) : '0.00'} {ing.uom}
+                    {formatUnit(ing.qtyOnHand, ing.uom)}
                   </span>
                   {ing.qtyOnHand <= ing.reorderLevel && (
                     <span className="ml-2 text-red-600 text-xs">⚠ Low Stock</span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {typeof ing.reorderLevel === 'number' ? ing.reorderLevel.toFixed(2) : '0.00'} {ing.uom}
+                  {formatUnit(ing.reorderLevel, ing.uom)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">₹{ing.currentCostPerBaseUnit.toFixed(2)}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -321,34 +318,22 @@ const Ingredients = () => {
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
                     value={formData.reorderLevel}
-                    onChange={(e) => setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lead Time (days)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.leadTimeDays}
-                    onChange={(e) => setFormData({ ...formData, leadTimeDays: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost per Unit</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.currentCostPerBaseUnit}
-                    onChange={(e) => setFormData({ ...formData, currentCostPerBaseUnit: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Shelf time (Days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.shelfTimeDays}
+                  onChange={(e) => setFormData({ ...formData, shelfTimeDays: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -412,8 +397,8 @@ const Ingredients = () => {
                   {fifoLayers.map((layer, idx) => (
                     <tr key={idx}>
                       <td className="px-4 py-2">{new Date(layer.date).toLocaleDateString()}</td>
-                      <td className="px-4 py-2">{layer.qty} {layer.uom}</td>
-                      <td className="px-4 py-2">{layer.remainingQty} {layer.uom}</td>
+                      <td className="px-4 py-2">{formatUnit(layer.qty, layer.uom)}</td>
+                      <td className="px-4 py-2">{formatUnit(layer.remainingQty, layer.uom)}</td>
                       <td className="px-4 py-2">₹{layer.unitCost.toFixed(2)}</td>
                       <td className="px-4 py-2">₹{(layer.remainingQty * layer.unitCost).toFixed(2)}</td>
                     </tr>
