@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import api from '../utils/api';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import api from "../utils/api";
 
 const CustomerManagement = () => {
+  const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('lastVisitAt');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("lastVisitAt");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   useEffect(() => {
     fetchCustomers();
@@ -18,13 +20,57 @@ const CustomerManagement = () => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const params = { sortBy, sortOrder };
+      const params = {
+        sortBy,
+        sortOrder,
+        // Include customers from all sources (orders, feedback, takeaway)
+        includeAllSources: true,
+      };
       if (searchQuery) params.search = searchQuery;
-      const response = await api.get('/customers', { params });
-      setCustomers(response.data.customers || []);
+
+      console.log(
+        "[CustomerManagement] Fetching customers with params:",
+        params
+      );
+      console.log(
+        "[CustomerManagement] User role:",
+        user?.role,
+        "User ID:",
+        user?._id
+      );
+
+      const response = await api.get("/customers", { params });
+      const customersData = response.data.customers || response.data || [];
+
+      console.log(
+        "[CustomerManagement] Received customers:",
+        customersData.length
+      );
+
+      // For cart admin, verify filtering is working
+      if (user?.role === "admin") {
+        console.log(
+          "[CustomerManagement] Cart admin - verifying customer data includes feedback and takeaway customers"
+        );
+        // Log sample customer data to verify sources
+        if (customersData.length > 0) {
+          console.log("[CustomerManagement] Sample customer:", {
+            name: customersData[0].name,
+            hasOrders: !!customersData[0].orders,
+            hasRatings: !!customersData[0].ratings,
+            visitCount: customersData[0].visitCount,
+          });
+        }
+      }
+
+      setCustomers(customersData);
     } catch (error) {
-      console.error('Error fetching customers:', error);
-      alert('Failed to load customers');
+      console.error("Error fetching customers:", error);
+      console.error("Error details:", error.response?.data);
+      alert(
+        "Failed to load customers. Please check console for details.",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -32,10 +78,10 @@ const CustomerManagement = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/customers/stats');
+      const response = await api.get("/customers/stats");
       setStats(response.data);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error("Error fetching stats:", error);
     }
   };
 
@@ -44,8 +90,8 @@ const CustomerManagement = () => {
       const response = await api.get(`/customers/${customerId}`);
       setSelectedCustomer(response.data);
     } catch (error) {
-      console.error('Error fetching customer details:', error);
-      alert('Failed to load customer details');
+      console.error("Error fetching customer details:", error);
+      alert("Failed to load customer details");
     }
   };
 
@@ -55,16 +101,16 @@ const CustomerManagement = () => {
   };
 
   const getRatingStars = (rating) => {
-    if (!rating) return 'No ratings';
-    return '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+    if (!rating) return "No ratings";
+    return "⭐".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating));
   };
 
   const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    if (!date) return "N/A";
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -83,7 +129,9 @@ const CustomerManagement = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Customer Management</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          Customer Management
+        </h1>
       </div>
 
       {/* Statistics Cards */}
@@ -91,21 +139,27 @@ const CustomerManagement = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-sm text-gray-600">Total Customers</div>
-            <div className="text-3xl font-bold text-blue-600">{stats.totalCustomers}</div>
+            <div className="text-3xl font-bold text-blue-600">
+              {stats.totalCustomers}
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-sm text-gray-600">Total Visits</div>
-            <div className="text-3xl font-bold text-green-600">{stats.totalVisits}</div>
+            <div className="text-3xl font-bold text-green-600">
+              {stats.totalVisits}
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-sm text-gray-600">Average Rating</div>
             <div className="text-3xl font-bold text-yellow-600">
-              {stats.averageRating || '0.00'} ⭐
+              {stats.averageRating || "0.00"} ⭐
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-sm text-gray-600">Customers with Ratings</div>
-            <div className="text-3xl font-bold text-purple-600">{stats.customersWithRatings}</div>
+            <div className="text-3xl font-bold text-purple-600">
+              {stats.customersWithRatings}
+            </div>
           </div>
         </div>
       )}
@@ -126,7 +180,9 @@ const CustomerManagement = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sort By
+            </label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -139,7 +195,9 @@ const CustomerManagement = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Order
+            </label>
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
@@ -190,7 +248,10 @@ const CustomerManagement = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                  <td
+                    colSpan="7"
+                    className="px-6 py-4 text-center text-gray-500"
+                  >
                     No customers found
                   </td>
                 </tr>
@@ -198,29 +259,48 @@ const CustomerManagement = () => {
                 customers.map((customer) => (
                   <tr key={customer._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{customer.name}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {customer.name}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {customer.phone && !customer.phone.startsWith('email-') ? (
-                        <div className="text-sm text-gray-500">{customer.phone}</div>
+                      {customer.phone &&
+                      !customer.phone.startsWith("email-") ? (
+                        <div className="text-sm text-gray-500">
+                          {customer.phone}
+                        </div>
                       ) : customer.email ? (
-                        <div className="text-sm text-gray-500">{customer.email}</div>
+                        <div className="text-sm text-gray-500">
+                          {customer.email}
+                        </div>
                       ) : (
-                        <div className="text-sm text-gray-400">No contact info</div>
+                        <div className="text-sm text-gray-400">
+                          No contact info
+                        </div>
                       )}
-                      {customer.email && customer.phone && !customer.phone.startsWith('email-') && (
-                        <div className="text-xs text-gray-400">{customer.email}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{customer.visitCount || 0}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{customer.totalRatings || 0}</div>
+                      {customer.email &&
+                        customer.phone &&
+                        !customer.phone.startsWith("email-") && (
+                          <div className="text-xs text-gray-400">
+                            {customer.email}
+                          </div>
+                        )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {customer.averageRating ? `${customer.averageRating} ⭐` : 'No ratings'}
+                        {customer.visitCount || 0}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {customer.totalRatings || 0}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {customer.averageRating
+                          ? `${customer.averageRating} ⭐`
+                          : "No ratings"}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -248,7 +328,9 @@ const CustomerManagement = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-gray-800">Customer Details</h2>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  Customer Details
+                </h2>
                 <button
                   onClick={() => setSelectedCustomer(null)}
                   className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -260,41 +342,68 @@ const CustomerManagement = () => {
               {/* Customer Info */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Name</label>
-                  <div className="text-lg font-semibold">{selectedCustomer.name}</div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Name
+                  </label>
+                  <div className="text-lg font-semibold">
+                    {selectedCustomer.name}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Phone</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    Phone
+                  </label>
                   <div className="text-lg">
-                    {selectedCustomer.phone && !selectedCustomer.phone.startsWith('email-') 
-                      ? selectedCustomer.phone 
-                      : 'N/A'}
+                    {selectedCustomer.phone &&
+                    !selectedCustomer.phone.startsWith("email-")
+                      ? selectedCustomer.phone
+                      : "N/A"}
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Email</label>
-                  <div className="text-lg">{selectedCustomer.email || 'N/A'}</div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Email
+                  </label>
+                  <div className="text-lg">
+                    {selectedCustomer.email || "N/A"}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Total Visits</label>
-                  <div className="text-lg font-semibold text-blue-600">{selectedCustomer.visitCount}</div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Total Visits
+                  </label>
+                  <div className="text-lg font-semibold text-blue-600">
+                    {selectedCustomer.visitCount}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">First Visit</label>
-                  <div className="text-lg">{formatDate(selectedCustomer.firstVisitAt)}</div>
+                  <label className="text-sm font-medium text-gray-600">
+                    First Visit
+                  </label>
+                  <div className="text-lg">
+                    {formatDate(selectedCustomer.firstVisitAt)}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Last Visit</label>
-                  <div className="text-lg">{formatDate(selectedCustomer.lastVisitAt)}</div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Last Visit
+                  </label>
+                  <div className="text-lg">
+                    {formatDate(selectedCustomer.lastVisitAt)}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Average Rating</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    Average Rating
+                  </label>
                   <div className="text-lg font-semibold text-yellow-600">
-                    {selectedCustomer.averageRating || '0.00'} ⭐
+                    {selectedCustomer.averageRating || "0.00"} ⭐
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Total Spent</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    Total Spent
+                  </label>
                   <div className="text-lg font-semibold text-green-600">
                     {formatCurrency(selectedCustomer.totalSpent)}
                   </div>
@@ -303,15 +412,22 @@ const CustomerManagement = () => {
 
               {/* All Ratings History */}
               <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Rating History ({selectedCustomer.ratings?.length || 0})</h3>
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  Rating History ({selectedCustomer.ratings?.length || 0})
+                </h3>
                 <div className="space-y-3">
-                  {selectedCustomer.ratings && selectedCustomer.ratings.length > 0 ? (
+                  {selectedCustomer.ratings &&
+                  selectedCustomer.ratings.length > 0 ? (
                     selectedCustomer.ratings.map((rating, index) => (
-                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                      <div
+                        key={index}
+                        className="border border-gray-200 rounded-lg p-4"
+                      >
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <div className="text-lg font-semibold">
-                              {getRatingStars(rating.rating)} ({rating.rating}/5)
+                              {getRatingStars(rating.rating)} ({rating.rating}
+                              /5)
                             </div>
                             <div className="text-sm text-gray-500">
                               {formatDate(rating.createdAt)}
@@ -319,13 +435,17 @@ const CustomerManagement = () => {
                           </div>
                         </div>
                         {rating.comments && (
-                          <div className="text-sm text-gray-700 mt-2">{rating.comments}</div>
+                          <div className="text-sm text-gray-700 mt-2">
+                            {rating.comments}
+                          </div>
                         )}
-                        {(rating.foodQuality || rating.serviceSpeed || rating.orderAccuracy) && (
+                        {(rating.foodQuality ||
+                          rating.serviceSpeed ||
+                          rating.orderAccuracy) && (
                           <div className="mt-2 text-xs text-gray-600">
-                            Food: {rating.foodQuality || 'N/A'} | 
-                            Service: {rating.serviceSpeed || 'N/A'} | 
-                            Accuracy: {rating.orderAccuracy || 'N/A'}
+                            Food: {rating.foodQuality || "N/A"} | Service:{" "}
+                            {rating.serviceSpeed || "N/A"} | Accuracy:{" "}
+                            {rating.orderAccuracy || "N/A"}
                           </div>
                         )}
                       </div>
@@ -337,36 +457,44 @@ const CustomerManagement = () => {
               </div>
 
               {/* Recent Orders */}
-              {selectedCustomer.orders && selectedCustomer.orders.length > 0 && (
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-4">
-                    Recent Orders ({selectedCustomer.totalOrders})
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedCustomer.orders.map((order) => (
-                      <div key={order._id} className="border border-gray-200 rounded-lg p-3">
-                        <div className="flex justify-between">
-                          <div>
-                            <div className="font-semibold">Order #{order._id}</div>
-                            <div className="text-sm text-gray-500">
-                              {formatDate(order.createdAt)} | Status: {order.status}
+              {selectedCustomer.orders &&
+                selectedCustomer.orders.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">
+                      Recent Orders ({selectedCustomer.totalOrders})
+                    </h3>
+                    <div className="space-y-2">
+                      {selectedCustomer.orders.map((order) => (
+                        <div
+                          key={order._id}
+                          className="border border-gray-200 rounded-lg p-3"
+                        >
+                          <div className="flex justify-between">
+                            <div>
+                              <div className="font-semibold">
+                                Order #{order._id}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {formatDate(order.createdAt)} | Status:{" "}
+                                {order.status}
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-semibold">
-                              {formatCurrency(
-                                order.kotLines && order.kotLines.length > 0
-                                  ? order.kotLines[order.kotLines.length - 1].totalAmount
-                                  : 0
-                              )}
+                            <div className="text-right">
+                              <div className="font-semibold">
+                                {formatCurrency(
+                                  order.kotLines && order.kotLines.length > 0
+                                    ? order.kotLines[order.kotLines.length - 1]
+                                        .totalAmount
+                                    : 0
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
         </div>
@@ -376,4 +504,3 @@ const CustomerManagement = () => {
 };
 
 export default CustomerManagement;
-
