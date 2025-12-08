@@ -198,8 +198,8 @@ const EmployeeManagement = () => {
     setEditingEmployee(employee);
     // Cart admin cannot see/edit franchise info
     if (!isCartAdmin) {
-      setSelectedFranchise(employee.franchiseId?._id || '');
-      setSelectedCafe(employee.cafeId?._id || '');
+      setSelectedFranchise(employee.franchiseId?._id || employee.franchiseId || '');
+      setSelectedCafe(employee.cafeId?._id || employee.cafeId || '');
     } else {
       // Cart admin: cafeId is automatically their cart
       setSelectedCafe(user?._id || '');
@@ -211,31 +211,85 @@ const EmployeeManagement = () => {
     try {
       // Fetch full employee details from backend (includes email if stored)
       const employeeResponse = await api.get(`/employees/${employee._id}`);
-      fullEmployeeData = employeeResponse.data || employee;
+      
+      // Backend returns { success: true, data: employee }
+      // Axios response structure: response.data = { success: true, data: employee }
+      if (employeeResponse?.data?.success && employeeResponse?.data?.data) {
+        // Backend wrapped response: { success: true, data: employee }
+        fullEmployeeData = employeeResponse.data.data;
+      } else if (employeeResponse?.data && !employeeResponse.data.success) {
+        // Direct employee object (no wrapper)
+        fullEmployeeData = employeeResponse.data;
+      } else {
+        // Fallback to provided employee data
+        fullEmployeeData = employee;
+      }
+      
+      console.log('[EmployeeManagement] Fetched employee data:', {
+        rawResponse: employeeResponse?.data,
+        extractedData: fullEmployeeData,
+        name: fullEmployeeData?.name,
+        email: fullEmployeeData?.email,
+        mobile: fullEmployeeData?.mobile,
+        dateOfBirth: fullEmployeeData?.dateOfBirth
+      });
     } catch (error) {
-      console.warn('Could not fetch full employee details, using provided data:', error);
+      console.error('Error fetching full employee details:', error);
+      console.warn('Using provided employee data:', employee);
       // Use the employee data we already have
       fullEmployeeData = employee;
     }
     
-    // Format date for input
-    const dob = fullEmployeeData.dateOfBirth ? new Date(fullEmployeeData.dateOfBirth).toISOString().split('T')[0] : '';
+    // Format date for input - handle various date formats
+    let dob = '';
+    if (fullEmployeeData.dateOfBirth) {
+      try {
+        const dateObj = new Date(fullEmployeeData.dateOfBirth);
+        if (!isNaN(dateObj.getTime())) {
+          // Format as YYYY-MM-DD for date input
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          dob = `${year}-${month}-${day}`;
+        }
+      } catch (dateError) {
+        console.warn('Error formatting date:', dateError, fullEmployeeData.dateOfBirth);
+      }
+    }
+    
+    // Extract franchise and cafe IDs (handle both populated and non-populated)
+    const franchiseId = isCartAdmin 
+      ? '' 
+      : (fullEmployeeData.franchiseId?._id || fullEmployeeData.franchiseId || '');
+    const cafeId = isCartAdmin 
+      ? (user?._id || '') 
+      : (fullEmployeeData.cafeId?._id || fullEmployeeData.cafeId || '');
     
     setFormData({
       name: fullEmployeeData.name || '',
       dateOfBirth: dob,
       mobile: fullEmployeeData.mobile || '',
       email: fullEmployeeData.email || '', // Email is now stored in Employee model
+      password: '', // Don't populate password when editing
       role: fullEmployeeData.employeeRole || fullEmployeeData.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
-      employeeRole: fullEmployeeData.employeeRole || 'waiter',
-      franchiseId: isCartAdmin ? '' : (fullEmployeeData.franchiseId?._id || ''),
-      cafeId: isCartAdmin ? (user?._id || '') : (fullEmployeeData.cafeId?._id || ''),
+      employeeRole: fullEmployeeData.employeeRole || fullEmployeeData.role || 'waiter',
+      franchiseId: franchiseId,
+      cafeId: cafeId,
       kycVerified: fullEmployeeData.kycVerified || false,
       disability: fullEmployeeData.disability || { hasDisability: false, type: '' },
       deviceIssued: fullEmployeeData.deviceIssued || { smartwatch: false, tracker: false },
       imei: fullEmployeeData.imei || { device: '', phone: '' },
       isActive: fullEmployeeData.isActive !== false
     });
+    
+    console.log('[EmployeeManagement] Form data set:', {
+      name: fullEmployeeData.name,
+      email: fullEmployeeData.email,
+      mobile: fullEmployeeData.mobile,
+      dateOfBirth: dob,
+      role: fullEmployeeData.employeeRole || fullEmployeeData.role
+    });
+    
     setShowModal(true);
   };
 
