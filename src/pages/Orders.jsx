@@ -79,7 +79,8 @@ const aggregateKotItems = (kotLines = []) => {
 };
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
-const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
+// eslint-disable-next-line no-unused-vars
+const computeKotTotals = (_kotLines = [], aggregatedItems = []) => {
   // Handle both old format (array) and new format (object with dineInItems/takeawayItems)
   let itemsArray = [];
   if (Array.isArray(aggregatedItems)) {
@@ -414,6 +415,7 @@ const printOrderInvoice = async (order) => {
   };
 };
 
+// eslint-disable-next-line no-unused-vars
 const downloadOrderInvoice = async (order) => {
   if (!order) return;
 
@@ -621,8 +623,6 @@ const Orders = () => {
     }
   };
 
-  // Use shared transitions for edit modal
-  const transitions = ORDER_TRANSITIONS;
 
   const toggleExpand = (id) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -1258,15 +1258,6 @@ const Orders = () => {
     }
   };
 
-  const updateNewItem = (idx, field, value) => {
-    setNewItems((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it))
-    );
-  };
-  const addNewItemRow = () =>
-    setNewItems((prev) => [...prev, { name: "", quantity: 1, price: 0 }]);
-  const removeNewItemRow = (idx) =>
-    setNewItems((prev) => prev.filter((_, i) => i !== idx));
 
   // Group orders by cart for franchise admin
   const ordersByCart = useMemo(() => {
@@ -1586,7 +1577,7 @@ const Orders = () => {
     });
   }, []);
 
-  const { tablesForService, usingFallbackTables } = useMemo(() => {
+  const { tablesForService } = useMemo(() => {
     if (draftServiceType === "DINE_IN") {
       // For DINE_IN: Only show AVAILABLE tables (or tables with sessionToken)
       // Occupied tables should not be available for dine-in orders
@@ -1749,7 +1740,7 @@ const Orders = () => {
           // Grouped view by cart for franchise admin
           <div className="divide-y divide-gray-200">
             {Object.entries(ordersByCart)
-              .filter(([cartId, { orders: cartOrders }]) => {
+              .filter(([, { orders: cartOrders }]) => {
                 const filtered = getFilteredOrdersForCart(cartOrders);
                 return filtered.length > 0;
               })
