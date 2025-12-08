@@ -51,12 +51,23 @@ const Ingredients = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let response;
       if (editing) {
-        await updateIngredient(editing._id, formData);
-        alert("Ingredient updated successfully!");
+        response = await updateIngredient(editing._id, formData);
+        // Check if response indicates success
+        if (response?.data?.success || response?.status === 200) {
+          alert("Ingredient updated successfully!");
+        } else {
+          throw new Error(response?.data?.message || "Failed to update ingredient");
+        }
       } else {
-        await createIngredient(formData);
-        alert("Ingredient created successfully!");
+        response = await createIngredient(formData);
+        // Check if response indicates success
+        if (response?.data?.success || response?.status === 200 || response?.status === 201) {
+          alert("Ingredient created successfully!");
+        } else {
+          throw new Error(response?.data?.message || "Failed to create ingredient");
+        }
       }
       setModalOpen(false);
       setEditing(null);
@@ -73,7 +84,9 @@ const Ingredients = () => {
       });
       fetchIngredients();
     } catch (error) {
-      alert(`Failed to save ingredient: ${error.response?.data?.message || error.message}`);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to save ingredient";
+      alert(`Failed to save ingredient: ${errorMessage}`);
+      console.error("Save ingredient error:", error);
     }
   };
 
@@ -94,26 +107,37 @@ const Ingredients = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this ingredient?")) return;
+    if (!window.confirm("Are you sure you want to delete this ingredient?\n\nNote: This action cannot be undone. If the ingredient is used in recipes, deletion will be prevented.")) return;
     try {
-      await deleteIngredient(id);
-      alert("Ingredient deleted successfully!");
-      fetchIngredients();
+      const response = await deleteIngredient(id);
+      // Check if response indicates success
+      if (response?.data?.success || response?.status === 200) {
+        alert("Ingredient deleted successfully!");
+        fetchIngredients();
+      } else {
+        throw new Error(response?.data?.message || "Failed to delete ingredient");
+      }
     } catch (error) {
-      alert(`Failed to delete ingredient: ${error.response?.data?.message || error.message}`);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to delete ingredient";
+      alert(`Failed to delete ingredient: ${errorMessage}`);
+      console.error("Delete ingredient error:", error);
     }
   };
 
   const handleViewFIFO = async (ingredient) => {
     try {
       const res = await getFIFOLayers(ingredient._id);
-      if (res.data.success) {
-        setFifoLayers(res.data.data);
+      if (res.data?.success) {
+        setFifoLayers(res.data.data || []);
         setSelectedIngredient(ingredient);
         setFifoModalOpen(true);
+      } else {
+        throw new Error(res.data?.message || "Failed to fetch FIFO layers");
       }
     } catch (error) {
-      alert("Failed to fetch FIFO layers");
+      const errorMessage = error.response?.data?.message || error.message || "Failed to fetch FIFO layers";
+      alert(`Failed to fetch FIFO layers: ${errorMessage}`);
+      console.error("FIFO layers error:", error);
     }
   };
 
@@ -381,30 +405,55 @@ const Ingredients = () => {
               </button>
             </div>
             {fifoLayers.length === 0 ? (
-              <p className="text-gray-500">No FIFO layers found</p>
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-2">No active FIFO layers found</p>
+                <p className="text-sm text-gray-400">
+                  {selectedIngredient?.name} has no remaining inventory in FIFO layers.
+                  {selectedIngredient?.qtyOnHand > 0 && " This may indicate inventory needs to be purchased."}
+                </p>
+              </div>
             ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Remaining</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Value</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {fifoLayers.map((layer, idx) => (
-                    <tr key={idx}>
-                      <td className="px-4 py-2">{new Date(layer.date).toLocaleDateString()}</td>
-                      <td className="px-4 py-2">{formatUnit(layer.qty, layer.uom)}</td>
-                      <td className="px-4 py-2">{formatUnit(layer.remainingQty, layer.uom)}</td>
-                      <td className="px-4 py-2">₹{layer.unitCost.toFixed(2)}</td>
-                      <td className="px-4 py-2">₹{(layer.remainingQty * layer.unitCost).toFixed(2)}</td>
+              <div>
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Total Remaining:</strong> {formatUnit(
+                      fifoLayers.reduce((sum, layer) => sum + (layer.remainingQty || 0), 0),
+                      selectedIngredient?.uom || "kg"
+                    )}
+                  </p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    <strong>Total Value:</strong> ₹{fifoLayers.reduce((sum, layer) => 
+                      sum + ((layer.remainingQty || 0) * (layer.unitCost || 0)), 0
+                    ).toFixed(2)}
+                  </p>
+                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Original Qty</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Remaining</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Value</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {fifoLayers.map((layer, idx) => (
+                      <tr key={idx} className={layer.remainingQty <= 0 ? "opacity-50" : ""}>
+                        <td className="px-4 py-2">{layer.date ? new Date(layer.date).toLocaleDateString() : "N/A"}</td>
+                        <td className="px-4 py-2">{formatUnit(layer.qty || 0, layer.uom || selectedIngredient?.uom || "kg")}</td>
+                        <td className="px-4 py-2">
+                          <span className={layer.remainingQty <= 0 ? "text-gray-400" : "font-medium"}>
+                            {formatUnit(layer.remainingQty || 0, layer.uom || selectedIngredient?.uom || "kg")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">₹{(layer.unitCost || 0).toFixed(2)}</td>
+                        <td className="px-4 py-2">₹{((layer.remainingQty || 0) * (layer.unitCost || 0)).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

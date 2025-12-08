@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaUtensils, FaPlus, FaEdit, FaTrash, FaSpinner, FaSave, FaChevronDown, FaChevronRight, FaSync, FaBuilding, FaUpload, FaImage, FaTimes } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 // Helper function to normalize image URLs
 // Converts absolute URLs from the same API server to relative URLs
@@ -41,6 +42,7 @@ const getImageUrl = (imagePath) => {
 };
 
 const DefaultMenu = () => {
+  const { user } = useAuth();
   const [defaultMenu, setDefaultMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -165,12 +167,60 @@ const DefaultMenu = () => {
 
   const handleOpenPushModal = () => {
     if (!defaultMenu?.categories || defaultMenu.categories.length === 0) {
-      alert('Please create and save menu first before pushing to franchises.');
+      if (user?.role === 'franchise_admin') {
+        alert('Please create and save menu first before pushing to carts.');
+      } else {
+        alert('Please create and save menu first before pushing to franchises.');
+      }
       return;
     }
+    
+    // For franchise admin: push directly to their carts (no modal needed)
+    if (user?.role === 'franchise_admin') {
+      handlePushToCarts();
+      return;
+    }
+    
+    // For super admin: show franchise selection modal
     setSelectedFranchises(new Set());
     setPushResults(null);
     setShowPushModal(true);
+  };
+  
+  const handlePushToCarts = async () => {
+    if (!window.confirm(
+      `Push default menu to all your carts?\n\n` +
+      `This will:\n` +
+      `• Replace the menu for all carts under your franchise\n` +
+      `• All existing menu items will be replaced\n\n` +
+      `Continue?`
+    )) {
+      return;
+    }
+
+    setPushing(true);
+    try {
+      // Push to own franchise (which pushes to all carts)
+      const response = await api.post(`/default-menu/push/franchise/${user._id}`);
+      setPushResults([{
+        franchiseId: user._id,
+        franchiseName: user.name || 'Your Franchise',
+        success: true,
+        message: `Updated ${response.data.cartsUpdated || response.data.cafesUpdated || 0} carts`,
+        data: response.data
+      }]);
+      setShowPushModal(true); // Show results in modal
+    } catch (error) {
+      setPushResults([{
+        franchiseId: user._id,
+        franchiseName: user.name || 'Your Franchise',
+        success: false,
+        message: error.response?.data?.message || error.message
+      }]);
+      setShowPushModal(true); // Show error in modal
+    } finally {
+      setPushing(false);
+    }
   };
 
   const handlePushToFranchises = async () => {
@@ -371,9 +421,13 @@ const DefaultMenu = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Global Default Menu</h1>
+          <h1 className="text-3xl font-bold text-gray-800">
+            {user?.role === 'franchise_admin' ? 'Franchise Default Menu' : 'Global Default Menu'}
+          </h1>
           <p className="text-gray-600 mt-1">
-            Create the master menu template. Push this menu to franchises, who can then customize and push to their carts.
+            {user?.role === 'franchise_admin' 
+              ? 'Customize your franchise menu and push it to all your carts.'
+              : 'Create the master menu template. Push this menu to franchises, who can then customize and push to their carts.'}
           </p>
         </div>
         <div className="flex space-x-3">
@@ -401,42 +455,86 @@ const DefaultMenu = () => {
               </>
             )}
           </button>
-          <button
-            onClick={handleOpenPushModal}
-            disabled={!defaultMenu?.categories || defaultMenu.categories.length === 0}
-            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-          >
-            <FaSync className="mr-2" />
-            Push to Franchises
-          </button>
+          {user?.role === 'super_admin' && (
+            <button
+              onClick={handleOpenPushModal}
+              disabled={!defaultMenu?.categories || defaultMenu.categories.length === 0}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            >
+              <FaSync className="mr-2" />
+              Push to Franchises
+            </button>
+          )}
+          {user?.role === 'franchise_admin' && (
+            <button
+              onClick={handleOpenPushModal}
+              disabled={!defaultMenu?.categories || defaultMenu.categories.length === 0 || pushing}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {pushing ? (
+                <>
+                  <FaSpinner className="animate-spin mr-2" />
+                  Pushing...
+                </>
+              ) : (
+                <>
+                  <FaSync className="mr-2" />
+                  Push to Carts
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Menu Flow Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-800 mb-2">Menu Hierarchy Flow</h3>
-        <div className="flex items-center gap-4 text-sm text-blue-700">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">1</span>
-            <span>Super Admin creates Global Menu</span>
-          </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">2</span>
-            <span>Push to Franchises (one by one)</span>
-          </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">3</span>
-            <span>Franchise pushes to their Carts</span>
-          </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold">4</span>
-            <span>Cart Admin toggles availability only</span>
+      {user?.role === 'super_admin' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-blue-800 mb-2">Menu Hierarchy Flow</h3>
+          <div className="flex items-center gap-4 text-sm text-blue-700">
+            <div className="flex items-center gap-2">
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">1</span>
+              <span>Super Admin creates Global Menu</span>
+            </div>
+            <span>→</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">2</span>
+              <span>Push to Franchises (one by one)</span>
+            </div>
+            <span>→</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">3</span>
+              <span>Franchise pushes to their Carts</span>
+            </div>
+            <span>→</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold">4</span>
+              <span>Cart Admin toggles availability only</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+      {user?.role === 'franchise_admin' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h3 className="font-semibold text-green-800 mb-2">Franchise Menu Flow</h3>
+          <div className="flex items-center gap-4 text-sm text-green-700">
+            <div className="flex items-center gap-2">
+              <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">1</span>
+              <span>Customize your Franchise Menu</span>
+            </div>
+            <span>→</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">2</span>
+              <span>Push to all your Carts</span>
+            </div>
+            <span>→</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold">3</span>
+              <span>Cart Admin toggles availability only</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow p-6">
         {!defaultMenu?.categories || defaultMenu.categories.length === 0 ? (
@@ -627,13 +725,22 @@ const DefaultMenu = () => {
         )}
       </div>
 
-      {/* Push to Franchises Modal */}
+      {/* Push to Franchises/Carts Modal */}
       {showPushModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <FaBuilding className="text-purple-600" />
-              Push Menu to Franchises
+              {user?.role === 'franchise_admin' ? (
+                <>
+                  <FaSync className="text-green-600" />
+                  Push Menu to Carts
+                </>
+              ) : (
+                <>
+                  <FaBuilding className="text-purple-600" />
+                  Push Menu to Franchises
+                </>
+              )}
             </h2>
             
             {pushResults ? (

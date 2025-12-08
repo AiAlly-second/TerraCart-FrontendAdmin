@@ -9,8 +9,10 @@ import { FaDownload, FaFileCsv, FaFilePdf } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { formatUnit } from "../../utils/unitConverter";
+import { useAuth } from "../../context/AuthContext";
 
 const Reports = () => {
+  const { user } = useAuth();
   const [activeReport, setActiveReport] = useState("food-cost");
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -23,6 +25,14 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
 
+  // For cart admins, automatically set selectedOutlet to their own cart ID
+  useEffect(() => {
+    if (user?.role === "admin" && user?._id) {
+      // Cart admin should only see their own cart's data
+      setSelectedOutlet(user._id);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchReport();
   }, [activeReport, dateRange, selectedOutlet]);
@@ -30,10 +40,20 @@ const Reports = () => {
   const fetchReport = async () => {
     try {
       setLoading(true);
+      
+      // For cart admins, always use their own cart ID
+      // For franchise/super admins, use selectedOutlet if provided
+      let outletId = null;
+      if (user?.role === "admin") {
+        outletId = user._id; // Cart admin's own cart
+      } else if (selectedOutlet) {
+        outletId = selectedOutlet; // Franchise/super admin's selected outlet
+      }
+      
       const params = { 
         from: dateRange.from, 
         to: dateRange.to,
-        ...(selectedOutlet && { outletId: selectedOutlet })
+        ...(outletId && { outletId })
       };
 
       switch (activeReport) {
@@ -46,7 +66,7 @@ const Reports = () => {
           if (menuEngRes.data.success) setMenuEngineeringData(menuEngRes.data.data);
           break;
         case "price-history":
-          const priceRes = await getSupplierPriceHistory();
+          const priceRes = await getSupplierPriceHistory(params);
           if (priceRes.data.success) setPriceHistoryData(priceRes.data.data);
           break;
         case "pnl":

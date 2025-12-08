@@ -235,6 +235,7 @@ const Invoices = () => {
   const [paymentsByOrder, setPaymentsByOrder] = useState({});
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
+  const [filterTimePeriod, setFilterTimePeriod] = useState("all"); // day, week, month, all
   const printRef = useRef(null);
 
   const selectedInvoiceItems = useMemo(
@@ -319,7 +320,37 @@ const Invoices = () => {
     }
   }, [selected]);
 
-  const paidOrders = useMemo(() => orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid'), [orders]);
+  // Helper function to check if order date matches time period
+  const matchesTimePeriod = (orderDate, period) => {
+    if (period === "all") return true;
+    if (!orderDate) return false;
+    
+    const now = new Date();
+    const order = new Date(orderDate);
+    if (isNaN(order.getTime())) return false; // Invalid date
+    
+    // Reset time to start of day for accurate day comparison
+    const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const orderStart = new Date(order.getFullYear(), order.getMonth(), order.getDate());
+    const diffTime = nowStart - orderStart;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    switch (period) {
+      case "day":
+        return diffDays === 0; // Today
+      case "week":
+        return diffDays >= 0 && diffDays <= 7; // Last 7 days (including today)
+      case "month":
+        return diffDays >= 0 && diffDays <= 30; // Last 30 days (including today)
+      default:
+        return true;
+    }
+  };
+
+  const paidOrders = useMemo(() => {
+    const paid = orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid');
+    return paid.filter(order => matchesTimePeriod(order.createdAt || order.paidAt, filterTimePeriod));
+  }, [orders, filterTimePeriod]);
   const selectedPayments = useMemo(
     () => (selected ? paymentsByOrder[selected._id] || [] : []),
     [selected, paymentsByOrder]
@@ -458,6 +489,23 @@ const Invoices = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={filterTimePeriod}
+            onChange={(e) => setFilterTimePeriod(e.target.value)}
+            className="border-2 border-blue-500 bg-blue-500 text-white rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-semibold cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
+            style={{ 
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.75rem center',
+              paddingRight: '2.5rem'
+            }}
+          >
+            <option value="all">📅 All Time</option>
+            <option value="day">📆 Today</option>
+            <option value="week">📊 This Week</option>
+            <option value="month">📈 This Month</option>
+          </select>
           <button
             onClick={loadPayments}
             className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-100"

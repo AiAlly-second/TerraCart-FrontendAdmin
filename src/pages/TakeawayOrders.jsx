@@ -901,6 +901,7 @@ const TakeawayOrders = () => {
     }
   };
 
+
   const filteredOrders = useMemo(() => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
     const normalizedTable = searchTable.trim().toLowerCase();

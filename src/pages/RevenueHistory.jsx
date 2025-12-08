@@ -260,7 +260,12 @@ const RevenueHistory = () => {
   // Get carts for a specific franchise
   const getCafesForFranchise = (franchiseId) => {
     if (!currentRevenue?.cartRevenue) return [];
-    return currentRevenue.cartRevenue.filter(cafe => cafe.franchiseId === franchiseId);
+    // Filter carts by franchiseId, ensuring proper string comparison
+    return currentRevenue.cartRevenue.filter(cafe => {
+      const cafeFranchiseId = cafe.franchiseId?.toString() || cafe.franchiseId;
+      const targetFranchiseId = franchiseId?.toString() || franchiseId;
+      return cafeFranchiseId === targetFranchiseId;
+    });
   };
 
   if (loading) {
@@ -602,7 +607,11 @@ const RevenueHistory = () => {
                             </div>
                             <div>
                               <h3 className="font-semibold text-[#4a2e1f]">{franchise.franchiseName}</h3>
-                              <p className="text-xs md:text-sm text-[#6b4423]">{franchise.cartCount || cafes.length} cart(s)</p>
+                              <p className="text-xs md:text-sm text-[#6b4423]">
+                                {franchise.cartCount !== undefined && franchise.cartCount !== null 
+                                  ? franchise.cartCount 
+                                  : cafes.length} cart(s)
+                              </p>
                             </div>
                           </div>
                           
@@ -891,7 +900,11 @@ const RevenueHistory = () => {
                       <div className="flex justify-between items-start">
                         <div>
                             <p className="font-semibold text-[#4a2e1f]">{franchise.franchiseName || 'Unknown Franchise'}</p>
-                            <p className="text-xs md:text-sm text-[#6b4423]">{franchise.cartCount || franchise.cafeCount || 0} cart(s)</p>
+                            <p className="text-xs md:text-sm text-[#6b4423]">
+                              {franchise.cartCount !== undefined && franchise.cartCount !== null 
+                                ? franchise.cartCount 
+                                : (franchise.cafeCount || 0)} cart(s)
+                            </p>
                         </div>
                         <div className="text-right">
                             <p className="text-base md:text-lg font-bold text-[#d86d2a]">{formatCurrency(franchise.revenue || 0)}</p>

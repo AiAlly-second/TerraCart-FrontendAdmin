@@ -17,6 +17,7 @@ const Payments = () => {
   const [error, setError] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterTimePeriod, setFilterTimePeriod] = useState("all"); // day, week, month, all
   const [busyId, setBusyId] = useState(null);
 
   const loadPayments = async () => {
@@ -36,20 +37,62 @@ const Payments = () => {
     loadPayments();
   }, []);
 
+  // Helper function to check if payment date matches time period
+  const matchesTimePeriod = (paymentDate, period) => {
+    if (period === "all") return true;
+    if (!paymentDate) return false;
+    
+    const now = new Date();
+    const payment = new Date(paymentDate);
+    if (isNaN(payment.getTime())) return false; // Invalid date
+    
+    // Reset time to start of day for accurate day comparison
+    const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const paymentStart = new Date(payment.getFullYear(), payment.getMonth(), payment.getDate());
+    const diffTime = nowStart - paymentStart;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    switch (period) {
+      case "day":
+        return diffDays === 0; // Today
+      case "week":
+        return diffDays >= 0 && diffDays <= 7; // Last 7 days (including today)
+      case "month":
+        return diffDays >= 0 && diffDays <= 30; // Last 30 days (including today)
+      default:
+        return true;
+    }
+  };
+
   const filteredPayments = useMemo(() => {
+    let filtered = payments;
+    
+    // Apply status filter
     switch (filterStatus) {
       case "ACTIVE":
-        return payments.filter((p) =>
+        filtered = filtered.filter((p) =>
           ["PENDING", "PROCESSING", "CASH_PENDING"].includes(p.status)
         );
+        break;
       case "PAID":
-        return payments.filter((p) => p.status === "PAID");
+        filtered = filtered.filter((p) => p.status === "PAID");
+        break;
       case "CANCELLED":
-        return payments.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        filtered = filtered.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        break;
       default:
-        return payments;
+        // ALL - no status filtering
+        break;
     }
-  }, [payments, filterStatus]);
+    
+    // Apply time period filter (use createdAt or paidAt if available)
+    filtered = filtered.filter((p) => {
+      const paymentDate = p.paidAt || p.createdAt;
+      return matchesTimePeriod(paymentDate, filterTimePeriod);
+    });
+    
+    return filtered;
+  }, [payments, filterStatus, filterTimePeriod]);
 
   const handleMarkPaid = async (payment) => {
     if (!window.confirm(`Mark payment ${payment.id} as paid?`)) return;
@@ -96,6 +139,23 @@ const Payments = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={filterTimePeriod}
+            onChange={(e) => setFilterTimePeriod(e.target.value)}
+            className="border-2 border-blue-500 bg-blue-500 text-white rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-semibold cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
+            style={{ 
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.75rem center',
+              paddingRight: '2.5rem'
+            }}
+          >
+            <option value="all">📅 All Time</option>
+            <option value="day">📆 Today</option>
+            <option value="week">📊 This Week</option>
+            <option value="month">📈 This Month</option>
+          </select>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}

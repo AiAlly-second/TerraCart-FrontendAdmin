@@ -458,6 +458,7 @@ const Orders = () => {
   const [cafeInfo, setCafeInfo] = useState(null);
   const [carts, setCarts] = useState([]); // For franchise admin: list of carts
   const [expandedCarts, setExpandedCarts] = useState({}); // Track expanded cart sections
+  const [cartServiceTypeFilters, setCartServiceTypeFilters] = useState({}); // Track service type filter per cart
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [searchOrderId, setSearchOrderId] = useState("");
@@ -465,6 +466,7 @@ const Orders = () => {
   const [searchInvoice, setSearchInvoice] = useState("");
   const [expanded, setExpanded] = useState({}); // track expanded rows
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterServiceType, setFilterServiceType] = useState("all"); // all, DINE_IN, TAKEAWAY
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState("");
   const [menuItems, setMenuItems] = useState([]);
@@ -480,18 +482,20 @@ const Orders = () => {
   const [createError, setCreateError] = useState("");
   const upsertOrder = useCallback(
     (incoming, { prepend = false } = {}) => {
-      // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
-      if (!incoming || incoming.serviceType !== "DINE_IN") {
-        console.log('[Orders] Ignoring non-DINE_IN order:', incoming?.serviceType, incoming?._id);
+      // For franchise users: show both DINE_IN and TAKEAWAY orders
+      // For cart users: only show DINE_IN orders (TAKEAWAY orders are handled in separate page)
+      if (!incoming) return;
+      
+      // If user is not a franchise admin, only show DINE_IN orders
+      if (user?.role !== 'franchise_admin' && incoming.serviceType !== "DINE_IN") {
         return;
       }
+      
       const incomingId = normalizeId(incoming._id);
       if (!incomingId) return;
 
       setOrders((prev) => {
-        // Also filter out any TAKEAWAY orders that might have slipped in
-        const filteredPrev = Array.isArray(prev) ? prev.filter(o => o.serviceType === "DINE_IN") : [];
-        const list = [...filteredPrev];
+        const list = Array.isArray(prev) ? [...prev] : [];
         const index = list.findIndex(
           (order) => normalizeId(order._id) === incomingId
         );
@@ -504,7 +508,7 @@ const Orders = () => {
         return prepend ? [incoming, ...list] : [...list, incoming];
       });
     },
-    []
+    [user?.role]
   );
 
   const getStatusClass = (status) => {
@@ -591,7 +595,7 @@ const Orders = () => {
             <span className="text-gray-900 font-medium">{new Date(order.createdAt).toLocaleTimeString()}</span>
           </button>
           {expanded[order._id] && (
-            <div className="mt-2 text-xs text-gray-600 space-y-1">
+              <div className="mt-2 text-xs text-gray-600 space-y-1">
               <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
               <div>
                 Invoice:{" "}
@@ -600,7 +604,7 @@ const Orders = () => {
               <div>
                 Service Type:{" "}
                 <span className="font-semibold text-gray-700">
-                  {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
+                  {order.serviceType === "TAKEAWAY" ? "🥡 Takeaway" : "🍽️ Dine-In"}
                 </span>
               </div>
             </div>
@@ -608,13 +612,19 @@ const Orders = () => {
         </td>
          <td className="px-6 py-4">
            <div className="flex items-center gap-2">
-             <img 
-               src={tableIcon} 
-               alt="Table" 
-               title="Table"
-               className="w-6 h-6 object-contain"
-             />
-             <span className="text-lg font-semibold text-gray-700">{order.tableNumber || 'N/A'}</span>
+             {order.serviceType === "TAKEAWAY" ? (
+               <span className="text-2xl">🥡</span>
+             ) : (
+               <img 
+                 src={tableIcon} 
+                 alt="Table" 
+                 title="Table"
+                 className="w-6 h-6 object-contain"
+               />
+             )}
+             <span className="text-lg font-semibold text-gray-700">
+               {order.serviceType === "TAKEAWAY" ? "TAKEAWAY" : (order.tableNumber || 'N/A')}
+             </span>
            </div>
          </td>
         <td className="px-6 py-4">
@@ -788,14 +798,16 @@ const Orders = () => {
         const res = await api.get("/orders");
         const data = res.data || [];
         
-        // STRICT: Only show DINE_IN orders, completely filter out TAKEAWAY orders
-        let dineInOrders = Array.isArray(data) ? data.filter(
-          (order) => order.serviceType === "DINE_IN"
-        ) : [];
+        // For franchise users: show both DINE_IN and TAKEAWAY orders
+        // For cart users: only show DINE_IN orders
+        let allOrders = Array.isArray(data) ? data : [];
+        if (user?.role !== 'franchise_admin') {
+          allOrders = allOrders.filter((order) => order.serviceType === "DINE_IN");
+        }
         
         // If cartId filter is provided, filter by specific cart
         if (filterCafeId) {
-          dineInOrders = dineInOrders.filter((order) => {
+          allOrders = allOrders.filter((order) => {
             let orderCafeId = order.cafeId || order.cartId;
             if (orderCafeId && typeof orderCafeId === 'object') {
               orderCafeId = orderCafeId._id || orderCafeId;
@@ -809,11 +821,11 @@ const Orders = () => {
             }
             return orderCafeId && orderCafeId.toString() === filterCafeId;
           });
-          console.log(`Filtered orders for cart ${filterCafeId}:`, dineInOrders.length);
+          console.log(`Filtered orders for cart ${filterCafeId}:`, allOrders.length);
         }
         
-        console.log("Fetched dine-in orders:", dineInOrders.length, "out of", data.length || 0, "total orders");
-        setOrders(dineInOrders);
+        console.log("Fetched orders:", allOrders.length, "out of", data.length || 0, "total orders");
+        setOrders(allOrders);
       } catch (err) {
         console.error("Failed to fetch orders:", err);
       }
@@ -826,7 +838,7 @@ const Orders = () => {
       if (!filterCafeId) {
         upsertOrder(order, { prepend: true });
       } else {
-        let orderCafeId = order.cafeId;
+        let orderCafeId = order.cafeId || order.cartId;
         if (orderCafeId && typeof orderCafeId === 'object') {
           orderCafeId = orderCafeId._id || orderCafeId;
         }
@@ -841,7 +853,7 @@ const Orders = () => {
       if (!filterCafeId) {
         upsertOrder(updatedOrder);
       } else {
-        let orderCafeId = updatedOrder.cafeId;
+        let orderCafeId = updatedOrder.cafeId || updatedOrder.cartId;
         if (orderCafeId && typeof orderCafeId === 'object') {
           orderCafeId = orderCafeId._id || orderCafeId;
         }
@@ -863,7 +875,7 @@ const Orders = () => {
       socket.off("orderUpdated");
       socket.off("orderDeleted");
     };
-  }, [upsertOrder, filterCafeId, user]);
+  }, [upsertOrder, filterCafeId, user?.role]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -930,12 +942,18 @@ const Orders = () => {
       // Refresh orders list by fetching again
       const ordersRes = await api.get("/orders");
       const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-      let dineInOrders = allOrders.filter((o) => o.serviceType === "DINE_IN");
+      
+      // For franchise users: show both DINE_IN and TAKEAWAY orders
+      // For cart users: only show DINE_IN orders
+      let filteredOrders = allOrders;
+      if (user?.role !== 'franchise_admin') {
+        filteredOrders = allOrders.filter((o) => o.serviceType === "DINE_IN");
+      }
       
       // Re-apply cart filter if active
       if (filterCafeId) {
-        dineInOrders = dineInOrders.filter((order) => {
-          let orderCafeId = order.cafeId;
+        filteredOrders = filteredOrders.filter((order) => {
+          let orderCafeId = order.cafeId || order.cartId;
           if (orderCafeId && typeof orderCafeId === 'object') {
             orderCafeId = orderCafeId._id || orderCafeId;
           }
@@ -949,7 +967,7 @@ const Orders = () => {
         });
       }
       
-      setOrders(dineInOrders);
+      setOrders(filteredOrders);
 
       setIsModalOpen(false);
       setCurrentOrder(null);
@@ -1049,15 +1067,20 @@ const Orders = () => {
       };
 
       const { data: created } = await api.post("/orders", payload);
-      // Only add to orders list if it's a DINE_IN order
-      if (created?.serviceType === "DINE_IN") {
+      // Add to orders list based on user role
+      if (user?.role === 'franchise_admin' || created?.serviceType === "DINE_IN") {
         setOrders((prev) => {
-          // Ensure we don't have any TAKEAWAY orders in the list
-          const filteredPrev = Array.isArray(prev) ? prev.filter(o => o.serviceType === "DINE_IN") : [];
-          return [created, ...filteredPrev];
+          const list = Array.isArray(prev) ? [...prev] : [];
+          // Check if order already exists
+          const existingIndex = list.findIndex(o => o._id === created._id);
+          if (existingIndex >= 0) {
+            list[existingIndex] = created;
+            return list;
+          }
+          return [created, ...list];
         });
       } else {
-        console.log('[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list');
+        console.log('[Orders] Created order is TAKEAWAY, not adding to orders list for cart admin');
       }
       setIsModalOpen(false);
       setCurrentOrder(null);
@@ -1129,17 +1152,22 @@ const Orders = () => {
     return grouped;
   }, [orders, carts, user, filterCafeId]);
 
+
   const filteredOrders = (() => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
     const normalizedTable = searchTable.trim().toLowerCase();
     const normalizedInvoice = searchInvoice.trim().toLowerCase();
 
-    // STRICT: Only show DINE_IN orders, filter out any TAKEAWAY orders that might have slipped in
-    const dineInOrders = orders.filter((order) => order.serviceType === "DINE_IN");
+    // For franchise users: show both DINE_IN and TAKEAWAY orders
+    // For cart users: only show DINE_IN orders
+    let filteredByType = orders;
+    if (user?.role !== 'franchise_admin') {
+      filteredByType = orders.filter((order) => order.serviceType === "DINE_IN");
+    }
 
     // Deduplicate orders by _id to prevent duplicate keys
     const uniqueOrders = new Map();
-    dineInOrders.forEach(order => {
+    filteredByType.forEach(order => {
       const orderId = order._id?.toString() || order._id;
       if (orderId && !uniqueOrders.has(orderId)) {
         uniqueOrders.set(orderId, order);
@@ -1148,14 +1176,27 @@ const Orders = () => {
 
     const matches = Array.from(uniqueOrders.values()).filter((order) => {
       const orderIdMatch = !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
+      
+      // For table search: match table number for DINE_IN, or "takeaway" for TAKEAWAY orders
       const tableMatch =
         !normalizedTable ||
-        (order.tableNumber !== undefined &&
+        (order.serviceType === "TAKEAWAY" && "takeaway".includes(normalizedTable)) ||
+        (order.serviceType === "DINE_IN" &&
+          order.tableNumber !== undefined &&
           order.tableNumber !== null &&
           String(order.tableNumber).toLowerCase().includes(normalizedTable));
+      
       const invoiceId = buildInvoiceId(order).toLowerCase();
       const invoiceMatch = !normalizedInvoice || invoiceId.includes(normalizedInvoice);
-      return orderIdMatch && tableMatch && invoiceMatch;
+      
+      // Service type filter (only when viewing specific cart for franchise users)
+      const serviceTypeMatch = 
+        !filterCafeId || // If not viewing specific cart, show all
+        filterServiceType === "all" || 
+        (user?.role === 'franchise_admin' && order.serviceType === filterServiceType) ||
+        (user?.role !== 'franchise_admin' && order.serviceType === "DINE_IN");
+      
+      return orderIdMatch && tableMatch && invoiceMatch && serviceTypeMatch;
     });
 
     if (filterStatus === 'all') return matches;
@@ -1163,10 +1204,13 @@ const Orders = () => {
   })();
 
   // Filter orders by cart for grouped view
-  const getFilteredOrdersForCart = (cartOrders) => {
+  const getFilteredOrdersForCart = (cartOrders, cartId = null) => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
     const normalizedTable = searchTable.trim().toLowerCase();
     const normalizedInvoice = searchInvoice.trim().toLowerCase();
+
+    // Get service type filter for this specific cart (if any)
+    const cartServiceFilter = cartId ? (cartServiceTypeFilters[cartId] || "all") : "all";
 
     // Deduplicate orders by _id to prevent duplicate keys
     const uniqueOrders = new Map();
@@ -1179,14 +1223,25 @@ const Orders = () => {
 
     const matches = Array.from(uniqueOrders.values()).filter((order) => {
       const orderIdMatch = !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
+      
+      // For table search: match table number for DINE_IN, or "takeaway" for TAKEAWAY orders
       const tableMatch =
         !normalizedTable ||
-        (order.tableNumber !== undefined &&
+        (order.serviceType === "TAKEAWAY" && "takeaway".includes(normalizedTable)) ||
+        (order.serviceType === "DINE_IN" &&
+          order.tableNumber !== undefined &&
           order.tableNumber !== null &&
           String(order.tableNumber).toLowerCase().includes(normalizedTable));
+      
       const invoiceId = buildInvoiceId(order).toLowerCase();
       const invoiceMatch = !normalizedInvoice || invoiceId.includes(normalizedInvoice);
-      return orderIdMatch && tableMatch && invoiceMatch;
+      
+      // Service type filter for this cart
+      const serviceTypeMatch = 
+        cartServiceFilter === "all" || 
+        order.serviceType === cartServiceFilter;
+      
+      return orderIdMatch && tableMatch && invoiceMatch && serviceTypeMatch;
     });
 
     if (filterStatus === 'all') return matches;
@@ -1388,12 +1443,12 @@ const Orders = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           {filterCafeId && (
-            <button
-              onClick={() => window.location.href = "/orders"}
-              className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm"
-            >
-              View All Carts
-            </button>
+          <button
+            onClick={() => window.location.href = "/orders"}
+            className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm"
+          >
+            View All Carts
+          </button>
           )}
           <input
             type="text"
@@ -1404,7 +1459,7 @@ const Orders = () => {
           />
           <input
             type="text"
-            placeholder="Table number"
+            placeholder={user?.role === 'franchise_admin' ? "Table/Takeaway" : "Table number"}
             value={searchTable}
             onChange={(e) => setSearchTable(e.target.value)}
             className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-40"
@@ -1421,6 +1476,9 @@ const Orders = () => {
               setSearchOrderId("");
               setSearchTable("");
               setSearchInvoice("");
+              if (filterCafeId && user?.role === 'franchise_admin') {
+                setFilterServiceType("all");
+              }
             }}
             className="border border-gray-200 text-gray-600 hover:bg-gray-100 py-2 px-3 rounded-lg text-sm"
           >
@@ -1447,15 +1505,25 @@ const Orders = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-2xl font-bold">{orders.filter((o) => o.serviceType === "DINE_IN").length}</div>
-              <div className="text-sm">All Dine-In</div>
+              <div className="text-2xl font-bold">
+                {user?.role === 'franchise_admin' 
+                  ? orders.length 
+                  : orders.filter((o) => o.serviceType === "DINE_IN").length}
+              </div>
+              <div className="text-sm">
+                {user?.role === 'franchise_admin' ? 'All Orders' : 'All Dine-In'}
+              </div>
             </div>
             <div className="text-2xl">📦</div>
           </div>
         </button>
 
         {Object.entries(orders
-          .filter((order) => order.serviceType === "DINE_IN") // Only count DINE_IN orders in status summary
+          .filter((order) => {
+            // For franchise users: include both DINE_IN and TAKEAWAY
+            // For cart users: only DINE_IN
+            return user?.role === 'franchise_admin' || order.serviceType === "DINE_IN";
+          })
           .reduce((acc, order) => {
             acc[order.status] = (acc[order.status] || 0) + 1;
             return acc;
@@ -1485,14 +1553,15 @@ const Orders = () => {
           <div className="divide-y divide-gray-200">
             {Object.entries(ordersByCart)
               .filter(([cartId, { orders: cartOrders }]) => {
-                const filtered = getFilteredOrdersForCart(cartOrders);
+                const filtered = getFilteredOrdersForCart(cartOrders, cartId);
                 return filtered.length > 0;
               })
               .map(([cartId, { cart, orders: cartOrders }]) => {
-                const filteredCartOrders = getFilteredOrdersForCart(cartOrders);
+                const filteredCartOrders = getFilteredOrdersForCart(cartOrders, cartId);
                 const cartName = cart.cartName || cart.name || cart.cafeName || 'Unknown Cart';
                 const cartCode = cart.cartCode || '';
                 const isExpanded = expandedCarts[cartId] !== false; // Default to expanded
+                const cartServiceFilter = cartServiceTypeFilters[cartId] || "all";
                 
                 return (
                   <div key={cartId} className="border-b border-gray-300">
@@ -1511,15 +1580,59 @@ const Orders = () => {
                         <h3 className="text-lg font-bold text-gray-800">{cartName}</h3>
                         <span className="text-sm text-gray-600">({filteredCartOrders.length} orders)</span>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/orders?cafeId=${cartId}`);
-                        }}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                      >
-                        View All
-                      </button>
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {/* Service Type Filter for this cart */}
+                        <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-300 p-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCartServiceTypeFilters(prev => ({ ...prev, [cartId]: "all" }));
+                            }}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              cartServiceFilter === "all"
+                                ? "bg-blue-500 text-white font-semibold"
+                                : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            All
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCartServiceTypeFilters(prev => ({ ...prev, [cartId]: "DINE_IN" }));
+                            }}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              cartServiceFilter === "DINE_IN"
+                                ? "bg-green-500 text-white font-semibold"
+                                : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            🍽️
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCartServiceTypeFilters(prev => ({ ...prev, [cartId]: "TAKEAWAY" }));
+                            }}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              cartServiceFilter === "TAKEAWAY"
+                                ? "bg-purple-500 text-white font-semibold"
+                                : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            🥡
+                          </button>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/orders?cafeId=${cartId}`);
+                          }}
+                          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                          View All
+                        </button>
+                      </div>
                     </div>
                     
                     {/* Orders for this cart */}
@@ -1528,7 +1641,9 @@ const Orders = () => {
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Details</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                              {user?.role === 'franchise_admin' ? 'Table/Type' : 'Table'}
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                           </tr>
@@ -1549,11 +1664,55 @@ const Orders = () => {
           </div>
         ) : (
           // Regular flat view
-          <table className="min-w-full">
+          <>
+            {filterCafeId && user?.role === 'franchise_admin' && (
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-gray-700">Filter by Service Type:</span>
+                    <div className="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-300 p-1">
+                      <button
+                        onClick={() => setFilterServiceType("all")}
+                        className={`px-4 py-2 text-sm rounded transition-colors ${
+                          filterServiceType === "all"
+                            ? "bg-blue-500 text-white font-semibold shadow-sm"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        All Orders
+                      </button>
+                      <button
+                        onClick={() => setFilterServiceType("DINE_IN")}
+                        className={`px-4 py-2 text-sm rounded transition-colors ${
+                          filterServiceType === "DINE_IN"
+                            ? "bg-green-500 text-white font-semibold shadow-sm"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        🍽️ Dine-In
+                      </button>
+                      <button
+                        onClick={() => setFilterServiceType("TAKEAWAY")}
+                        className={`px-4 py-2 text-sm rounded transition-colors ${
+                          filterServiceType === "TAKEAWAY"
+                            ? "bg-purple-500 text-white font-semibold shadow-sm"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        🥡 Takeaway
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <table className="min-w-full">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Details</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  {user?.role === 'franchise_admin' ? 'Table/Type' : 'Table'}
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -1569,6 +1728,7 @@ const Orders = () => {
               {filteredOrders.map((order) => renderOrderRow(order))}
             </tbody>
           </table>
+          </>
         )}
       </div>
 
