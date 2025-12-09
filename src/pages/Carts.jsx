@@ -152,36 +152,36 @@ const Carts = () => {
   });
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 min-h-screen">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-[#4a2e1f] mb-4 md:mb-0">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#4a2e1f]">
           Cart Management
         </h1>
           <button
             onClick={() => navigate("/carts/new")}
-            className="bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors"
+            className="bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-bold py-2 px-3 sm:px-4 rounded-lg shadow-md transition-colors text-sm sm:text-base w-full sm:w-auto"
           >
             + Register New Cart Admin
           </button>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
             <input
               type="text"
               placeholder="Search by cart name, manager, location, or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-[#e2c1ac] bg-[#fef4ec] text-[#4a2e1f] rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
+              className="w-full border border-[#e2c1ac] bg-[#fef4ec] text-[#4a2e1f] rounded-lg py-2 px-3 sm:px-4 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
             />
           </div>
-          <div className="md:w-48">
+          <div className="w-full sm:w-48">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full border border-[#e2c1ac] bg-[#fef4ec] text-[#4a2e1f] rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
+              className="w-full border border-[#e2c1ac] bg-[#fef4ec] text-[#4a2e1f] rounded-lg py-2 px-3 sm:px-4 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a] transition-colors"
             >
               <option value="all">All Carts</option>
               <option value="active">Active</option>
@@ -204,11 +204,11 @@ const Carts = () => {
             : "No carts found. Add your first cart to get started."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {filteredCarts.map((cart) => (
             <div
               key={cart.id}
-              className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-6 hover:shadow-lg hover:border-[#d86d2a] transition-all"
+              className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 sm:p-6 hover:shadow-lg hover:border-[#d86d2a] transition-all"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
@@ -255,22 +255,22 @@ const Carts = () => {
               </div>
 
               <div className="space-y-2 mb-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <span className="font-medium w-24">Manager:</span>
-                  <span>{cart.managerName}</span>
+                <div className="flex items-start sm:items-center text-xs sm:text-sm text-gray-600">
+                  <span className="font-medium w-20 sm:w-24 flex-shrink-0">Manager:</span>
+                  <span className="truncate">{cart.managerName}</span>
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <span className="font-medium w-24">Email:</span>
-                  <span className="truncate">{cart.email}</span>
+                <div className="flex items-start sm:items-center text-xs sm:text-sm text-gray-600">
+                  <span className="font-medium w-20 sm:w-24 flex-shrink-0">Email:</span>
+                  <span className="truncate min-w-0">{cart.email}</span>
                 </div>
                 {cart.phone && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="font-medium w-24">Phone:</span>
-                    <span>{cart.phone}</span>
+                  <div className="flex items-start sm:items-center text-xs sm:text-sm text-gray-600">
+                    <span className="font-medium w-20 sm:w-24 flex-shrink-0">Phone:</span>
+                    <span className="truncate">{cart.phone}</span>
                   </div>
                 )}
-                <div className="flex items-center text-sm text-gray-600">
-                  <span className="font-medium w-24">Created:</span>
+                <div className="flex items-start sm:items-center text-xs sm:text-sm text-gray-600">
+                  <span className="font-medium w-20 sm:w-24 flex-shrink-0">Created:</span>
                   <span>
                     {new Date(cart.createdAt).toLocaleDateString()}
                   </span>

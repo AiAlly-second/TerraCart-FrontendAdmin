@@ -48,36 +48,36 @@ const Navbar = ({ onMenuToggle }) => {
 
 
   return (
-    <header className="h-20 bg-[#f5e3d5]/80 backdrop-blur-md shadow-md border-b border-[#e2c1ac] flex items-center justify-between px-4 md:px-6">
+    <header className="h-16 sm:h-20 bg-[#f5e3d5]/80 backdrop-blur-md shadow-md border-b border-[#e2c1ac] flex items-center justify-between px-3 sm:px-4 md:px-6">
       {/* Mobile Menu Button */}
       <button
         onClick={onMenuToggle}
-        className="lg:hidden text-[#4a2e1f] hover:text-[#d86d2a] transition-colors p-2 mr-2"
+        className="lg:hidden text-[#4a2e1f] hover:text-[#d86d2a] transition-colors p-1.5 sm:p-2 mr-1 sm:mr-2"
         aria-label="Toggle menu"
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
       
       {/* Date and Time Display on the left */}
-      <div className="text-[#4a2e1f] flex-1">
-        <p className="font-bold text-lg md:text-2xl lg:text-3xl">{formattedTime}</p>
-        <p className="text-xs md:text-sm">{formattedDate}</p>
+      <div className="text-[#4a2e1f] flex-1 min-w-0">
+        <p className="font-bold text-base sm:text-lg md:text-2xl lg:text-3xl truncate">{formattedTime}</p>
+        <p className="text-[10px] sm:text-xs md:text-sm truncate">{formattedDate}</p>
       </div>
       
       {/* User Info on the right */}
-      <div className="flex items-center space-x-2 md:space-x-4">
-        <span className="text-[#4a2e1f] font-medium text-sm md:text-base hidden sm:block">{user?.name}</span>
+      <div className="flex items-center space-x-1.5 sm:space-x-2 md:space-x-4 flex-shrink-0">
+        <span className="text-[#4a2e1f] font-medium text-xs sm:text-sm md:text-base hidden sm:block truncate max-w-[100px] md:max-w-none">{user?.name}</span>
         <button
           onClick={handleLogout}
-          className="px-3 py-2 text-xs md:text-sm font-medium text-white bg-[#d86d2a] rounded-lg hover:bg-[#c75b1a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#d86d2a] transition-colors"
+          className="px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs md:text-sm font-medium text-white bg-[#d86d2a] rounded-lg hover:bg-[#c75b1a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#d86d2a] transition-colors whitespace-nowrap"
         >
           <span className="hidden sm:inline">Logout</span>
           <span className="sm:hidden">Out</span>
         </button>
        
-        <div className="w-8 h-8 md:w-10 md:h-10 bg-[#d86d2a] rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-[#d86d2a] rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm md:text-base flex-shrink-0">
           {user?.name?.charAt(0).toUpperCase() || 'A'}
         </div>
       </div>

@@ -368,109 +368,112 @@ const DefaultMenu = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Global Default Menu</h1>
-          <p className="text-gray-600 mt-1">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Global Default Menu</h1>
+          <p className="text-xs sm:text-sm md:text-base text-gray-600 mt-1">
             Create the master menu template. Push this menu to franchises, who can then customize and push to their carts.
           </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={handleAddCategory}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="flex items-center px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base flex-1 sm:flex-initial justify-center"
           >
-            <FaPlus className="mr-2" />
-            Add Category
+            <FaPlus className="mr-1.5 sm:mr-2" />
+            <span className="whitespace-nowrap">Add Category</span>
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base flex-1 sm:flex-initial justify-center"
           >
             {saving ? (
               <>
-                <FaSpinner className="animate-spin mr-2" />
-                Saving...
+                <FaSpinner className="animate-spin mr-1.5 sm:mr-2" />
+                <span className="whitespace-nowrap">Saving...</span>
               </>
             ) : (
               <>
-                <FaSave className="mr-2" />
-                Save Menu
+                <FaSave className="mr-1.5 sm:mr-2" />
+                <span className="whitespace-nowrap">Save Menu</span>
               </>
             )}
           </button>
           <button
             onClick={handleOpenPushModal}
             disabled={!defaultMenu?.categories || defaultMenu.categories.length === 0}
-            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            className="flex items-center px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm sm:text-base flex-1 sm:flex-initial justify-center"
           >
-            <FaSync className="mr-2" />
-            Push to Franchises
+            <FaSync className="mr-1.5 sm:mr-2" />
+            <span className="whitespace-nowrap">Push to Franchises</span>
           </button>
         </div>
       </div>
 
       {/* Menu Flow Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-800 mb-2">Menu Hierarchy Flow</h3>
-        <div className="flex items-center gap-4 text-sm text-blue-700">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">1</span>
-            <span>Super Admin creates Global Menu</span>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+        <h3 className="font-semibold text-blue-800 mb-2 text-sm sm:text-base">Menu Hierarchy Flow</h3>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 text-xs sm:text-sm text-blue-700">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="bg-blue-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">1</span>
+            <span className="whitespace-nowrap">Super Admin creates Global Menu</span>
           </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">2</span>
-            <span>Push to Franchises (one by one)</span>
+          <span className="hidden sm:inline">→</span>
+          <span className="sm:hidden text-blue-500">↓</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="bg-purple-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">2</span>
+            <span className="whitespace-nowrap">Push to Franchises</span>
           </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">3</span>
-            <span>Franchise pushes to their Carts</span>
+          <span className="hidden sm:inline">→</span>
+          <span className="sm:hidden text-blue-500">↓</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="bg-green-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">3</span>
+            <span className="whitespace-nowrap">Franchise pushes to Carts</span>
           </div>
-          <span>→</span>
-          <div className="flex items-center gap-2">
-            <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold">4</span>
-            <span>Cart Admin toggles availability only</span>
+          <span className="hidden sm:inline">→</span>
+          <span className="sm:hidden text-blue-500">↓</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="bg-orange-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">4</span>
+            <span className="whitespace-nowrap">Cart Admin toggles availability</span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
         {!defaultMenu?.categories || defaultMenu.categories.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <FaUtensils className="mx-auto text-4xl mb-4" />
-            <p className="mb-2">No categories in default menu. Click "Add Category" to get started.</p>
+          <div className="text-center py-8 sm:py-12 text-gray-500">
+            <FaUtensils className="mx-auto text-3xl sm:text-4xl mb-3 sm:mb-4" />
+            <p className="text-sm sm:text-base mb-2">No categories in default menu. Click "Add Category" to get started.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {defaultMenu.categories.map((category, catIndex) => (
               <div key={catIndex} className="border border-gray-200 rounded-lg">
                 <div
-                  className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer"
                   onClick={() => toggleCategory(catIndex)}
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                     {expandedCategories.has(catIndex) ? (
-                      <FaChevronDown className="text-gray-500" />
+                      <FaChevronDown className="text-gray-500 flex-shrink-0" />
                     ) : (
-                      <FaChevronRight className="text-gray-500" />
+                      <FaChevronRight className="text-gray-500 flex-shrink-0" />
                     )}
-                    <FaUtensils className="text-blue-600" />
-                    <div>
-                      <h3 className="font-semibold text-lg">{category.name}</h3>
+                    <FaUtensils className="text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-sm sm:text-base md:text-lg truncate">{category.name}</h3>
                       {category.description && (
-                        <p className="text-sm text-gray-500">{category.description}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">{category.description}</p>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <span className="text-sm text-gray-600">
+                  <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 flex-shrink-0">
+                    <span className="text-xs sm:text-sm text-gray-600 hidden sm:inline">
                       {category.items?.length || 0} Items
                     </span>
-                    <span className={`px-2 py-1 rounded text-xs ${
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs whitespace-nowrap ${
                       category.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
                     }`}>
                       {category.isActive ? 'Active' : 'Inactive'}
@@ -480,35 +483,37 @@ const DefaultMenu = () => {
                         e.stopPropagation();
                         handleEditCategory(category, catIndex);
                       }}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      title="Edit"
                     >
-                      <FaEdit />
+                      <FaEdit className="text-sm sm:text-base" />
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteCategory(catIndex);
                       }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded"
+                      className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded"
+                      title="Delete"
                     >
-                      <FaTrash />
+                      <FaTrash className="text-sm sm:text-base" />
                     </button>
                   </div>
                 </div>
 
                 {expandedCategories.has(catIndex) && (
-                  <div className="p-4 space-y-4">
+                  <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
                     <div className="flex justify-end mb-2">
                       <button
                         onClick={() => handleAddItem(catIndex)}
-                        className="flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                        className="flex items-center px-2.5 sm:px-3 py-1 text-xs sm:text-sm bg-green-600 text-white rounded hover:bg-green-700"
                       >
                         <FaPlus className="mr-1" />
-                        Add Item
+                        <span className="whitespace-nowrap">Add Item</span>
                       </button>
                     </div>
                     {category.items && category.items.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                         {category.items.map((item, itemIndex) => (
                           <div
                             key={itemIndex}
@@ -519,7 +524,7 @@ const DefaultMenu = () => {
                             }`}
                           >
                             {/* Item Image */}
-                            <div className="h-32 md:h-36 bg-gradient-to-br from-slate-100 to-slate-200 relative">
+                            <div className="h-28 sm:h-32 md:h-36 bg-gradient-to-br from-slate-100 to-slate-200 relative">
                               {item.image ? (
                                 <img
                                   src={getImageUrl(item.image)}
@@ -556,22 +561,22 @@ const DefaultMenu = () => {
                             </div>
 
                             {/* Item Details */}
-                            <div className="p-2">
+                            <div className="p-1.5 sm:p-2">
                               <h4
-                                className="font-semibold text-sm text-slate-800 truncate"
+                                className="font-semibold text-xs sm:text-sm text-slate-800 truncate"
                                 title={item.name}
                               >
                                 {item.name}
                               </h4>
 
                               {item.description && (
-                                <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                                <p className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                                   {item.description}
                                 </p>
                               )}
 
                               {/* Meta Tags */}
-                              <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px]">
+                              <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px] sm:text-[10px]">
                                 {item.spiceLevel && item.spiceLevel !== "NONE" && (
                                   <span>🌶️</span>
                                 )}
@@ -594,17 +599,17 @@ const DefaultMenu = () => {
                               <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
                                 <button
                                   onClick={() => handleEditItem(item, catIndex, itemIndex)}
-                                  className="flex-1 text-[10px] px-1 py-1 rounded border border-blue-200 text-blue-600 hover:bg-blue-50"
+                                  className="flex-1 text-[9px] sm:text-[10px] px-1 py-0.5 sm:py-1 rounded border border-blue-200 text-blue-600 hover:bg-blue-50"
                                   title="Edit"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   onClick={() => handleDeleteItem(catIndex, itemIndex)}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  className="p-0.5 sm:p-1 text-red-600 hover:bg-red-50 rounded"
                                   title="Delete"
                                 >
-                                  <FaTrash size={11} />
+                                  <FaTrash className="text-[10px] sm:text-xs" />
                                 </button>
                               </div>
                             </div>
@@ -629,11 +634,11 @@ const DefaultMenu = () => {
 
       {/* Push to Franchises Modal */}
       {showPushModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <FaBuilding className="text-purple-600" />
-              Push Menu to Franchises
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4 flex items-center gap-2">
+              <FaBuilding className="text-purple-600 flex-shrink-0" />
+              <span className="truncate">Push Menu to Franchises</span>
             </h2>
             
             {pushResults ? (
@@ -733,27 +738,27 @@ const DefaultMenu = () => {
                   )}
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-4 border-t">
+                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4 border-t">
                   <button
                     onClick={() => setShowPushModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm sm:text-base w-full sm:w-auto"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handlePushToFranchises}
                     disabled={pushing || selectedFranchises.size === 0}
-                    className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                    className="flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
                   >
                     {pushing ? (
                       <>
-                        <FaSpinner className="animate-spin mr-2" />
-                        Pushing...
+                        <FaSpinner className="animate-spin mr-1.5 sm:mr-2" />
+                        <span className="whitespace-nowrap">Pushing...</span>
                       </>
                     ) : (
                       <>
-                        <FaSync className="mr-2" />
-                        Push to {selectedFranchises.size} Franchise(s)
+                        <FaSync className="mr-1.5 sm:mr-2" />
+                        <span className="whitespace-nowrap">Push to {selectedFranchises.size} Franchise(s)</span>
                       </>
                     )}
                   </button>
@@ -766,9 +771,9 @@ const DefaultMenu = () => {
 
       {/* Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
               {editingCategory !== null ? 'Edit Category' : 'Add Category'}
             </h2>
             <form onSubmit={(e) => { e.preventDefault(); handleSaveCategory(); }} className="space-y-4">
@@ -819,24 +824,24 @@ const DefaultMenu = () => {
                 />
                 <label className="text-sm text-gray-700">Active</label>
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCategoryModal(false);
-                    setEditingCategory(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  {editingCategory !== null ? 'Update' : 'Add'}
-                </button>
-              </div>
+                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCategoryModal(false);
+                      setEditingCategory(null);
+                    }}
+                    className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm sm:text-base w-full sm:w-auto"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base w-full sm:w-auto"
+                  >
+                    {editingCategory !== null ? 'Update' : 'Add'}
+                  </button>
+                </div>
             </form>
           </div>
         </div>
@@ -844,13 +849,13 @@ const DefaultMenu = () => {
 
       {/* Item Modal */}
       {showItemModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
               {editingItem !== null ? 'Edit Item' : 'Add Item'}
             </h2>
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveItem(); }} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveItem(); }} className="space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
                   <input
@@ -882,9 +887,9 @@ const DefaultMenu = () => {
                     rows="2"
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Item Image</label>
-                  <div className="flex items-start space-x-4">
+                  <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                     {/* Image Preview */}
                     <div className="flex-shrink-0">
                       {itemFormData.image ? (
@@ -892,7 +897,7 @@ const DefaultMenu = () => {
                           <img
                             src={getImageUrl(itemFormData.image)}
                             alt="Preview"
-                            className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg border border-gray-300"
                             onError={(e) => {
                               e.target.onerror = null;
                               e.target.src = 'https://via.placeholder.com/96?text=No+Image';
@@ -901,31 +906,31 @@ const DefaultMenu = () => {
                           <button
                             type="button"
                             onClick={() => setItemFormData({ ...itemFormData, image: '' })}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 sm:p-1 hover:bg-red-600"
                           >
-                            <FaTimes size={12} />
+                            <FaTimes className="text-[10px] sm:text-xs" />
                           </button>
                         </div>
                       ) : (
-                        <div className="w-24 h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center">
-                          <FaImage className="text-gray-400 text-2xl" />
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center">
+                          <FaImage className="text-gray-400 text-xl sm:text-2xl" />
                         </div>
                       )}
                     </div>
                     
                     {/* Upload Controls */}
-                    <div className="flex-grow space-y-2">
+                    <div className="flex-grow space-y-2 w-full sm:w-auto">
                       <div className="flex items-center space-x-2">
-                        <label className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors">
+                        <label className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors text-sm">
                           {uploadingImage ? (
                             <>
-                              <FaSpinner className="animate-spin mr-2" />
-                              Uploading...
+                              <FaSpinner className="animate-spin mr-1.5 sm:mr-2" />
+                              <span className="whitespace-nowrap">Uploading...</span>
                             </>
                           ) : (
                             <>
-                              <FaUpload className="mr-2" />
-                              Upload Image
+                              <FaUpload className="mr-1.5 sm:mr-2" />
+                              <span className="whitespace-nowrap">Upload Image</span>
                             </>
                           )}
                           <input
@@ -937,15 +942,15 @@ const DefaultMenu = () => {
                           />
                         </label>
                       </div>
-                      <p className="text-xs text-gray-500">Max size: 5MB. Formats: JPG, PNG, GIF</p>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-gray-500">Or enter URL:</span>
+                      <p className="text-[10px] sm:text-xs text-gray-500">Max size: 5MB. Formats: JPG, PNG, GIF</p>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                        <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">Or enter URL:</span>
                         <input
                           type="text"
                           value={itemFormData.image}
                           onChange={(e) => setItemFormData({ ...itemFormData, image: e.target.value })}
                           placeholder="https://example.com/image.jpg or /uploads/image.jpg"
-                          className="flex-grow px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                          className="flex-grow w-full sm:w-auto px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
@@ -1003,7 +1008,7 @@ const DefaultMenu = () => {
                   <span className="text-sm text-gray-700">Featured</span>
                 </label>
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -1011,13 +1016,13 @@ const DefaultMenu = () => {
                     setEditingItem(null);
                     setEditingItemCategoryIndex(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm sm:text-base w-full sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base w-full sm:w-auto"
                 >
                   {editingItem !== null ? 'Update' : 'Add'}
                 </button>

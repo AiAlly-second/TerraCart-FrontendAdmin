@@ -367,12 +367,12 @@ const Franchises = () => {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <FaBuilding className="text-blue-600" />
-            Franchise Management
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FaBuilding className="text-blue-600 flex-shrink-0" />
+            <span className="truncate">Franchise Management</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Manage all franchise locations and their carts</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage all franchise locations and their carts</p>
         </div>
         <button
           onClick={() => {
@@ -381,10 +381,10 @@ const Franchises = () => {
             setFiles({ udyamCertificate: null, aadharCard: null, panCard: null });
             setShowModal(true);
           }}
-          className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+          className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm w-full sm:w-auto justify-center"
         >
           <FaPlus className="mr-1.5" size={12} />
-          Add Franchise
+          <span className="whitespace-nowrap">Add Franchise</span>
         </button>
       </div>
 
@@ -474,18 +474,18 @@ const Franchises = () => {
               return (
                 <div key={franchise._id} className={`${!isActive && 'bg-gray-50'}`}>
                   {/* Franchise Row */}
-                  <div className="p-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       {/* Expand Button */}
                       <button
                         onClick={() => toggleFranchiseExpand(franchise._id)}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
                       >
                         {isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
                       </button>
 
                       {/* Avatar */}
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm ${
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 ${
                         isActive ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gray-400'
                       }`}>
                         {franchise.name.charAt(0).toUpperCase()}
@@ -493,34 +493,51 @@ const Franchises = () => {
 
                       {/* Main Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                           {franchise.franchiseCode && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded">
+                            <span className="px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded whitespace-nowrap">
                               {franchise.franchiseCode}
                             </span>
                           )}
-                          <span className="font-semibold text-gray-800 text-sm truncate">{franchise.name}</span>
-                          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                          <span className="font-semibold text-gray-800 text-xs sm:text-sm truncate">{franchise.name}</span>
+                          <span className={`px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
                             isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
                           }`}>
                             {isActive ? 'Active' : 'Inactive'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <FaEnvelope size={10} />
-                            {franchise.email}
+                        <div className="flex items-center gap-2 sm:gap-3 mt-0.5 text-[10px] sm:text-xs text-gray-500 flex-wrap">
+                          <span className="flex items-center gap-1 truncate min-w-0">
+                            <FaEnvelope size={9} className="flex-shrink-0" />
+                            <span className="truncate">{franchise.email}</span>
                           </span>
                           {franchise.mobile && (
                             <span className="hidden sm:flex items-center gap-1">
-                              <FaPhone size={10} />
+                              <FaPhone size={9} />
                               {franchise.mobile}
                             </span>
                           )}
                         </div>
+                        {/* Mobile Cart Stats */}
+                        <div className="flex items-center gap-2 mt-1 sm:hidden text-[10px]">
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
+                            <FaStore size={9} />
+                            <span className="font-medium">{cartStats.totalCarts || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-600 rounded">
+                            <FaCheckCircle size={9} />
+                            <span>{cartStats.activeCarts || 0}</span>
+                          </div>
+                          {(cartStats.pendingApproval || 0) > 0 && (
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-50 text-yellow-600 rounded">
+                              <FaClock size={9} />
+                              <span>{cartStats.pendingApproval}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Cart Stats */}
+                      {/* Cart Stats - Desktop */}
                       <div className="hidden md:flex items-center gap-3 text-xs">
                         <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
                           <FaStore size={10} />
@@ -539,7 +556,7 @@ const Franchises = () => {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                         <button
                           onClick={() => setViewDetails(franchise)}
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -771,15 +788,15 @@ const Franchises = () => {
 
       {/* Create/Edit Franchise Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="w-full max-w-xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden rounded-xl sm:rounded-2xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col">
             {/* Modal header */}
-            <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-5 py-4 text-white flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-bold tracking-wide">
+            <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-3 sm:px-5 py-3 sm:py-4 text-white flex justify-between items-center">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base sm:text-lg font-bold tracking-wide truncate">
                   {editingFranchise ? 'Edit Franchise' : 'Create New Franchise'}
                 </h2>
-                <p className="text-xs text-orange-100 mt-1">
+                <p className="text-[10px] sm:text-xs text-orange-100 mt-1 hidden sm:block">
                   Primary details for the franchise owner. You can add carts later.
                 </p>
               </div>
