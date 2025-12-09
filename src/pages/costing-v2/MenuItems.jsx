@@ -321,7 +321,7 @@ const MenuItems = () => {
 
       {/* Create/Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">{editing ? "Edit Menu Item" : "Add Menu Item"}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -425,7 +425,7 @@ const MenuItems = () => {
 
       {/* Import Modal */}
       {importModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">Import from Default Menu</h2>
             <div className="space-y-4">

@@ -345,7 +345,7 @@ const Carts = () => {
 
       {/* Approval Modal */}
       {approvalModal && approvalData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-[#e2c1ac] p-6 flex justify-between items-center z-10">
               <h2 className="text-2xl font-bold text-[#4a2e1f]">

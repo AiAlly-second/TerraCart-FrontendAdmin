@@ -10,6 +10,7 @@ import { FaPlus, FaCheck } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
 import { formatUnit } from "../../utils/unitConverter";
+import { confirm } from "../../utils/confirm";
 
 const Purchases = () => {
   const { user } = useAuth();
@@ -78,7 +79,29 @@ const Purchases = () => {
   };
 
   const handleReceive = async (id) => {
-    if (!window.confirm("Mark this purchase as received? This will update inventory with FIFO layers.")) return;
+    // Find the purchase to get details for the confirmation message
+    const purchase = purchases.find(p => p._id === id);
+    const purchaseInfo = purchase 
+      ? `Purchase Order #${purchase.purchaseOrderNo || purchase._id.slice(-6)}`
+      : 'this purchase';
+    
+    // Show confirmation dialog using custom confirm utility
+    // This will show a proper modal that blocks until user clicks Receive or Cancel
+    const confirmed = await confirm(
+      `Are you sure you want to mark ${purchaseInfo} as received?\n\nThis will update inventory with FIFO layers and cannot be undone.`,
+      {
+        title: 'Receive Purchase',
+        confirmText: 'Receive',
+        cancelText: 'Cancel',
+        danger: false, // Not a destructive action, but important
+        requireInput: false
+      }
+    );
+    
+    if (!confirmed) {
+      return; // User cancelled, do nothing
+    }
+    
     try {
       await receivePurchase(id);
       alert("Purchase received successfully! Inventory updated.");
@@ -186,7 +209,12 @@ const Purchases = () => {
                 <td className="px-6 py-4 whitespace-nowrap">
                   {purchase.status === "created" && (
                     <button
-                      onClick={() => handleReceive(purchase._id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleReceive(purchase._id);
+                      }}
                       className="text-green-600 hover:text-green-800 flex items-center gap-1"
                       title="Receive Purchase"
                     >
@@ -202,7 +230,7 @@ const Purchases = () => {
 
       {/* Create Purchase Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">Create Purchase Order</h2>
             <form onSubmit={handleSubmit} className="space-y-4">

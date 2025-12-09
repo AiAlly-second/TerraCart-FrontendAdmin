@@ -50,6 +50,8 @@ const Franchises = () => {
     shopActLicense: null,
     fssaiLicense: null,
   });
+  const [cartFormError, setCartFormError] = useState(null);
+  const [isSubmittingCart, setIsSubmittingCart] = useState(false);
 
   useEffect(() => {
     fetchFranchises();
@@ -93,11 +95,59 @@ const Franchises = () => {
       setLoadingCarts(prev => ({ ...prev, [franchiseId]: true }));
       const response = await api.get('/users');
       const allUsers = response.data || [];
-      const carts = allUsers.filter(u => 
-        u.role === 'admin' && 
-        u.franchiseId && 
-        u.franchiseId.toString() === franchiseId.toString()
+      
+      // Normalize franchiseId for comparison - handle both string and ObjectId formats
+      const targetFranchiseId = franchiseId?.toString() || franchiseId;
+      
+      // Filter carts that belong to this franchise
+      const carts = allUsers.filter(u => {
+        // Must be a cart (admin role)
+        if (u.role !== 'admin') {
+          return false;
+        }
+        
+        // Must have a franchiseId
+        if (!u.franchiseId) {
+          console.warn(`[Franchises] Cart ${u._id} (${u.cartName || u.name}) has no franchiseId`);
+          return false;
+        }
+        
+        // Handle different franchiseId formats: ObjectId, string, or populated object
+        let cartFranchiseId = u.franchiseId;
+        if (cartFranchiseId && typeof cartFranchiseId === 'object') {
+          // If it's an object, extract the _id if it exists, otherwise use the object itself
+          cartFranchiseId = cartFranchiseId._id || cartFranchiseId;
+        }
+        
+        // Convert to string for comparison
+        const cartFranchiseIdStr = cartFranchiseId?.toString() || String(cartFranchiseId);
+        const matches = cartFranchiseIdStr === targetFranchiseId;
+        
+        if (!matches && u.franchiseId) {
+          // Debug: log mismatches for troubleshooting
+          const debugCartFranchiseId = typeof u.franchiseId === 'object' 
+            ? (u.franchiseId._id?.toString() || u.franchiseId.toString())
+            : u.franchiseId.toString();
+          console.debug(
+            `[Franchises] Cart ${u._id} franchiseId mismatch: ` +
+            `cart=${debugCartFranchiseId}, target=${targetFranchiseId}`
+          );
+        }
+        
+        return matches;
+      });
+      
+      console.log(
+        `[Franchises] Fetched ${carts.length} carts for franchise ${franchiseId} ` +
+        `(from ${allUsers.filter(u => u.role === 'admin').length} total carts)`
       );
+      
+      if (carts.length === 0) {
+        console.warn(
+          `[Franchises] No carts found for franchise ${franchiseId}. ` +
+          `This might indicate a data issue or the franchise has no carts yet.`
+        );
+      }
       
       setFranchiseCarts(prev => ({
         ...prev,
@@ -108,7 +158,7 @@ const Franchises = () => {
       }));
     } catch (error) {
       console.error('Error fetching carts:', error);
-      alert('Failed to fetch carts');
+      alert('Failed to fetch carts. Please try again.');
     } finally {
       setLoadingCarts(prev => ({ ...prev, [franchiseId]: false }));
     }
@@ -542,6 +592,8 @@ const Franchises = () => {
                                 shopActLicense: null,
                                 fssaiLicense: null,
                               });
+                              setCartFormError(null);
+                              setIsSubmittingCart(false);
                               setShowCartModal(true);
                             }}
                             className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -643,7 +695,7 @@ const Franchises = () => {
 
       {/* View Details Modal */}
       {viewDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-white">
               <div className="flex justify-between items-start">
@@ -701,7 +753,7 @@ const Franchises = () => {
 
       {/* Create/Edit Franchise Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col">
             {/* Modal header */}
             <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-5 py-4 text-white flex justify-between items-center">
@@ -865,7 +917,7 @@ const Franchises = () => {
 
       {/* Add Cart Modal */}
       {showCartModal && selectedFranchiseForCart && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] p-4 text-white flex justify-between items-center">
               <div>
@@ -878,36 +930,67 @@ const Franchises = () => {
                 onClick={() => {
                   setShowCartModal(false);
                   setSelectedFranchiseForCart(null);
+                  setCartFormError(null);
+                  setIsSubmittingCart(false);
                 }}
                 className="p-1 hover:bg-white/20 rounded"
               >
                 <FaTimes size={16} />
               </button>
             </div>
+            {/* Error Message Display */}
+            {cartFormError && (
+              <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <FaTimesCircle className="text-red-600 mt-0.5 flex-shrink-0" size={16} />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800">Error</p>
+                    <p className="text-sm text-red-700 mt-1">{cartFormError}</p>
+                  </div>
+                  <button
+                    onClick={() => setCartFormError(null)}
+                    className="text-red-600 hover:text-red-800 flex-shrink-0"
+                  >
+                    <FaTimes size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
             <form 
               onSubmit={async (e) => {
                 e.preventDefault();
                 
+                // Clear previous errors
+                setCartFormError(null);
+                
                 // Validation
                 if (!cartFormData.name || !cartFormData.email || !cartFormData.password || !cartFormData.cartName || !cartFormData.location) {
-                  alert('Please fill in all required fields');
+                  setCartFormError('Please fill in all required fields');
+                  return;
+                }
+
+                // Email validation
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(cartFormData.email)) {
+                  setCartFormError('Please enter a valid email address');
                   return;
                 }
 
                 if (cartFormData.password !== cartFormData.confirmPassword) {
-                  alert('Passwords do not match');
+                  setCartFormError('Passwords do not match');
                   return;
                 }
 
                 if (cartFormData.password.length < 6) {
-                  alert('Password must be at least 6 characters');
+                  setCartFormError('Password must be at least 6 characters');
                   return;
                 }
 
+                setIsSubmittingCart(true);
                 try {
                   const formDataToSend = new FormData();
                   formDataToSend.append('name', cartFormData.name);
-                  formDataToSend.append('email', cartFormData.email);
+                  formDataToSend.append('email', cartFormData.email.trim().toLowerCase());
                   formDataToSend.append('password', cartFormData.password);
                   formDataToSend.append('cartName', cartFormData.cartName);
                   formDataToSend.append('location', cartFormData.location);
@@ -926,7 +1009,8 @@ const Franchises = () => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                   });
                   
-                  alert('Cart admin created successfully');
+                  // Success - reset form and close modal
+                  setCartFormError(null);
                   setShowCartModal(false);
                   setSelectedFranchiseForCart(null);
                   setCartFormData({
@@ -953,7 +1037,18 @@ const Franchises = () => {
                   }
                 } catch (error) {
                   console.error('Error creating cart:', error);
-                  alert(error.response?.data?.message || 'Failed to create cart');
+                  const errorMessage = error.response?.data?.message || error.message || 'Failed to create cart';
+                  
+                  // Provide more helpful error messages
+                  if (errorMessage.toLowerCase().includes('email already registered')) {
+                    setCartFormError(`This email address (${cartFormData.email}) is already registered. Please use a different email address.`);
+                  } else if (errorMessage.toLowerCase().includes('email')) {
+                    setCartFormError(errorMessage);
+                  } else {
+                    setCartFormError(errorMessage);
+                  }
+                } finally {
+                  setIsSubmittingCart(false);
                 }
               }}
               className="flex-1 overflow-y-auto p-4 space-y-4"
@@ -1143,8 +1238,11 @@ const Franchises = () => {
                 onClick={() => {
                   setShowCartModal(false);
                   setSelectedFranchiseForCart(null);
+                  setCartFormError(null);
+                  setIsSubmittingCart(false);
                 }}
-                className="flex-1 px-4 py-2 text-sm border border-[#e2c1ac] rounded-lg text-[#4a2e1f] hover:bg-[#fef4ec] transition-colors font-medium"
+                disabled={isSubmittingCart}
+                className="flex-1 px-4 py-2 text-sm border border-[#e2c1ac] rounded-lg text-[#4a2e1f] hover:bg-[#fef4ec] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -1152,14 +1250,23 @@ const Franchises = () => {
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
+                  if (isSubmittingCart) return;
                   const form = e.target.closest('.bg-white').querySelector('form');
                   if (form) {
                     form.requestSubmit();
                   }
                 }}
-                className="flex-1 px-4 py-2 text-sm font-bold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md bg-[#d86d2a] hover:bg-[#c75b1a]"
+                disabled={isSubmittingCart}
+                className="flex-1 px-4 py-2 text-sm font-bold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md bg-[#d86d2a] hover:bg-[#c75b1a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Create Cart
+                {isSubmittingCart ? (
+                  <>
+                    <FaSpinner className="animate-spin" size={14} />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Cart'
+                )}
               </button>
             </div>
           </div>

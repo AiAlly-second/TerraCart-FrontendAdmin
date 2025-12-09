@@ -8,6 +8,7 @@ import {
 } from "../../services/costingV2Api";
 import { FaPlus, FaEdit, FaTrash, FaEye } from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
+import { confirm } from "../../utils/confirm";
 
 const Ingredients = () => {
   const [ingredients, setIngredients] = useState([]);
@@ -93,11 +94,31 @@ const Ingredients = () => {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this ingredient?")) return;
+  const handleDelete = async (id, ingredientName) => {
+    // Find the ingredient to get its name for the confirmation message
+    const ingredient = ingredients.find(ing => ing._id === id);
+    const name = ingredient?.name || 'this ingredient';
+    
+    // Show confirmation dialog using custom confirm utility
+    // This will show a proper modal that blocks until user clicks Delete or Cancel
+    const confirmed = await confirm(
+      `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Ingredient',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        danger: true,
+        requireInput: false // Don't require typing DELETE, just click Delete button
+      }
+    );
+    
+    if (!confirmed) {
+      return; // User cancelled, do nothing
+    }
+    
     try {
       await deleteIngredient(id);
-      alert("Ingredient deleted successfully!");
+      alert(`Ingredient "${name}" deleted successfully!`);
       fetchIngredients();
     } catch (error) {
       alert(`Failed to delete ingredient: ${error.response?.data?.message || error.message}`);
@@ -210,7 +231,12 @@ const Ingredients = () => {
                     <FaEdit />
                   </button>
                   <button
-                    onClick={() => handleDelete(ing._id)}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete(ing._id, ing.name);
+                    }}
                     className="text-red-600 hover:text-red-800"
                     title="Delete"
                   >
@@ -225,7 +251,7 @@ const Ingredients = () => {
 
       {/* Create/Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold mb-4">{editing ? "Edit Ingredient" : "Add Ingredient"}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -369,7 +395,7 @@ const Ingredients = () => {
 
       {/* FIFO Layers Modal */}
       {fifoModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">FIFO Layers - {selectedIngredient?.name}</h2>

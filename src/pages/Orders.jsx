@@ -1786,17 +1786,6 @@ const Orders = () => {
             title="Filter by order date"
           />
           <button
-            onClick={() => {
-              setSearchOrderId("");
-              setSearchTable("");
-              setSearchInvoice("");
-              setFilterDate("");
-            }}
-            className="border border-gray-200 text-gray-600 hover:bg-gray-100 py-2 px-3 rounded-lg text-sm"
-          >
-            Reset
-          </button>
-          <button
             onClick={handleAdd}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow"
           >
@@ -1984,7 +1973,7 @@ const Orders = () => {
 
       {isModalOpen && (
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[9999]"
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[9999]"
           style={{ padding: "1rem" }}
         >
           <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col m-4">

@@ -230,6 +230,7 @@ const Invoices = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [franchiseData, setFranchiseData] = useState(null);
   const [cartData, setCartData] = useState(null);
   const [paymentsByOrder, setPaymentsByOrder] = useState({});
@@ -319,7 +320,20 @@ const Invoices = () => {
     }
   }, [selected]);
 
-  const paidOrders = useMemo(() => orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid'), [orders]);
+  const paidOrders = useMemo(() => {
+    let filtered = orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid');
+    
+    // Filter by date if provided
+    if (filterDate) {
+      filtered = filtered.filter((o) => {
+        const orderDate = new Date(o.createdAt || o.paidAt || o.updatedAt);
+        const filterDateObj = new Date(filterDate);
+        return orderDate.toDateString() === filterDateObj.toDateString();
+      });
+    }
+    
+    return filtered;
+  }, [orders, filterDate]);
   const selectedPayments = useMemo(
     () => (selected ? paymentsByOrder[selected._id] || [] : []),
     [selected, paymentsByOrder]
@@ -457,7 +471,14 @@ const Invoices = () => {
             Generate printable invoices for Paid orders and keep payment records in sync.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Filter by date"
+          />
           <button
             onClick={loadPayments}
             className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-100"
@@ -494,8 +515,13 @@ const Invoices = () => {
                   <div>
                     <div className="font-semibold text-gray-800">Order #{order._id}</div>
                     <div className="text-sm text-gray-500">Table {order.tableNumber || '—'}</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                    </div>
                   </div>
-                  <div className="text-sm font-mono text-gray-700">{new Date(order.createdAt).toLocaleString()}</div>
+                  <div className="text-sm font-mono text-gray-700">
+                    {new Date(order.paidAt || order.updatedAt || order.createdAt).toLocaleDateString()}
+                  </div>
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Click to preview invoice</div>
               </button>

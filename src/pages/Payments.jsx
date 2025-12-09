@@ -17,6 +17,7 @@ const Payments = () => {
   const [error, setError] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [busyId, setBusyId] = useState(null);
 
   const loadPayments = async () => {
@@ -37,19 +38,37 @@ const Payments = () => {
   }, []);
 
   const filteredPayments = useMemo(() => {
+    let filtered = payments;
+    
+    // Filter by status
     switch (filterStatus) {
       case "ACTIVE":
-        return payments.filter((p) =>
+        filtered = filtered.filter((p) =>
           ["PENDING", "PROCESSING", "CASH_PENDING"].includes(p.status)
         );
+        break;
       case "PAID":
-        return payments.filter((p) => p.status === "PAID");
+        filtered = filtered.filter((p) => p.status === "PAID");
+        break;
       case "CANCELLED":
-        return payments.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        filtered = filtered.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        break;
       default:
-        return payments;
+        // ALL - no status filter
+        break;
     }
-  }, [payments, filterStatus]);
+    
+    // Filter by date if provided
+    if (filterDate) {
+      filtered = filtered.filter((p) => {
+        const paymentDate = new Date(p.createdAt);
+        const filterDateObj = new Date(filterDate);
+        return paymentDate.toDateString() === filterDateObj.toDateString();
+      });
+    }
+    
+    return filtered;
+  }, [payments, filterStatus, filterDate]);
 
   const handleMarkPaid = async (payment) => {
     if (!window.confirm(`Mark payment ${payment.id} as paid?`)) return;
@@ -95,7 +114,7 @@ const Payments = () => {
             Track online and cash payments. You can mark payments as paid or cancel them from here.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -106,6 +125,13 @@ const Payments = () => {
             <option value="PAID">Paid</option>
             <option value="CANCELLED">Cancelled/Failed</option>
           </select>
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Filter by date"
+          />
           <button
             onClick={loadPayments}
             className="px-3 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-100"
@@ -138,6 +164,9 @@ const Payments = () => {
                       Order
                     </th>
                     <th className="px-4 py-2 text-left font-semibold text-slate-600">
+                      Date & Time
+                    </th>
+                    <th className="px-4 py-2 text-left font-semibold text-slate-600">
                       Amount
                     </th>
                     <th className="px-4 py-2 text-left font-semibold text-slate-600">
@@ -162,8 +191,13 @@ const Payments = () => {
                     >
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-800">{payment.orderId}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm text-slate-700">
+                          {new Date(payment.createdAt).toLocaleDateString()}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {new Date(payment.createdAt).toLocaleString()}
+                          {new Date(payment.createdAt).toLocaleTimeString()}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-slate-700">₹{payment.amount.toFixed(2)}</td>

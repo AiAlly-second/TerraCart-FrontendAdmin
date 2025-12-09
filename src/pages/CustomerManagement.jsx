@@ -293,13 +293,13 @@ const CustomerManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {customer.totalRatings || 0}
+                        {customer.totalRatings !== undefined ? customer.totalRatings : (customer.ratings?.length || 0)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {customer.averageRating
-                          ? `${customer.averageRating} ⭐`
+                        {customer.averageRating && customer.averageRating > 0
+                          ? `${Number(customer.averageRating).toFixed(1)} ⭐`
                           : "No ratings"}
                       </div>
                     </td>
@@ -324,7 +324,7 @@ const CustomerManagement = () => {
 
       {/* Customer Details Modal */}
       {selectedCustomer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
