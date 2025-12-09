@@ -36,22 +36,19 @@ const Franchises = () => {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     cartName: '',
     location: '',
     phone: '',
     address: '',
     shopActLicenseExpiry: '',
     fssaiLicenseExpiry: '',
-    gstCertificateExpiry: '',
   });
   const [cartFiles, setCartFiles] = useState({
     aadharCard: null,
     panCard: null,
-    gstCertificate: null,
     shopActLicense: null,
     fssaiLicense: null,
-    electricityBill: null,
-    rentAgreement: null,
   });
 
   useEffect(() => {
@@ -531,22 +528,19 @@ const Franchises = () => {
                                 name: '',
                                 email: '',
                                 password: '',
+                                confirmPassword: '',
                                 cartName: '',
                                 location: '',
                                 phone: '',
                                 address: '',
                                 shopActLicenseExpiry: '',
                                 fssaiLicenseExpiry: '',
-                                gstCertificateExpiry: '',
                               });
                               setCartFiles({
                                 aadharCard: null,
                                 panCard: null,
-                                gstCertificate: null,
                                 shopActLicense: null,
                                 fssaiLicense: null,
-                                electricityBill: null,
-                                rentAgreement: null,
                               });
                               setShowCartModal(true);
                             }}
@@ -873,10 +867,10 @@ const Franchises = () => {
       {showCartModal && selectedFranchiseForCart && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-white flex justify-between items-center">
+            <div className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] p-4 text-white flex justify-between items-center">
               <div>
                 <h2 className="text-lg font-bold">Add New Cart</h2>
-                <p className="text-sm text-blue-100 mt-1">
+                <p className="text-sm text-orange-100 mt-1">
                   Under: {selectedFranchiseForCart.name} {selectedFranchiseForCart.franchiseCode ? `(${selectedFranchiseForCart.franchiseCode})` : ''}
                 </p>
               </div>
@@ -893,6 +887,23 @@ const Franchises = () => {
             <form 
               onSubmit={async (e) => {
                 e.preventDefault();
+                
+                // Validation
+                if (!cartFormData.name || !cartFormData.email || !cartFormData.password || !cartFormData.cartName || !cartFormData.location) {
+                  alert('Please fill in all required fields');
+                  return;
+                }
+
+                if (cartFormData.password !== cartFormData.confirmPassword) {
+                  alert('Passwords do not match');
+                  return;
+                }
+
+                if (cartFormData.password.length < 6) {
+                  alert('Password must be at least 6 characters');
+                  return;
+                }
+
                 try {
                   const formDataToSend = new FormData();
                   formDataToSend.append('name', cartFormData.name);
@@ -905,15 +916,11 @@ const Franchises = () => {
                   if (cartFormData.address) formDataToSend.append('address', cartFormData.address);
                   if (cartFormData.shopActLicenseExpiry) formDataToSend.append('shopActLicenseExpiry', cartFormData.shopActLicenseExpiry);
                   if (cartFormData.fssaiLicenseExpiry) formDataToSend.append('fssaiLicenseExpiry', cartFormData.fssaiLicenseExpiry);
-                  if (cartFormData.gstCertificateExpiry) formDataToSend.append('gstCertificateExpiry', cartFormData.gstCertificateExpiry);
                   
                   if (cartFiles.aadharCard) formDataToSend.append('aadharCard', cartFiles.aadharCard);
                   if (cartFiles.panCard) formDataToSend.append('panCard', cartFiles.panCard);
-                  if (cartFiles.gstCertificate) formDataToSend.append('gstCertificate', cartFiles.gstCertificate);
                   if (cartFiles.shopActLicense) formDataToSend.append('shopActLicense', cartFiles.shopActLicense);
                   if (cartFiles.fssaiLicense) formDataToSend.append('fssaiLicense', cartFiles.fssaiLicense);
-                  if (cartFiles.electricityBill) formDataToSend.append('electricityBill', cartFiles.electricityBill);
-                  if (cartFiles.rentAgreement) formDataToSend.append('rentAgreement', cartFiles.rentAgreement);
 
                   await api.post('/users/register-cafe-admin', formDataToSend, {
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -926,22 +933,19 @@ const Franchises = () => {
                     name: '',
                     email: '',
                     password: '',
+                    confirmPassword: '',
                     cartName: '',
                     location: '',
                     phone: '',
                     address: '',
                     shopActLicenseExpiry: '',
                     fssaiLicenseExpiry: '',
-                    gstCertificateExpiry: '',
                   });
                   setCartFiles({
                     aadharCard: null,
                     panCard: null,
-                    gstCertificate: null,
                     shopActLicense: null,
                     fssaiLicense: null,
-                    electricityBill: null,
-                    rentAgreement: null,
                   });
                   fetchFranchises();
                   if (expandedFranchises.has(selectedFranchiseForCart._id)) {
@@ -956,7 +960,10 @@ const Franchises = () => {
             >
               {/* Basic Information */}
               <div className="border-b pb-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Basic Information</h3>
+                <h3 className="text-base font-semibold text-[#4a2e1f] mb-3 flex items-center gap-2">
+                  <FaIdCard className="text-[#d86d2a]" />
+                  Basic Information
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Manager Name *</label>
@@ -989,6 +996,17 @@ const Franchises = () => {
                       onChange={(e) => setCartFormData({ ...cartFormData, password: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Minimum 6 characters"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={cartFormData.confirmPassword}
+                      onChange={(e) => setCartFormData({ ...cartFormData, confirmPassword: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Confirm password"
                     />
                   </div>
                   <div>
@@ -1038,118 +1056,83 @@ const Franchises = () => {
 
               {/* Documents Section */}
               <div className="border-b pb-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Owner Documents (Optional)</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Documents can be uploaded later. You can create the cart now and add documents anytime.
+                <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">Owner Documents (Optional)</h3>
+                <p className="text-sm text-[#6b4423] mb-4">
+                  📄 Documents can be uploaded later. You can create the cart now and add documents anytime.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Aadhar Card</label>
+                    <label className="block text-sm font-medium text-[#4a2e1f]">
+                      Aadhar Card of Owner
+                    </label>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => setCartFiles({ ...cartFiles, aadharCard: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                     />
                     {cartFiles.aadharCard && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.aadharCard.name}</p>
+                      <p className="mt-1 text-xs text-[#6b4423]">Selected: {cartFiles.aadharCard.name}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">PAN Card</label>
+                    <label className="block text-sm font-medium text-[#4a2e1f]">
+                      PAN Card
+                    </label>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => setCartFiles({ ...cartFiles, panCard: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                     />
                     {cartFiles.panCard && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.panCard.name}</p>
+                      <p className="mt-1 text-xs text-[#6b4423]">Selected: {cartFiles.panCard.name}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">GST Certificate</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => setCartFiles({ ...cartFiles, gstCertificate: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {cartFiles.gstCertificate && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.gstCertificate.name}</p>
-                    )}
-                    <input
-                      type="date"
-                      value={cartFormData.gstCertificateExpiry}
-                      onChange={(e) => setCartFormData({ ...cartFormData, gstCertificateExpiry: e.target.value })}
-                      className="mt-2 w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Expiry Date (Optional)</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Shop Act License</label>
+                    <label className="block text-sm font-medium text-[#4a2e1f]">
+                      Shop Act License
+                    </label>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => setCartFiles({ ...cartFiles, shopActLicense: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                     />
                     {cartFiles.shopActLicense && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.shopActLicense.name}</p>
+                      <p className="mt-1 text-xs text-[#6b4423]">Selected: {cartFiles.shopActLicense.name}</p>
                     )}
                     <input
                       type="date"
                       value={cartFormData.shopActLicenseExpiry}
                       onChange={(e) => setCartFormData({ ...cartFormData, shopActLicenseExpiry: e.target.value })}
-                      className="mt-2 w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Expiry Date (Optional)</p>
+                    <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">FSSAI License</label>
+                    <label className="block text-sm font-medium text-[#4a2e1f]">
+                      FSSAI License
+                    </label>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => setCartFiles({ ...cartFiles, fssaiLicense: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                     />
                     {cartFiles.fssaiLicense && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.fssaiLicense.name}</p>
+                      <p className="mt-1 text-xs text-[#6b4423]">Selected: {cartFiles.fssaiLicense.name}</p>
                     )}
                     <input
                       type="date"
                       value={cartFormData.fssaiLicenseExpiry}
                       onChange={(e) => setCartFormData({ ...cartFormData, fssaiLicenseExpiry: e.target.value })}
-                      className="mt-2 w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Expiry Date (Optional)</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Electricity Bill</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => setCartFiles({ ...cartFiles, electricityBill: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {cartFiles.electricityBill && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.electricityBill.name}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Rent Agreement</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => setCartFiles({ ...cartFiles, rentAgreement: e.target.files[0] || null })}
-                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {cartFiles.rentAgreement && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {cartFiles.rentAgreement.name}</p>
-                    )}
+                    <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-gray-500">
+                <p className="mt-4 text-xs text-[#6b4423]">
                   All documents are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
                 </p>
               </div>
@@ -1161,7 +1144,7 @@ const Franchises = () => {
                   setShowCartModal(false);
                   setSelectedFranchiseForCart(null);
                 }}
-                className="flex-1 px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className="flex-1 px-4 py-2 text-sm border border-[#e2c1ac] rounded-lg text-[#4a2e1f] hover:bg-[#fef4ec] transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -1174,7 +1157,7 @@ const Franchises = () => {
                     form.requestSubmit();
                   }
                 }}
-                className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                className="flex-1 px-4 py-2 text-sm font-bold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md bg-[#d86d2a] hover:bg-[#c75b1a]"
               >
                 Create Cart
               </button>

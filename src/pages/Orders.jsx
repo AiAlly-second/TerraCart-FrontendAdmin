@@ -520,6 +520,7 @@ const Orders = () => {
   const [cafeInfo, setCafeInfo] = useState(null);
   const [carts, setCarts] = useState([]); // For franchise admin: list of carts
   const [expandedCarts, setExpandedCarts] = useState({}); // Track expanded cart sections
+  const [unknownCarts, setUnknownCarts] = useState({}); // Cache for fetched unknown cart info
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [searchOrderId, setSearchOrderId] = useState("");
@@ -909,17 +910,30 @@ const Orders = () => {
           const allUsers = usersRes.data || [];
           // Filter admin users (carts) that belong to this franchise
           const franchiseCarts = allUsers.filter((u) => {
+            if (u.role !== "admin") return false;
+
+            // Check franchiseId match (handle both object and string formats)
+            const userFranchiseId = user._id?.toString() || user._id;
+            const cartFranchiseId = u.franchiseId
+              ? u.franchiseId._id?.toString() ||
+                u.franchiseId.toString() ||
+                u.franchiseId
+              : null;
+
             return (
-              u.role === "admin" &&
-              u.franchiseId &&
-              (u.franchiseId._id?.toString() === user._id?.toString() ||
-                u.franchiseId.toString() === user._id?.toString())
+              cartFranchiseId &&
+              cartFranchiseId.toString() === userFranchiseId.toString()
             );
           });
           setCarts(franchiseCarts);
           console.log(
-            `[Orders] Found ${franchiseCarts.length} carts for franchise admin`
+            `[Orders] Found ${franchiseCarts.length} carts for franchise admin (user ID: ${user._id})`
           );
+          if (franchiseCarts.length === 0) {
+            console.warn(
+              `[Orders] No carts found for franchise admin. This might indicate a data issue.`
+            );
+          }
         } catch (err) {
           console.error("Failed to fetch carts:", err);
         }
@@ -1268,12 +1282,28 @@ const Orders = () => {
     const grouped = {};
     const orderIdsSeen = new Set(); // Track orders we've already added to prevent duplicates
 
+    // Create a map of cart IDs for quick lookup
+    const cartMap = new Map();
     carts.forEach((cart) => {
       const cartId = cart._id?.toString() || cart._id;
-      grouped[cartId] = {
-        cart,
-        orders: [],
-      };
+      if (cartId) {
+        cartMap.set(cartId, cart);
+        grouped[cartId] = {
+          cart,
+          orders: [],
+        };
+      }
+    });
+
+    // Also add any previously fetched unknown carts
+    Object.entries(unknownCarts).forEach(([cartId, cartInfo]) => {
+      if (!cartMap.has(cartId)) {
+        cartMap.set(cartId, cartInfo);
+        grouped[cartId] = {
+          cart: cartInfo,
+          orders: [],
+        };
+      }
     });
 
     orders.forEach((order) => {
@@ -1295,25 +1325,115 @@ const Orders = () => {
       }
 
       const cartIdStr = orderCartId?.toString();
-      if (cartIdStr && grouped[cartIdStr]) {
+      if (cartIdStr && cartMap.has(cartIdStr)) {
+        // Cart is in our list
         grouped[cartIdStr].orders.push(order);
         orderIdsSeen.add(orderId);
       } else if (cartIdStr) {
-        // Cart not in our list, create entry
-        grouped[cartIdStr] = {
-          cart: {
-            _id: cartIdStr,
-            name: "Unknown Cart",
-            cartName: "Unknown Cart",
-          },
-          orders: [order],
-        };
-        orderIdsSeen.add(orderId);
+        // Cart not in our list - check if we have it in unknownCarts cache
+        if (unknownCarts[cartIdStr]) {
+          if (!grouped[cartIdStr]) {
+            grouped[cartIdStr] = {
+              cart: unknownCarts[cartIdStr],
+              orders: [],
+            };
+          }
+          grouped[cartIdStr].orders.push(order);
+          orderIdsSeen.add(orderId);
+        } else {
+          // New unknown cart - create entry and mark for fetching
+          const cartInfo = order.cart || order.cafe || null;
+          grouped[cartIdStr] = {
+            cart: cartInfo || {
+              _id: cartIdStr,
+              name: "Loading...",
+              cartName: "Loading...",
+              cartCode: "",
+            },
+            orders: [order],
+          };
+          orderIdsSeen.add(orderId);
+        }
       }
     });
 
     return grouped;
-  }, [orders, carts, user, filterCafeId]);
+  }, [orders, carts, unknownCarts, user, filterCafeId]);
+
+  // Fetch cart information for unknown carts
+  useEffect(() => {
+    if (user?.role !== "franchise_admin" || filterCafeId || !ordersByCart) {
+      return;
+    }
+
+    const fetchUnknownCarts = async () => {
+      const cartIdsToFetch = [];
+
+      Object.entries(ordersByCart).forEach(([cartId, { cart }]) => {
+        // Check if cart name is "Loading..." or "Unknown Cart" and we haven't fetched it yet
+        if (
+          (cart.cartName === "Loading..." ||
+            cart.cartName === "Unknown Cart") &&
+          !unknownCarts[cartId]
+        ) {
+          cartIdsToFetch.push(cartId);
+        }
+      });
+
+      if (cartIdsToFetch.length === 0) {
+        return;
+      }
+
+      console.log(
+        `[Orders] Fetching info for ${cartIdsToFetch.length} unknown cart(s)...`
+      );
+
+      // Fetch all unknown carts in parallel
+      const fetchPromises = cartIdsToFetch.map(async (cartId) => {
+        try {
+          const cartRes = await api.get(`/users/${cartId}`);
+          if (cartRes.data) {
+            const cartInfo = {
+              _id: cartId,
+              name:
+                cartRes.data.cartName || cartRes.data.name || "Unknown Cart",
+              cartName:
+                cartRes.data.cartName || cartRes.data.name || "Unknown Cart",
+              cartCode: cartRes.data.cartCode || "",
+            };
+            setUnknownCarts((prev) => ({
+              ...prev,
+              [cartId]: cartInfo,
+            }));
+            console.log(
+              `[Orders] Fetched cart info for ${cartId}: ${cartInfo.cartName}`
+            );
+            return { cartId, cartInfo };
+          }
+        } catch (err) {
+          console.warn(
+            `[Orders] Failed to fetch cart info for ${cartId}:`,
+            err.message
+          );
+          // Mark as truly unknown
+          setUnknownCarts((prev) => ({
+            ...prev,
+            [cartId]: {
+              _id: cartId,
+              name: "Unknown Cart",
+              cartName: "Unknown Cart",
+              cartCode: "",
+            },
+          }));
+        }
+      });
+
+      await Promise.all(fetchPromises);
+    };
+
+    fetchUnknownCarts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordersByCart, user, filterCafeId]);
 
   const filteredOrders = (() => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
