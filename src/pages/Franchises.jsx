@@ -6,7 +6,7 @@ import {
   FaIdCard, FaCalendarAlt, FaEye, FaTimes, FaUsers
 } from 'react-icons/fa';
 import api from '../utils/api';
-import { confirmFranchiseDelete } from '../utils/confirm';
+import { confirmFranchiseDelete, confirm } from '../utils/confirm';
 
 const Franchises = () => {
   const [franchises, setFranchises] = useState([]);
@@ -205,7 +205,19 @@ const Franchises = () => {
   };
 
   const handleDeleteCart = async (cartId, cartName) => {
-    if (!window.confirm(`Are you sure you want to delete cart "${cartName}"? This action cannot be undone.`)) {
+    // Show confirmation dialog using custom confirm utility
+    const confirmed = await confirm(
+      `Are you sure you want to delete cart "${cartName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Cart',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        danger: true,
+        requireInput: false
+      }
+    );
+    
+    if (!confirmed) {
       return;
     }
     
@@ -671,8 +683,14 @@ const Franchises = () => {
                                         </button>
                                       )}
                                       <button
-                                        onClick={() => handleDeleteCart(cart._id, cart.cafeName || cart.name)}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          handleDeleteCart(cart._id, cart.cafeName || cart.name);
+                                        }}
                                         className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                        title="Delete Cart"
                                       >
                                         <FaTrash size={10} />
                                       </button>
