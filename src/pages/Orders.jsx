@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import io from "socket.io-client";
+import { getSocket } from "../utils/socket";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import {
@@ -15,9 +15,8 @@ import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 
-// Use Vite environment variable if available, fallback to localhost:5001
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi); // Connect socket to configured backend
+// Use centralized socket connection with proper CORS configuration
+const socket = getSocket();
 
 const buildInvoiceId = (order) => {
   if (!order) return "";

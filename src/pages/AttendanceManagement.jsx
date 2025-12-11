@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../utils/api';
+import { getSocket } from '../utils/socket';
 
 const AttendanceManagement = () => {
   const [attendance, setAttendance] = useState([]);
@@ -11,19 +12,58 @@ const AttendanceManagement = () => {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState('today'); // 'today', 'history', 'stats'
+  const [currentTime, setCurrentTime] = useState(new Date()); // For real-time timer updates
+  const socketRef = useRef(null);
+
+  // Real-time timer that updates every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetchEmployees();
     fetchTodayAttendance();
     
-    // Set up auto-refresh every 30 seconds for real-time updates
-    const interval = setInterval(() => {
+    // Set up Socket.IO for real-time updates
+    const socket = getSocket();
+    socketRef.current = socket;
+
+    // Listen for attendance updates
+    const handleAttendanceCheckedIn = (data) => {
+      console.log('[AttendanceManagement] Socket: attendance:checked_in', data);
+      // Immediately update the UI with new attendance data
       if (activeTab === 'today') {
         fetchTodayAttendance();
       }
-    }, 30000); // Refresh every 30 seconds
-    
-    return () => clearInterval(interval);
+    };
+
+    const handleAttendanceCheckedOut = (data) => {
+      console.log('[AttendanceManagement] Socket: attendance:checked_out', data);
+      if (activeTab === 'today') {
+        fetchTodayAttendance();
+      }
+    };
+
+    const handleAttendanceUpdated = (data) => {
+      console.log('[AttendanceManagement] Socket: attendance:updated', data);
+      if (activeTab === 'today') {
+        fetchTodayAttendance();
+      }
+    };
+
+    socket.on('attendance:checked_in', handleAttendanceCheckedIn);
+    socket.on('attendance:checked_out', handleAttendanceCheckedOut);
+    socket.on('attendance:updated', handleAttendanceUpdated);
+
+    return () => {
+      socket.off('attendance:checked_in', handleAttendanceCheckedIn);
+      socket.off('attendance:checked_out', handleAttendanceCheckedOut);
+      socket.off('attendance:updated', handleAttendanceUpdated);
+    };
   }, [activeTab]);
 
   useEffect(() => {
@@ -66,6 +106,11 @@ const AttendanceManagement = () => {
       } else if (response.data && Array.isArray(response.data.data)) {
         attendanceData = response.data.data;
       }
+      
+      // Debug: Log attendance data
+      console.log('[ATTENDANCE] Fetched today attendance:', attendanceData);
+      console.log('[ATTENDANCE] Number of records:', attendanceData.length);
+      
       setTodayAttendance(attendanceData);
     } catch (error) {
       console.error('Error fetching today attendance:', error);
@@ -123,28 +168,188 @@ const AttendanceManagement = () => {
   };
 
   const handleCheckIn = async (employeeId) => {
+    // Check if already checked in before showing confirmation
+    const todayRecord = Array.isArray(todayAttendance) 
+      ? todayAttendance.find((a) => 
+          a.employeeId?._id === employeeId || 
+          a.employeeId === employeeId ||
+          (typeof a.employeeId === 'object' && a.employeeId?._id === employeeId)
+        ) 
+      : null;
+    
+    if (todayRecord?.checkIn?.time) {
+      alert('This employee is already checked in today.');
+      // Refresh to show current state
+      fetchTodayAttendance();
+      return;
+    }
+    
     if (!window.confirm('Mark this employee as checked in?')) return;
     try {
-      await api.post('/attendance/checkin', { employeeId });
-      alert('Check-in successful!');
+      const response = await api.post('/attendance/checkin', { employeeId });
+      
+      // Immediately update the UI with the response data
+      if (response.data?.attendance) {
+        setTodayAttendance(prev => {
+          const updated = Array.isArray(prev) ? [...prev] : [];
+          const existingIndex = updated.findIndex(a => {
+            const recordEmployeeId = a.employeeId?._id || a.employeeId;
+            return recordEmployeeId?.toString() === employeeId?.toString();
+          });
+          
+          if (existingIndex >= 0) {
+            updated[existingIndex] = response.data.attendance;
+          } else {
+            updated.push(response.data.attendance);
+          }
+          
+          return updated;
+        });
+      }
+      
+      // Also fetch latest data to ensure consistency
       fetchTodayAttendance();
       if (activeTab === 'history') fetchAttendance();
+      
+      alert('✅ Check-in successful!');
     } catch (error) {
       console.error('Error checking in:', error);
-      alert(error.response?.data?.message || 'Failed to check in');
+      const errorMessage = error.response?.data?.message || 'Failed to check in';
+      
+      // If error is about already checked in, refresh data and show info message
+      if (errorMessage.toLowerCase().includes('already checked in')) {
+        // Refresh immediately to show the existing attendance record
+        await fetchTodayAttendance();
+        alert('ℹ️ ' + errorMessage + '\n\nAttendance record refreshed.');
+      } else {
+        alert('❌ ' + errorMessage);
+      }
+    }
+  };
+
+  const handleStartBreak = async (attendanceId, employeeId) => {
+    if (!window.confirm('Start break for this employee?')) return;
+    try {
+      const response = await api.post(`/attendance/${attendanceId}/start-break`);
+      
+      // Immediately update the UI
+      if (response.data?.attendance) {
+        setTodayAttendance(prev => {
+          const updated = Array.isArray(prev) ? [...prev] : [];
+          const index = updated.findIndex(a => {
+            const recordEmployeeId = a.employeeId?._id || a.employeeId;
+            return recordEmployeeId?.toString() === employeeId?.toString();
+          });
+          
+          if (index >= 0) {
+            updated[index] = response.data.attendance;
+          }
+          
+          return updated;
+        });
+      }
+      
+      fetchTodayAttendance();
+      alert('✅ Break started!');
+    } catch (error) {
+      console.error('Error starting break:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to start break';
+      alert('❌ ' + errorMessage);
+      fetchTodayAttendance();
+    }
+  };
+
+  const handleEndBreak = async (attendanceId, employeeId) => {
+    if (!window.confirm('End break for this employee?')) return;
+    try {
+      const response = await api.post(`/attendance/${attendanceId}/end-break`);
+      
+      // Immediately update the UI
+      if (response.data?.attendance) {
+        setTodayAttendance(prev => {
+          const updated = Array.isArray(prev) ? [...prev] : [];
+          const index = updated.findIndex(a => {
+            const recordEmployeeId = a.employeeId?._id || a.employeeId;
+            return recordEmployeeId?.toString() === employeeId?.toString();
+          });
+          
+          if (index >= 0) {
+            updated[index] = response.data.attendance;
+          }
+          
+          return updated;
+        });
+      }
+      
+      fetchTodayAttendance();
+      alert('✅ Break ended!');
+    } catch (error) {
+      console.error('Error ending break:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to end break';
+      alert('❌ ' + errorMessage);
+      fetchTodayAttendance();
     }
   };
 
   const handleCheckOut = async (employeeId) => {
+    // Check if already checked out before showing confirmation
+    const todayRecord = Array.isArray(todayAttendance) 
+      ? todayAttendance.find((a) => 
+          a.employeeId?._id === employeeId || 
+          a.employeeId === employeeId ||
+          (typeof a.employeeId === 'object' && a.employeeId?._id === employeeId)
+        ) 
+      : null;
+    
+    if (!todayRecord?.checkIn?.time) {
+      alert('This employee has not checked in today.');
+      fetchTodayAttendance();
+      return;
+    }
+    
+    if (todayRecord?.checkOut?.time) {
+      alert('This employee is already checked out today.');
+      fetchTodayAttendance();
+      return;
+    }
+    
     if (!window.confirm('Mark this employee as checked out?')) return;
     try {
-      await api.post('/attendance/checkout', { employeeId });
-      alert('Check-out successful!');
+      const response = await api.post('/attendance/checkout', { employeeId });
+      
+      // Immediately update the UI with the response data
+      if (response.data?.attendance) {
+        setTodayAttendance(prev => {
+          const updated = Array.isArray(prev) ? [...prev] : [];
+          const existingIndex = updated.findIndex(a => {
+            const recordEmployeeId = a.employeeId?._id || a.employeeId;
+            return recordEmployeeId?.toString() === employeeId?.toString();
+          });
+          
+          if (existingIndex >= 0) {
+            updated[existingIndex] = response.data.attendance;
+          }
+          
+          return updated;
+        });
+      }
+      
+      // Also fetch latest data to ensure consistency
       fetchTodayAttendance();
       if (activeTab === 'history') fetchAttendance();
+      
+      alert('✅ Check-out successful!');
     } catch (error) {
       console.error('Error checking out:', error);
-      alert(error.response?.data?.message || 'Failed to check out');
+      const errorMessage = error.response?.data?.message || 'Failed to check out';
+      
+      // If error is about already checked out, refresh data and show info message
+      if (errorMessage.toLowerCase().includes('already checked out')) {
+        alert('ℹ️ ' + errorMessage + '\n\nRefreshing attendance data...');
+        fetchTodayAttendance();
+      } else {
+        alert('❌ ' + errorMessage);
+      }
     }
   };
 
@@ -170,26 +375,52 @@ const AttendanceManagement = () => {
   const calculateRealTimeHours = (record) => {
     if (!record?.checkIn?.time) return '-';
     
-    const now = new Date();
+    // Use currentTime state for real-time updates (updates every second)
+    const now = currentTime;
     const checkInTime = new Date(record.checkIn.time);
     const breakMinutes = record.breakDuration || 0;
     
     // If on break, pause timer at break start
-    let workingMinutes = 0;
+    let workingSeconds = 0;
     if (record.isOnBreak && record.breakStart) {
       // PAUSED: Working timer is frozen at the moment break started
       const breakStartTime = new Date(record.breakStart);
-      const workingTimeUntilBreak = Math.floor((breakStartTime - checkInTime) / (1000 * 60));
-      // breakDuration doesn't include current break, so subtract it
-      workingMinutes = Math.max(0, workingTimeUntilBreak - breakMinutes);
+      const workingTimeUntilBreak = Math.floor((breakStartTime - checkInTime) / 1000); // seconds
+      // breakDuration doesn't include current break, so subtract it (convert to seconds)
+      workingSeconds = Math.max(0, workingTimeUntilBreak - (breakMinutes * 60));
     } else {
       // ACTIVE: Working timer is running
-      const totalDurationMinutes = Math.floor((now - checkInTime) / (1000 * 60));
-      // Subtract completed break time
-      workingMinutes = Math.max(0, totalDurationMinutes - breakMinutes);
+      const totalDurationSeconds = Math.floor((now - checkInTime) / 1000);
+      // Subtract completed break time (convert to seconds)
+      workingSeconds = Math.max(0, totalDurationSeconds - (breakMinutes * 60));
     }
     
-    return formatHours(workingMinutes);
+    // Convert to hours and minutes with seconds for real-time display
+    const hours = Math.floor(workingSeconds / 3600);
+    const mins = Math.floor((workingSeconds % 3600) / 60);
+    const secs = workingSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+    }
+    return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+  };
+
+  const calculateBreakTimer = (record) => {
+    if (!record?.isOnBreak || !record?.breakStart) return null;
+    
+    const now = currentTime;
+    const breakStartTime = new Date(record.breakStart);
+    const breakSeconds = Math.floor((now - breakStartTime) / 1000);
+    
+    const hours = Math.floor(breakSeconds / 3600);
+    const mins = Math.floor((breakSeconds % 3600) / 60);
+    const secs = breakSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+    }
+    return `${mins}m ${secs.toString().padStart(2, '0')}s`;
   };
 
   const getStatusBadge = (status) => {
@@ -278,9 +509,34 @@ const AttendanceManagement = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Array.isArray(employees) && employees.map((employee) => {
-                      const todayRecord = Array.isArray(todayAttendance) ? todayAttendance.find((a) => a.employeeId?._id === employee._id) : null;
-                      const hasCheckedIn = todayRecord?.checkIn?.time;
-                      const hasCheckedOut = todayRecord?.checkOut?.time;
+                      // Find today's attendance record - check multiple possible employeeId formats
+                      const todayRecord = Array.isArray(todayAttendance) 
+                        ? todayAttendance.find((a) => {
+                            // Handle different employeeId formats
+                            const recordEmployeeId = a.employeeId?._id || a.employeeId;
+                            const employeeIdStr = employee._id?.toString() || employee._id;
+                            const match = recordEmployeeId?.toString() === employeeIdStr;
+                            
+                            // Debug logging
+                            if (match) {
+                              console.log('[ATTENDANCE] Found record for employee:', {
+                                employeeId: employeeIdStr,
+                                record: a,
+                                hasCheckIn: !!a.checkIn?.time,
+                                hasCheckOut: !!a.checkOut?.time
+                              });
+                            }
+                            
+                            return match;
+                          })
+                        : null;
+                      
+                      // Check if checked in - handle multiple formats
+                      const hasCheckedIn = todayRecord?.checkIn?.time || 
+                                          (todayRecord?.checkIn && typeof todayRecord.checkIn === 'string');
+                      const hasCheckedOut = todayRecord?.checkOut?.time || 
+                                           (todayRecord?.checkOut && typeof todayRecord.checkOut === 'string');
+                      const isOnBreak = todayRecord?.isOnBreak || todayRecord?.breakStart;
 
                       return (
                         <tr key={employee._id}>
@@ -291,54 +547,100 @@ const AttendanceManagement = () => {
                           <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap capitalize text-xs sm:text-sm hidden sm:table-cell">{employee.employeeRole}</td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4">
                             {hasCheckedIn ? (
-                              <span className="text-green-600 font-medium text-xs sm:text-sm">{formatTime(todayRecord.checkIn.time)}</span>
+                              <span className="text-green-600 font-medium text-xs sm:text-sm">
+                                {formatTime(todayRecord.checkIn?.time || todayRecord.checkIn)}
+                              </span>
                             ) : (
                               <span className="text-gray-400 text-xs sm:text-sm">Not checked in</span>
                             )}
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
                             {hasCheckedOut ? (
-                              <span className="text-blue-600 font-medium text-xs sm:text-sm">{formatTime(todayRecord.checkOut.time)}</span>
+                              <span className="text-blue-600 font-medium text-xs sm:text-sm">
+                                {formatTime(todayRecord.checkOut?.time || todayRecord.checkOut)}
+                              </span>
                             ) : (
                               <span className="text-gray-400 text-xs sm:text-sm">Not checked out</span>
                             )}
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4">
-                            {todayRecord ? (
-                              <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full ${getStatusBadge(todayRecord.status)}`}>
-                                {todayRecord.status.replace('_', ' ').toUpperCase()}
-                              </span>
-                            ) : (
-                              <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-gray-100 text-gray-800">ABSENT</span>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {todayRecord ? (
+                                <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full ${getStatusBadge(todayRecord.status)}`}>
+                                  {todayRecord.status.replace('_', ' ').toUpperCase()}
+                                </span>
+                              ) : (
+                                <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-gray-100 text-gray-800">ABSENT</span>
+                              )}
+                              {isOnBreak && (
+                                <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-orange-100 text-orange-800">
+                                  ON BREAK
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell text-xs sm:text-sm">
-                            {todayRecord?.workingHours 
-                              ? formatHours(Math.round(todayRecord.workingHours * 60))
-                              : hasCheckedIn && !hasCheckedOut
-                              ? calculateRealTimeHours(todayRecord)
-                              : '-'}
+                            <div className="space-y-1">
+                              {todayRecord?.workingHours 
+                                ? formatHours(Math.round(todayRecord.workingHours * 60))
+                                : hasCheckedIn && !hasCheckedOut
+                                ? (
+                                    <div>
+                                      <div className={todayRecord?.isOnBreak ? 'text-orange-600' : 'text-green-600'}>
+                                        {calculateRealTimeHours(todayRecord)}
+                                        {todayRecord?.isOnBreak && <span className="ml-1">(Paused)</span>}
+                                      </div>
+                                      {todayRecord?.isOnBreak && todayRecord?.breakStart && (
+                                        <div className="text-orange-500 text-[10px]">
+                                          Break: {calculateBreakTimer(todayRecord)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                : '-'}
+                            </div>
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm font-medium">
-                            {!hasCheckedIn ? (
-                              <button
-                                type="button"
-                                onClick={() => handleCheckIn(employee._id)}
-                                className="text-green-600 hover:text-green-900 mr-2 sm:mr-3 text-[10px] sm:text-xs"
-                              >
-                                Check In
-                              </button>
-                            ) : !hasCheckedOut ? (
-                              <button
-                                type="button"
-                                onClick={() => handleCheckOut(employee._id)}
-                                className="text-blue-600 hover:text-blue-900 text-[10px] sm:text-xs"
-                              >
-                                Check Out
-                              </button>
-                            ) : (
-                              <span className="text-gray-400">Completed</span>
-                            )}
+                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                              {!hasCheckedIn ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCheckIn(employee._id)}
+                                  className="text-green-600 hover:text-green-900 text-[10px] sm:text-xs px-2 py-1 border border-green-600 rounded hover:bg-green-50"
+                                >
+                                  Check In
+                                </button>
+                              ) : !hasCheckedOut ? (
+                                <>
+                                  {todayRecord?.isOnBreak ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEndBreak(todayRecord._id, employee._id)}
+                                      className="text-orange-600 hover:text-orange-900 text-[10px] sm:text-xs px-2 py-1 border border-orange-600 rounded hover:bg-orange-50"
+                                    >
+                                      End Break
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartBreak(todayRecord._id, employee._id)}
+                                      className="text-yellow-600 hover:text-yellow-900 text-[10px] sm:text-xs px-2 py-1 border border-yellow-600 rounded hover:bg-yellow-50"
+                                    >
+                                      Start Break
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckOut(employee._id)}
+                                    className="text-blue-600 hover:text-blue-900 text-[10px] sm:text-xs px-2 py-1 border border-blue-600 rounded hover:bg-blue-50"
+                                  >
+                                    Check Out
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-gray-400">Completed</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

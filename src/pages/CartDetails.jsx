@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/api";
-import io from "socket.io-client";
+import { getSocket } from "../utils/socket";
 
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi);
+// Use centralized socket connection with proper CORS configuration
+const socket = getSocket();
 
 const CartDetails = () => {
   const { id } = useParams();

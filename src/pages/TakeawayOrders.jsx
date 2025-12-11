@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import io from "socket.io-client";
+import { createSocketConnection } from "../utils/socket";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import {
@@ -12,8 +12,6 @@ import {
   canReturn,
 } from "../domain/orderLogic";
 import api from "../utils/api";
-
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 
@@ -556,7 +554,7 @@ const TakeawayOrders = () => {
     fetchOrders();
     loadMenu();
 
-    const socket = io(nodeApi);
+    const socket = createSocketConnection();
     socketRef.current = socket;
 
     const handleNewOrder = (order) => {
