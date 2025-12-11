@@ -669,18 +669,18 @@ const Orders = () => {
             order.status === "Pending" ? "bg-orange-50" : ""
           }`}
         >
-          <td className="px-6 py-4 text-sm">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
             <button
               onClick={() => toggleExpand(order._id)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1 sm:gap-2"
             >
-              <span className="font-mono text-xs text-gray-500">
+              <span className="font-mono text-[10px] sm:text-xs text-gray-500 truncate max-w-[60px] sm:max-w-none">
                 {buildInvoiceId(order)}
               </span>
-              <span className="text-gray-900 font-medium">{formattedTime}</span>
+              <span className="text-gray-900 font-medium text-xs sm:text-sm">{formattedTime}</span>
             </button>
             {expanded[order._id] && (
-              <div className="mt-2 text-xs text-gray-600 space-y-1">
+              <div className="mt-2 text-[10px] sm:text-xs text-gray-600 space-y-1">
                 <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
                 <div>
                   Invoice:{" "}
@@ -695,36 +695,36 @@ const Orders = () => {
               </div>
             )}
           </td>
-          <td className="px-6 py-4 text-sm text-gray-600">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
             <div className="flex flex-col">
               <span className="font-medium text-gray-900">{formattedDate}</span>
               <span className="text-xs text-gray-500">{formattedTime}</span>
             </div>
           </td>
-          <td className="px-6 py-4">
-            <div className="flex items-center gap-2">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
+            <div className="flex items-center gap-1 sm:gap-2">
               <img
                 src={tableIcon}
                 alt="Table"
                 title="Table"
-                className="w-6 h-6 object-contain"
+                className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 object-contain"
               />
-              <span className="text-lg font-semibold text-gray-700">
+              <span className="text-sm sm:text-base md:text-lg font-semibold text-gray-700">
                 {order.tableNumber || "N/A"}
               </span>
             </div>
           </td>
-          <td className="px-6 py-4">
-            <div className="flex flex-col gap-2">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
+            <div className="flex flex-col gap-1 sm:gap-2">
               <span
-                className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${getStatusClass(
+                className={`px-2 sm:px-3 py-0.5 sm:py-1 inline-flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm font-medium rounded-full border ${getStatusClass(
                   order.status
                 )}`}
               >
-                {getStatusIcon(order.status)} {order.status}
+                {getStatusIcon(order.status)} <span className="truncate">{order.status}</span>
               </span>
               {/* Sequential flow - show only next step + cancel option */}
-              <div className="flex flex-wrap gap-1 mt-1">
+              <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                 {(() => {
                   const nextStatus = getNextStatus(order.status);
                   const buttons = [];
@@ -734,10 +734,11 @@ const Orders = () => {
                     buttons.push(
                       <button
                         key="accept"
+                        type="button"
                         onClick={() => tryAccept(order)}
-                        className="px-3 py-1 text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
+                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
                       >
-                        ✅ Accept (Preparing)
+                        ✅ Accept
                       </button>
                     );
                   }
@@ -747,8 +748,9 @@ const Orders = () => {
                     buttons.push(
                       <button
                         key="next"
+                        type="button"
                         onClick={() => changeStatus(order._id, nextStatus)}
-                        className="px-3 py-1 text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
+                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
                       >
                         {nextStatus}
                       </button>
@@ -759,18 +761,20 @@ const Orders = () => {
                     buttons.push(
                       <button
                         key="return"
+                        type="button"
                         onClick={() => changeStatus(order._id, "Returned")}
-                        className="px-3 py-1 text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
+                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
                       >
-                        ↩️ Return Order
+                        ↩️ Return
                       </button>
                     );
                   } else if (canCancel(order.status)) {
                     buttons.push(
                       <button
                         key="cancel"
+                        type="button"
                         onClick={() => changeStatus(order._id, "Cancelled")}
-                        className="px-3 py-1 text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
+                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
                       >
                         ❌ Cancel
                       </button>
@@ -782,8 +786,8 @@ const Orders = () => {
               </div>
             </div>
           </td>
-          <td className="px-6 py-4 text-sm">
-            <div className="flex flex-wrap gap-2">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
+            <div className="flex flex-wrap gap-1 sm:gap-2">
               {/* Modify Order button - only show for unpaid orders */}
               {order.status !== "Paid" &&
                 order.status !== "Cancelled" &&
@@ -804,7 +808,8 @@ const Orders = () => {
               </button>
               {user?.role !== "admin" && (
                 <button
-                  onClick={() => handleDelete(order._id)}
+                  type="button"
+                  onClick={(e) => handleDelete(e, order._id)}
                   className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
                 >
                   🗑️ Delete
@@ -1055,21 +1060,34 @@ const Orders = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (orderId) => {
-    if (window.confirm("Are you sure you want to delete this order?")) {
-      api
-        .delete(`/orders/${orderId}`)
-        .then(() => {
-          setOrders((prev) => prev.filter((order) => order._id !== orderId));
-        })
-        .catch((err) => {
-          console.error("Delete failed:", err);
-          const errorMessage =
-            err.response?.data?.message ||
-            err.message ||
-            "Failed to delete order";
-          alert(errorMessage);
-        });
+  const handleDelete = async (e, orderId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      "Are you sure you want to PERMANENTLY DELETE this order?\n\nThis action cannot be undone.",
+      {
+        title: 'Delete Order',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      await api.delete(`/orders/${orderId}`);
+      setOrders((prev) => prev.filter((order) => order._id !== orderId));
+    } catch (err) {
+      console.error("Delete failed:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to delete order";
+      alert(errorMessage);
     }
   };
 
@@ -1734,25 +1752,25 @@ const Orders = () => {
   }, []);
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
+    <div className="p-3 sm:p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
             {filterCafeId && cafeInfo
               ? `Orders - ${cafeInfo.cafeName || cafeInfo.name}`
               : "Orders"}
           </h1>
           {filterCafeId && (
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               Filtered by specific cart
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {filterCafeId && (
             <button
               onClick={() => (window.location.href = "/orders")}
-              className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm"
+              className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-xs sm:text-sm whitespace-nowrap"
             >
               View All Carts
             </button>
@@ -1762,56 +1780,56 @@ const Orders = () => {
             placeholder="Order ID / token"
             value={searchOrderId}
             onChange={(e) => setSearchOrderId(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-48"
+            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-48"
           />
           <input
             type="text"
             placeholder="Table number"
             value={searchTable}
             onChange={(e) => setSearchTable(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-40"
+            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-40"
           />
           <input
             type="text"
             placeholder="Invoice ID"
             value={searchInvoice}
             onChange={(e) => setSearchInvoice(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-52"
+            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-52"
           />
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-40"
+            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-40"
             title="Filter by order date"
           />
           <button
             onClick={handleAdd}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow"
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg shadow text-sm sm:text-base whitespace-nowrap"
           >
             + Add Order
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
         {/* Clickable Status Summary Tiles to filter orders */}
         {/* All tile */}
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-4 rounded-lg border shadow-sm text-left transition outline-none ${
+          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none ${
             filterStatus === "all" ? "ring-2 ring-blue-400" : ""
           }`}
         >
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-2xl font-bold">
+            <div className="min-w-0 flex-1">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold">
                 {orders.filter((o) => o.serviceType === "DINE_IN").length}
               </div>
-              <div className="text-sm">All Dine-In</div>
+              <div className="text-xs sm:text-sm truncate">All Dine-In</div>
             </div>
-            <div className="text-2xl">📦</div>
+            <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">📦</div>
           </div>
         </button>
 
@@ -1827,24 +1845,24 @@ const Orders = () => {
             type="button"
             key={status}
             onClick={() => setFilterStatus(status)}
-            className={`p-4 rounded-lg border ${getStatusClass(
+            className={`p-2 sm:p-3 md:p-4 rounded-lg border ${getStatusClass(
               status
             )} shadow-sm text-left transition outline-none ${
               filterStatus === status ? "ring-2 ring-blue-400" : ""
             }`}
           >
             <div className="flex items-center justify-between">
-              <div>
-                <div className="text-2xl font-bold">{count}</div>
-                <div className="text-sm">{status}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg sm:text-xl md:text-2xl font-bold">{count}</div>
+                <div className="text-xs sm:text-sm truncate">{status}</div>
               </div>
-              <div className="text-2xl">{getStatusIcon(status)}</div>
+              <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">{getStatusIcon(status)}</div>
             </div>
           </button>
         ))}
       </div>
 
-      <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+      <div className="overflow-x-auto bg-white rounded-lg shadow-md -mx-2 sm:mx-0">
         {user?.role === "franchise_admin" && !filterCafeId && ordersByCart ? (
           // Grouped view by cart for franchise admin
           <div className="divide-y divide-gray-200">
@@ -1896,32 +1914,34 @@ const Orders = () => {
 
                     {/* Orders for this cart */}
                     {isExpanded && (
-                      <table className="min-w-full">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Order Details
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Date & Time
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Table
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Status
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs sm:text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                Order Details
+                              </th>
+                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                                Date & Time
+                              </th>
+                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                Table
+                              </th>
+                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                Status
+                              </th>
+                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
                         <tbody className="divide-y divide-gray-200">
                           {filteredCartOrders.map((order) =>
                             renderOrderRow(order)
                           )}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 );
@@ -1934,40 +1954,42 @@ const Orders = () => {
           </div>
         ) : (
           // Regular flat view
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Order Details
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Date & Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Table
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredOrders.length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs sm:text-sm">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td
-                    colSpan="5"
-                    className="px-6 py-4 text-center text-gray-500"
-                  >
-                    No orders found.
-                  </td>
+                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                    Order Details
+                  </th>
+                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                    Date & Time
+                  </th>
+                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                    Table
+                  </th>
+                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                    Status
+                  </th>
+                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                    Actions
+                  </th>
                 </tr>
-              )}
-              {filteredOrders.map((order) => renderOrderRow(order))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredOrders.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan="5"
+                      className="px-3 sm:px-4 md:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm"
+                    >
+                      No orders found.
+                    </td>
+                  </tr>
+                )}
+                {filteredOrders.map((order) => renderOrderRow(order))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

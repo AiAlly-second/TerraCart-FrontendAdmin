@@ -155,10 +155,24 @@ const InventoryManagement = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this inventory item?")) {
-      return;
-    }
+  const handleDelete = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      "Are you sure you want to PERMANENTLY DELETE this inventory item?\n\nThis action cannot be undone.",
+      {
+        title: 'Delete Inventory Item',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.delete(`/inventory/${id}`);
       await loadInventory();
@@ -388,7 +402,8 @@ const InventoryManagement = () => {
                             Stock
                           </button>
                           <button
-                            onClick={() => handleDelete(item._id)}
+                            type="button"
+                            onClick={(e) => handleDelete(e, item._id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete

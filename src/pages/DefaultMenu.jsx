@@ -324,10 +324,27 @@ const DefaultMenu = () => {
     setShowItemModal(true);
   };
 
-  const handleDeleteItem = (categoryIndex, itemIndex) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) {
-      return;
-    }
+  const handleDeleteItem = async (e, categoryIndex, itemIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const item = defaultMenu.categories[categoryIndex]?.items[itemIndex];
+    const itemName = item?.name || 'this item';
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${itemName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Menu Item',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     const newCategories = [...defaultMenu.categories];
     newCategories[categoryIndex].items.splice(itemIndex, 1);
     setDefaultMenu({ ...defaultMenu, categories: newCategories });
@@ -489,9 +506,10 @@ const DefaultMenu = () => {
                       <FaEdit className="text-sm sm:text-base" />
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteCategory(catIndex);
+                        handleDeleteCategory(e, catIndex);
                       }}
                       className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded"
                       title="Delete"
@@ -605,7 +623,8 @@ const DefaultMenu = () => {
                                   Edit
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteItem(catIndex, itemIndex)}
+                                  type="button"
+                                  onClick={(e) => handleDeleteItem(e, catIndex, itemIndex)}
                                   className="p-0.5 sm:p-1 text-red-600 hover:bg-red-50 rounded"
                                   title="Delete"
                                 >

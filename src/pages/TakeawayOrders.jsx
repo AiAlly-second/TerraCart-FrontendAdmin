@@ -829,10 +829,24 @@ const TakeawayOrders = () => {
     }
   };
 
-  const handleDelete = async (orderId) => {
-    if (!window.confirm("Are you sure you want to delete this takeaway order?")) {
-      return;
-    }
+  const handleDelete = async (e, orderId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      "Are you sure you want to PERMANENTLY DELETE this takeaway order?\n\nThis action cannot be undone.",
+      {
+        title: 'Delete Takeaway Order',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((order) => order._id !== orderId));
@@ -1221,7 +1235,8 @@ const TakeawayOrders = () => {
                     ✏️ Edit
                   </button>
                   <button 
-                    onClick={() => handleDelete(order._id)}
+                    type="button"
+                    onClick={(e) => handleDelete(e, order._id)}
                     className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
                   >
                     🗑️ Delete

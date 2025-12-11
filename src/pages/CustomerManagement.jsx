@@ -127,37 +127,37 @@ const CustomerManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
           Customer Management
         </h1>
       </div>
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600">Total Customers</div>
-            <div className="text-3xl font-bold text-blue-600">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+            <div className="text-xs sm:text-sm text-gray-600">Total Customers</div>
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">
               {stats.totalCustomers}
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600">Total Visits</div>
-            <div className="text-3xl font-bold text-green-600">
+          <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+            <div className="text-xs sm:text-sm text-gray-600">Total Visits</div>
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">
               {stats.totalVisits}
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600">Average Rating</div>
-            <div className="text-3xl font-bold text-yellow-600">
+          <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+            <div className="text-xs sm:text-sm text-gray-600">Average Rating</div>
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-yellow-600">
               {stats.averageRating || "0.00"} ⭐
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600">Customers with Ratings</div>
-            <div className="text-3xl font-bold text-purple-600">
+          <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+            <div className="text-xs sm:text-sm text-gray-600">Customers with Ratings</div>
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-600">
               {stats.customersWithRatings}
             </div>
           </div>
@@ -165,10 +165,10 @@ const CustomerManagement = () => {
       )}
 
       {/* Search and Sort */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <form onSubmit={handleSearch} className="flex gap-4 items-end">
+      <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Search Customers
             </label>
             <input
@@ -176,17 +176,17 @@ const CustomerManagement = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, email, or phone..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="w-full sm:w-auto">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Sort By
             </label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="lastVisitAt">Last Visit</option>
               <option value="visitCount">Visit Count</option>
@@ -194,14 +194,14 @@ const CustomerManagement = () => {
               <option value="name">Name</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="w-full sm:w-auto">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Order
             </label>
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="desc">Descending</option>
               <option value="asc">Ascending</option>
@@ -209,7 +209,7 @@ const CustomerManagement = () => {
           </div>
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto"
           >
             Search
           </button>
@@ -218,29 +218,29 @@ const CustomerManagement = () => {
 
       {/* Customers Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Customer
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                   Contact
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Visits
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                   Ratings
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Avg Rating
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">
                   Last Visit
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>

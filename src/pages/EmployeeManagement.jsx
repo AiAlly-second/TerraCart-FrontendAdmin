@@ -464,10 +464,26 @@ const EmployeeManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (employeeId) => {
-    if (!window.confirm('Are you sure you want to delete this employee?')) {
-      return;
-    }
+  const handleDelete = async (e, employeeId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const employee = employees.find(emp => emp._id === employeeId);
+    const employeeName = employee?.name || 'this employee';
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Employee',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
     
     try {
       await api.delete(`/employees/${employeeId}`);
@@ -660,7 +676,8 @@ const EmployeeManagement = () => {
                                   <FaEdit />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(employee._id)}
+                                  type="button"
+                                  onClick={(e) => handleDelete(e, employee._id)}
                                   className="p-2 text-red-600 hover:bg-red-50 rounded"
                                 >
                                   <FaTrash />
@@ -702,7 +719,8 @@ const EmployeeManagement = () => {
                                           <FaEdit />
                                         </button>
                                         <button
-                                          onClick={() => handleDelete(employee._id)}
+                                          type="button"
+                                          onClick={(e) => handleDelete(e, employee._id)}
                                           className="p-2 text-red-600 hover:bg-red-50 rounded"
                                         >
                                           <FaTrash />
@@ -768,7 +786,8 @@ const EmployeeManagement = () => {
                                               <FaEdit />
                                             </button>
                                             <button
-                                              onClick={() => handleDelete(employee._id)}
+                                              type="button"
+                                          onClick={(e) => handleDelete(e, employee._id)}
                                               className="p-2 text-red-600 hover:bg-red-50 rounded"
                                             >
                                               <FaTrash />

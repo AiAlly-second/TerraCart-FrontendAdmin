@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { confirm } from '../utils/confirm';
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -262,7 +263,10 @@ const Users = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (userId) => {
+  const handleDelete = async (e, userId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     // Find the user to check their role
     const userToDelete = users.find(u => u._id === userId);
     
@@ -272,7 +276,19 @@ const Users = () => {
       return;
     }
     
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    const userName = userToDelete?.name || 'this user';
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${userName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete User',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
     
     try {
       await api.delete(`/users/${userId}`);
@@ -494,7 +510,8 @@ const Users = () => {
                         </button>
                         {user.role !== 'super_admin' && (
                           <button
-                            onClick={() => handleDelete(user._id)}
+                            type="button"
+                            onClick={(e) => handleDelete(e, user._id)}
                             className="p-1 sm:p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
                             title="Delete"
                           >

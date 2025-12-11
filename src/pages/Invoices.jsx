@@ -463,32 +463,32 @@ const Invoices = () => {
   };
 
   return (
-    <div className="p-4">
-      <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div className="p-3 sm:p-4">
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Invoices</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Invoices</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Generate printable invoices for Paid orders and keep payment records in sync.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 rounded-lg border border-gray-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
             placeholder="Filter by date"
           />
           <button
             onClick={loadPayments}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-100"
+            className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg border border-gray-300 hover:bg-gray-100 whitespace-nowrap"
             disabled={paymentsLoading}
           >
             {paymentsLoading ? "Refreshing payments…" : "Refresh payments"}
           </button>
           <button
             onClick={handleSyncPayments}
-            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
             disabled={syncingPayments}
           >
             {syncingPayments ? "Syncing…" : "Sync paid orders"}
@@ -496,53 +496,53 @@ const Invoices = () => {
         </div>
       </div>
 
-      {loading && <div className="text-gray-500">Loading paid orders…</div>}
-      {error && <div className="text-red-600">{error}</div>}
+      {loading && <div className="text-sm text-gray-500">Loading paid orders…</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
       {!loading && !error && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-1 space-y-2 sm:space-y-3">
             {paidOrders.length === 0 && (
-              <div className="text-gray-500">No paid orders yet.</div>
+              <div className="text-sm text-gray-500">No paid orders yet.</div>
             )}
             {paidOrders.map(order => (
               <button
                 key={order._id}
                 onClick={() => setSelected(order)}
-                className={`w-full text-left p-4 rounded-lg border shadow-sm hover:shadow transition ${selected?._id === order._id ? 'ring-2 ring-blue-400' : ''}`}
+                className={`w-full text-left p-3 sm:p-4 rounded-lg border shadow-sm hover:shadow transition ${selected?._id === order._id ? 'ring-2 ring-blue-400' : ''}`}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-semibold text-gray-800">Order #{order._id}</div>
-                    <div className="text-sm text-gray-500">Table {order.tableNumber || '—'}</div>
-                    <div className="text-xs text-gray-400 mt-1">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm sm:text-base text-gray-800 truncate">Order #{order._id}</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Table {order.tableNumber || '—'}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-400 mt-1">
                       {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
                     </div>
                   </div>
-                  <div className="text-sm font-mono text-gray-700">
+                  <div className="text-xs sm:text-sm font-mono text-gray-700 flex-shrink-0">
                     {new Date(order.paidAt || order.updatedAt || order.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">Click to preview invoice</div>
+                <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Click to preview invoice</div>
               </button>
             ))}
           </div>
 
           <div className="lg:col-span-2">
             {!selected && (
-              <div className="text-gray-500">Select a paid order to preview the invoice.</div>
+              <div className="text-sm text-gray-500">Select a paid order to preview the invoice.</div>
             )}
             {selected && (
               <div>
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex gap-2">
-                    <h2 className="text-xl font-bold text-gray-800">Invoice Preview</h2>
-                    <p className="text-sm text-gray-500">Invoice #{getInvoiceNumber(selected)}</p>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
+                  <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-800">Invoice Preview</h2>
+                    <p className="text-xs sm:text-sm text-gray-500">Invoice #{getInvoiceNumber(selected)}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={handlePrint}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm"
                     >
                       Print
                     </button>

@@ -132,25 +132,25 @@ const FeedbackManagement = () => {
       {/* Statistics */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm text-gray-600">Total Feedback</div>
-            <div className="text-2xl font-bold">{stats.total}</div>
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+            <div className="text-xs sm:text-sm text-gray-600">Total Feedback</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm text-gray-600">Average Rating</div>
-            <div className="text-2xl font-bold text-yellow-600">
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+            <div className="text-xs sm:text-sm text-gray-600">Average Rating</div>
+            <div className="text-xl sm:text-2xl font-bold text-yellow-600">
               {stats.averageRating}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm text-gray-600">Food Quality</div>
-            <div className="text-2xl font-bold">
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+            <div className="text-xs sm:text-sm text-gray-600">Food Quality</div>
+            <div className="text-xl sm:text-2xl font-bold">
               {stats.averageFoodQuality || "N/A"}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm text-gray-600">Service Speed</div>
-            <div className="text-2xl font-bold">
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+            <div className="text-xs sm:text-sm text-gray-600">Service Speed</div>
+            <div className="text-xl sm:text-2xl font-bold">
               {stats.averageServiceSpeed || "N/A"}
             </div>
           </div>
@@ -196,10 +196,10 @@ const FeedbackManagement = () => {
       )}
 
       {/* Filter */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilter("all")}
-          className={`px-4 py-2 rounded ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm ${
             filter === "all" ? "bg-blue-600 text-white" : "bg-gray-200"
           }`}
         >
@@ -207,7 +207,7 @@ const FeedbackManagement = () => {
         </button>
         <button
           onClick={() => setFilter("high")}
-          className={`px-4 py-2 rounded ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm ${
             filter === "high" ? "bg-green-600 text-white" : "bg-gray-200"
           }`}
         >
@@ -215,7 +215,7 @@ const FeedbackManagement = () => {
         </button>
         <button
           onClick={() => setFilter("low")}
-          className={`px-4 py-2 rounded ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm ${
             filter === "low" ? "bg-red-600 text-white" : "bg-gray-200"
           }`}
         >
@@ -225,26 +225,26 @@ const FeedbackManagement = () => {
 
       {/* Feedback List */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                   Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                   Order ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                   Table
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">
                   Customer
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                   Overall Rating
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden xl:table-cell">
                   Food Quality
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">

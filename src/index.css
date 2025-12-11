@@ -70,3 +70,37 @@
   @apply bg-[#f5e3d5] cursor-not-allowed opacity-60;
 }
 
+/* Custom Scrollbar Styles */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(107, 68, 35, 0.5);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(107, 68, 35, 0.8);
+}
+
+.scrollbar-thumb-\[#6b4423\]::-webkit-scrollbar-thumb {
+  background-color: #6b4423;
+}
+
+.scrollbar-track-\[#3d2418\]::-webkit-scrollbar-track {
+  background-color: #3d2418;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
