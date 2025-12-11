@@ -821,7 +821,7 @@ const RevenueHistory = () => {
 
       {/* ==================== DETAIL MODAL ==================== */}
       {selectedPeriod && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl border border-[#e2c1ac] w-full max-w-5xl max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-4 md:p-6 text-white">

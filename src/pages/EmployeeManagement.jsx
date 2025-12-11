@@ -205,8 +205,22 @@ const EmployeeManagement = () => {
       setSelectedCafe(user?._id || '');
     }
     
-    // Fetch full employee details to get email (now stored in Employee model)
-    let fullEmployeeData = employee;
+    // Start with employee data (may already have email from hierarchy)
+    let fullEmployeeData = { ...employee };
+    
+    // Check if email is already available from the employee object (from hierarchy)
+    // Hierarchy endpoint should populate email from User model
+    if (employee.email && employee.email !== 'employee@example.com' && employee.email.trim() !== '') {
+      console.log('[EmployeeManagement] Email from hierarchy employee object:', employee.email);
+      // Use this email as initial value
+      fullEmployeeData.email = employee.email;
+    } else if (employee.userId) {
+      // Check if userId is populated in the employee object from hierarchy
+      if (typeof employee.userId === 'object' && employee.userId.email) {
+        fullEmployeeData.email = employee.userId.email;
+        console.log('[EmployeeManagement] Email from userId in hierarchy:', employee.userId.email);
+      }
+    }
     
     try {
       // Fetch full employee details from backend (includes email if stored)
@@ -225,14 +239,116 @@ const EmployeeManagement = () => {
         fullEmployeeData = employee;
       }
       
+      // ALWAYS check userId for email - User model is the source of truth for login emails
+      if (fullEmployeeData.userId) {
+        let userEmail = null;
+        
+        // Check if userId is populated (object) with email
+        if (typeof fullEmployeeData.userId === 'object' && fullEmployeeData.userId.email) {
+          userEmail = fullEmployeeData.userId.email;
+          console.log('[EmployeeManagement] Email from populated userId object:', userEmail);
+        } else {
+          // userId is just an ID string, fetch User to get email
+          const userId = typeof fullEmployeeData.userId === 'object' 
+            ? (fullEmployeeData.userId._id || fullEmployeeData.userId.id)
+            : fullEmployeeData.userId;
+          
+          if (userId) {
+            try {
+              console.log('[EmployeeManagement] Fetching User email for userId:', userId);
+              const userResponse = await api.get(`/users/${userId}`);
+              
+              // Handle different response structures
+              let fetchedEmail = null;
+              if (userResponse?.data?.email) {
+                fetchedEmail = userResponse.data.email;
+              } else if (userResponse?.data?.user?.email) {
+                fetchedEmail = userResponse.data.user.email;
+              } else if (userResponse?.data?.data?.email) {
+                fetchedEmail = userResponse.data.data.email;
+              }
+              
+              if (fetchedEmail) {
+                userEmail = fetchedEmail;
+                console.log('[EmployeeManagement] ✅ Email fetched from User API:', userEmail);
+              } else {
+                console.warn('[EmployeeManagement] ⚠️ User found but no email in response:', {
+                  responseData: userResponse?.data,
+                  userId: userId
+                });
+              }
+            } catch (userErr) {
+              console.error('[EmployeeManagement] ❌ Error fetching user email:', userErr);
+              console.error('[EmployeeManagement] UserId was:', userId);
+              console.error('[EmployeeManagement] Error details:', userErr.response?.data || userErr.message);
+            }
+          }
+        }
+        
+        // Use User email if found, otherwise keep employee email (if valid)
+        if (userEmail) {
+          fullEmployeeData.email = userEmail;
+        } else if (!fullEmployeeData.email || fullEmployeeData.email === 'employee@example.com') {
+          // If no valid email found, log warning
+          console.warn('[EmployeeManagement] No email found in User model for userId:', fullEmployeeData.userId);
+        }
+      }
+      
       console.log('[EmployeeManagement] Fetched employee data:', {
         rawResponse: employeeResponse?.data,
         extractedData: fullEmployeeData,
         name: fullEmployeeData?.name,
         email: fullEmployeeData?.email,
         mobile: fullEmployeeData?.mobile,
-        dateOfBirth: fullEmployeeData?.dateOfBirth
+        dateOfBirth: fullEmployeeData?.dateOfBirth,
+        userId: fullEmployeeData?.userId,
+        userIdType: typeof fullEmployeeData?.userId,
+        hasUserIdEmail: fullEmployeeData?.userId?.email
       });
+      
+      // CRITICAL: If employee has userId but no email yet, fetch from User model
+      // This ensures we always get the actual login email
+      if (fullEmployeeData.userId && (!fullEmployeeData.email || fullEmployeeData.email === 'employee@example.com')) {
+        const userIdToFetch = typeof fullEmployeeData.userId === 'object' 
+          ? (fullEmployeeData.userId._id || fullEmployeeData.userId.id || fullEmployeeData.userId)
+          : fullEmployeeData.userId;
+        
+        if (userIdToFetch) {
+          try {
+            console.log('[EmployeeManagement] Fetching User email directly for userId:', userIdToFetch);
+            const directUserResponse = await api.get(`/users/${userIdToFetch}`);
+            const userEmail = directUserResponse?.data?.email || directUserResponse?.data?.user?.email;
+            if (userEmail) {
+              fullEmployeeData.email = userEmail;
+              console.log('[EmployeeManagement] ✅ Email successfully fetched from User model:', userEmail);
+            } else {
+              console.warn('[EmployeeManagement] ⚠️ User found but no email in response:', directUserResponse?.data);
+            }
+          } catch (directUserErr) {
+            console.error('[EmployeeManagement] ❌ Failed to fetch User email:', directUserErr);
+            console.error('[EmployeeManagement] UserId attempted:', userIdToFetch);
+          }
+        }
+      }
+      
+      // FALLBACK: If still no email and employee has email in Employee model, try to find User by email
+      // This handles cases where userId link might be missing
+      if ((!fullEmployeeData.email || fullEmployeeData.email === 'employee@example.com') && employee.email && employee.email !== 'employee@example.com') {
+        try {
+          console.log('[EmployeeManagement] Trying to find User by email:', employee.email);
+          const usersResponse = await api.get('/users');
+          const allUsers = usersResponse.data || [];
+          const foundUser = allUsers.find(u => u.email && u.email.toLowerCase().trim() === employee.email.toLowerCase().trim());
+          
+          if (foundUser) {
+            fullEmployeeData.email = foundUser.email;
+            fullEmployeeData.userId = foundUser._id;
+            console.log('[EmployeeManagement] ✅ Found User by email and linked userId:', foundUser.email, foundUser._id);
+          }
+        } catch (emailLookupErr) {
+          console.warn('[EmployeeManagement] Could not lookup User by email:', emailLookupErr);
+        }
+      }
     } catch (error) {
       console.error('Error fetching full employee details:', error);
       console.warn('Using provided employee data:', employee);
@@ -265,11 +381,54 @@ const EmployeeManagement = () => {
       ? (user?._id || '') 
       : (fullEmployeeData.cafeId?._id || fullEmployeeData.cafeId || '');
     
+    // Get email - prefer User model email (via userId) over Employee model email
+    // User model is the source of truth for login accounts
+    let employeeEmail = '';
+    
+    // First, try to get email from User model (via userId) - this is the actual login email
+    if (fullEmployeeData.userId) {
+      if (typeof fullEmployeeData.userId === 'object' && fullEmployeeData.userId.email) {
+        employeeEmail = fullEmployeeData.userId.email;
+        console.log('[EmployeeManagement] Using email from populated userId:', employeeEmail);
+      } else {
+        // userId is an ID, email should already be in fullEmployeeData.email from the fetch above
+        // But if not, we'll use what we have
+        if (fullEmployeeData.email && fullEmployeeData.email !== 'employee@example.com') {
+          employeeEmail = fullEmployeeData.email;
+          console.log('[EmployeeManagement] Using email from fullEmployeeData (fetched from User):', employeeEmail);
+        }
+      }
+    }
+    
+    // Fallback: use employee.email if it's valid (not placeholder)
+    if (!employeeEmail && fullEmployeeData.email && fullEmployeeData.email !== 'employee@example.com') {
+      employeeEmail = fullEmployeeData.email;
+      console.log('[EmployeeManagement] Using email from Employee model:', employeeEmail);
+    }
+    
+    console.log('[EmployeeManagement] Final email extracted:', {
+      employeeEmail,
+      fromEmployee: fullEmployeeData.email,
+      fromUserId: fullEmployeeData.userId?.email,
+      userId: fullEmployeeData.userId,
+      userIdType: typeof fullEmployeeData.userId
+    });
+    
+    // Final check - if still no email, log warning
+    if (!employeeEmail || employeeEmail === 'employee@example.com') {
+      console.warn('[EmployeeManagement] ⚠️ Email not found for employee:', {
+        employeeId: fullEmployeeData._id,
+        employeeName: fullEmployeeData.name,
+        hasUserId: !!fullEmployeeData.userId,
+        userIdValue: fullEmployeeData.userId
+      });
+    }
+    
     setFormData({
       name: fullEmployeeData.name || '',
       dateOfBirth: dob,
       mobile: fullEmployeeData.mobile || '',
-      email: fullEmployeeData.email || '', // Email is now stored in Employee model
+      email: employeeEmail, // Email from Employee model or User model (via userId)
       password: '', // Don't populate password when editing
       role: fullEmployeeData.employeeRole || fullEmployeeData.role || 'waiter', // Use role, fallback to employeeRole for backward compatibility
       employeeRole: fullEmployeeData.employeeRole || fullEmployeeData.role || 'waiter',
@@ -284,19 +443,47 @@ const EmployeeManagement = () => {
     
     console.log('[EmployeeManagement] Form data set:', {
       name: fullEmployeeData.name,
-      email: fullEmployeeData.email,
+      email: employeeEmail,
+      emailFromEmployee: fullEmployeeData.email,
+      emailFromUserId: fullEmployeeData.userId?.email,
       mobile: fullEmployeeData.mobile,
       dateOfBirth: dob,
-      role: fullEmployeeData.employeeRole || fullEmployeeData.role
+      role: fullEmployeeData.employeeRole || fullEmployeeData.role,
+      userId: fullEmployeeData.userId
     });
+    
+    // Verify email is set correctly
+    if (!employeeEmail || employeeEmail === 'employee@example.com') {
+      console.warn('[EmployeeManagement] ⚠️ Email not properly extracted!', {
+        employeeEmail,
+        fullEmployeeDataEmail: fullEmployeeData.email,
+        userId: fullEmployeeData.userId
+      });
+    }
     
     setShowModal(true);
   };
 
-  const handleDelete = async (employeeId) => {
-    if (!window.confirm('Are you sure you want to delete this employee?')) {
-      return;
-    }
+  const handleDelete = async (e, employeeId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const employee = employees.find(emp => emp._id === employeeId);
+    const employeeName = employee?.name || 'this employee';
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Employee',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
     
     try {
       await api.delete(`/employees/${employeeId}`);
@@ -489,7 +676,8 @@ const EmployeeManagement = () => {
                                   <FaEdit />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(employee._id)}
+                                  type="button"
+                                  onClick={(e) => handleDelete(e, employee._id)}
                                   className="p-2 text-red-600 hover:bg-red-50 rounded"
                                 >
                                   <FaTrash />
@@ -531,7 +719,8 @@ const EmployeeManagement = () => {
                                           <FaEdit />
                                         </button>
                                         <button
-                                          onClick={() => handleDelete(employee._id)}
+                                          type="button"
+                                          onClick={(e) => handleDelete(e, employee._id)}
                                           className="p-2 text-red-600 hover:bg-red-50 rounded"
                                         >
                                           <FaTrash />
@@ -597,7 +786,8 @@ const EmployeeManagement = () => {
                                               <FaEdit />
                                             </button>
                                             <button
-                                              onClick={() => handleDelete(employee._id)}
+                                              type="button"
+                                          onClick={(e) => handleDelete(e, employee._id)}
                                               className="p-2 text-red-600 hover:bg-red-50 rounded"
                                             >
                                               <FaTrash />
@@ -664,7 +854,7 @@ const EmployeeManagement = () => {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">
               {editingEmployee ? 'Edit Employee' : 'Create Employee'}
@@ -727,14 +917,23 @@ const EmployeeManagement = () => {
                     required={!editingEmployee}
                     value={formData.email || ''}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="employee@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder={editingEmployee ? "No email (employee has no login account)" : "employee@example.com"}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                      formData.email ? 'border-gray-300' : 'border-gray-300'
+                    }`}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {editingEmployee 
-                      ? 'Update email if employee has a login account' 
+                      ? (formData.email 
+                          ? `Current login email: ${formData.email}` 
+                          : 'Employee has no login account. Add email to create login access.')
                       : 'Required for login access'}
                   </p>
+                  {editingEmployee && formData.email && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ Email found - employee can login with this email
+                    </p>
+                  )}
                 </div>
                 {!editingEmployee && (
                   <div>

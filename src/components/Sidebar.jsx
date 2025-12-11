@@ -139,40 +139,40 @@ const Sidebar = ({ isOpen, onClose }) => {
       {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar */}
       <div
-        className={`w-64 fixed top-0 left-0 h-screen bg-[#4a2e1f] text-white flex flex-col shadow-lg z-50 transform transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0`}
+        className={`w-64 lg:w-64 xl:w-72 fixed top-0 left-0 h-screen bg-[#4a2e1f] text-white flex flex-col shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
       >
         {/* Logo Section */}
         <div
           className={`flex items-center justify-between ${
-            franchiseName ? "flex-col h-24 p-3" : "h-20"
-          } border-b border-[#6b4423] bg-[#3d2418] px-4`}
+            franchiseName ? "flex-col h-20 sm:h-24 p-2 sm:p-3" : "h-16 sm:h-20"
+          } border-b border-[#6b4423] bg-[#3d2418] px-3 sm:px-4 flex-shrink-0`}
         >
-          <div className="flex items-center flex-1">
+          <div className="flex items-center flex-1 min-w-0">
             <img
               src={Logo}
               alt="Logo"
               className={`${
-                franchiseName ? "h-12 w-auto object-contain mb-2" : "h-12"
-              } bg-white rounded-full p-1`}
+                franchiseName ? "h-8 sm:h-10 md:h-12 w-auto object-contain mb-1 sm:mb-2" : "h-8 sm:h-10 md:h-12"
+              } bg-white rounded-full p-0.5 sm:p-1 flex-shrink-0`}
             />
             {franchiseName ? (
               <>
-                <h1 className="text-sm font-bold text-[#f5e3d5] text-center ml-2">
+                <h1 className="text-[10px] sm:text-xs md:text-sm font-bold text-[#f5e3d5] text-center ml-1.5 sm:ml-2 truncate">
                   {franchiseName}
                 </h1>
               </>
             ) : (
               <>
-                <h1 className="text-lg font-bold ml-2 text-[#f5e3d5]">
+                <h1 className="text-sm sm:text-base md:text-lg font-bold ml-1.5 sm:ml-2 text-[#f5e3d5] truncate">
                   {portalTitle}
                 </h1>
               </>
@@ -181,11 +181,11 @@ const Sidebar = ({ isOpen, onClose }) => {
           {/* Close button for mobile */}
           <button
             onClick={onClose}
-            className="lg:hidden text-white hover:text-[#d86d2a] transition-colors p-2"
+            className="lg:hidden text-white hover:text-[#d86d2a] transition-all duration-200 p-1.5 sm:p-2 flex-shrink-0 hover:bg-[#6b4423]/50 rounded"
             aria-label="Close menu"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -201,7 +201,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Nav Links */}
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-2 sm:px-3 md:px-4 py-3 sm:py-4 md:py-6 space-y-1 sm:space-y-1.5 md:space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-[#6b4423] scrollbar-track-[#3d2418]">
           {menuItems.map((item) => {
             // Regular menu items
             return (
@@ -212,14 +212,20 @@ const Sidebar = ({ isOpen, onClose }) => {
                 style={({ isActive }) =>
                   isActive ? activeLinkStyle : undefined
                 }
-                className="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-[#6b4423] transition-colors text-[#f5e3d5]"
+                className="flex items-center justify-between px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 rounded-lg hover:bg-[#6b4423] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base group"
+                onClick={() => {
+                  // Close sidebar on mobile when clicking a link
+                  if (window.innerWidth < 1024) {
+                    onClose();
+                  }
+                }}
               >
-                <div className="flex items-center">
-                  <span>{item.icon}</span>
-                  <span className="ml-3">{item.label}</span>
+                <div className="flex items-center min-w-0 flex-1">
+                  <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
+                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">{item.label}</span>
                 </div>
                 {item.showStats && !menuLoading && menuStats.categories > 0 && (
-                  <span className="ml-2 text-xs bg-[#d86d2a] text-white px-2 py-0.5 rounded-full">
+                  <span className="ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs bg-[#d86d2a] text-white px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 rounded-full flex-shrink-0 whitespace-nowrap font-semibold shadow-sm">
                     {menuStats.categories} cat
                     {menuStats.categories !== 1 ? "s" : ""} • {menuStats.items}{" "}
                     items
@@ -231,13 +237,13 @@ const Sidebar = ({ isOpen, onClose }) => {
         </nav>
 
         {/* Logout Button */}
-        <div className="px-4 py-4 border-t border-[#6b4423]">
+        <div className="px-2.5 sm:px-3 md:px-4 py-2.5 sm:py-3 md:py-4 border-t border-[#6b4423] flex-shrink-0 bg-[#3d2418]">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-left hover:bg-[#d86d2a] transition-colors text-[#f5e3d5]"
+            className="w-full flex items-center px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-left hover:bg-[#d86d2a] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base font-medium group"
           >
-            <span>🚪</span>
-            <span className="ml-3">Logout</span>
+            <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">🚪</span>
+            <span className="ml-1.5 sm:ml-2 md:ml-3">Logout</span>
           </button>
         </div>
       </div>

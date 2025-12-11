@@ -321,20 +321,20 @@ const Dashboard = () => {
         {statsArray.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <div key={index} className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-6 hover:shadow-lg transition-shadow">
+            <div key={index} className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 sm:p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-[#6b4423]">{stat.title}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm text-[#6b4423]">{stat.title}</p>
                   {stat.loading ? (
                     <div className="mt-2">
                       <FaSpinner className="animate-spin text-[#d86d2a]" />
                     </div>
                   ) : (
-                    <p className="text-2xl font-bold text-[#4a2e1f] mt-2">{stat.value}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-[#4a2e1f] mt-2 truncate">{stat.value}</p>
                   )}
                 </div>
-                <div className="bg-[#d86d2a] p-3 rounded-lg">
-                  <Icon className="w-6 h-6 text-white" />
+                <div className="bg-[#d86d2a] p-2 sm:p-3 rounded-lg flex-shrink-0 ml-2">
+                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>

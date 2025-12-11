@@ -431,6 +431,7 @@ const TakeawayOrders = () => {
   const [searchOrderId, setSearchOrderId] = useState("");
   const [searchTable, setSearchTable] = useState("");
   const [searchInvoice, setSearchInvoice] = useState("");
+  const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [expanded, setExpanded] = useState({});
   const [filterStatus, setFilterStatus] = useState("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -828,10 +829,24 @@ const TakeawayOrders = () => {
     }
   };
 
-  const handleDelete = async (orderId) => {
-    if (!window.confirm("Are you sure you want to delete this takeaway order?")) {
-      return;
-    }
+  const handleDelete = async (e, orderId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      "Are you sure you want to PERMANENTLY DELETE this takeaway order?\n\nThis action cannot be undone.",
+      {
+        title: 'Delete Takeaway Order',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((order) => order._id !== orderId));
@@ -916,12 +931,24 @@ const TakeawayOrders = () => {
           String(order.tableNumber).toLowerCase().includes(normalizedTable));
       const invoiceId = buildInvoiceId(order).toLowerCase();
       const invoiceMatch = !normalizedInvoice || invoiceId.includes(normalizedInvoice);
-      return orderIdMatch && tableMatch && invoiceMatch;
+      
+      // Date filter: compare order date with filter date
+      let dateMatch = true;
+      if (filterDate) {
+        const orderDate = new Date(order.createdAt);
+        const filterDateObj = new Date(filterDate);
+        // Compare dates (ignore time)
+        const orderDateStr = orderDate.toISOString().split('T')[0];
+        const filterDateStr = filterDateObj.toISOString().split('T')[0];
+        dateMatch = orderDateStr === filterDateStr;
+      }
+      
+      return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
     });
 
     if (filterStatus === "all") return matches;
     return matches.filter((order) => order.status === filterStatus);
-  }, [orders, searchOrderId, searchTable, searchInvoice, filterStatus]);
+  }, [orders, searchOrderId, searchTable, searchInvoice, filterStatus, filterDate]);
 
   const tryAccept = (order) => {
     if (canAccept(order.status)) {
@@ -957,11 +984,19 @@ const TakeawayOrders = () => {
             onChange={(e) => setSearchInvoice(e.target.value)}
             className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-52"
           />
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-40"
+            title="Filter by order date"
+          />
           <button
             onClick={() => {
               setSearchOrderId("");
               setSearchTable("");
               setSearchInvoice("");
+              setFilterDate("");
             }}
             className="border border-gray-200 text-gray-600 hover:bg-gray-100 py-2 px-3 rounded-lg text-sm"
           >
@@ -1038,6 +1073,9 @@ const TakeawayOrders = () => {
             Order Details
           </th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            Date & Time
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
             Table
           </th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -1051,12 +1089,24 @@ const TakeawayOrders = () => {
       <tbody className="divide-y divide-gray-200">
         {filteredOrders.length === 0 && (
           <tr>
-            <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+            <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
               No takeaway orders match the current filters.
             </td>
           </tr>
         )}
-        {filteredOrders.map((order) => (
+        {filteredOrders.map((order) => {
+          const orderDate = new Date(order.createdAt);
+          const formattedDate = orderDate.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          });
+          const formattedTime = orderDate.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          
+          return (
           <React.Fragment key={order._id}>
             <tr
               className={`hover:bg-gray-50 ${
@@ -1072,7 +1122,7 @@ const TakeawayOrders = () => {
                     {buildInvoiceId(order)}
                   </span>
                   <span className="text-gray-900 font-medium">
-                    {new Date(order.createdAt).toLocaleTimeString()}
+                    {formattedTime}
                   </span>
                 </button>
                 {expanded[order._id] && (
@@ -1085,6 +1135,12 @@ const TakeawayOrders = () => {
                     <div>Service Type: Takeaway</div>
                   </div>
                 )}
+              </td>
+              <td className="px-6 py-4 text-sm text-gray-600">
+                <div className="flex flex-col">
+                  <span className="font-medium text-gray-900">{formattedDate}</span>
+                  <span className="text-xs text-gray-500">{formattedTime}</span>
+                </div>
               </td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2">
@@ -1179,7 +1235,8 @@ const TakeawayOrders = () => {
                     ✏️ Edit
                   </button>
                   <button 
-                    onClick={() => handleDelete(order._id)}
+                    type="button"
+                    onClick={(e) => handleDelete(e, order._id)}
                     className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
                   >
                     🗑️ Delete
@@ -1197,7 +1254,7 @@ const TakeawayOrders = () => {
 
             {expanded[order._id] && (
               <tr className="bg-gray-50">
-                <td colSpan="4" className="px-6 py-4">
+                <td colSpan="5" className="px-6 py-4">
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {(order.kotLines || []).map((kot, idx) => (
@@ -1242,13 +1299,14 @@ const TakeawayOrders = () => {
               </tr>
             )}
           </React.Fragment>
-        ))}
+          );
+        })}
       </tbody>
     </table>
   </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl m-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-800">

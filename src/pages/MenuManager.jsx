@@ -180,14 +180,24 @@ const MenuManager = () => {
     setEditingCategoryId(category._id);
   };
 
-  const handleDeleteCategory = async (category) => {
-    if (
-      !window.confirm(
-        `Delete category "${category.name}"? This requires the category to be empty.`
-      )
-    ) {
-      return;
-    }
+  const handleDeleteCategory = async (e, category) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE category "${category.name}"?\n\nThis requires the category to be empty. This action cannot be undone.`,
+      {
+        title: 'Delete Category',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.delete(`/menu/categories/${category._id}`);
       if (selectedCategoryId === category._id) {
@@ -279,8 +289,24 @@ const MenuManager = () => {
     setEditingItemId(null);
   };
 
-  const handleDeleteItem = async (item) => {
-    if (!window.confirm(`Remove "${item.name}" from the menu?`)) return;
+  const handleDeleteItem = async (e, item) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${item.name}" from the menu?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Menu Item',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.delete(`/menu/items/${item._id}`);
       await loadMenu();
@@ -416,7 +442,7 @@ const MenuManager = () => {
                       type="button"
                       onClick={(ev) => {
                         ev.stopPropagation();
-                        handleDeleteCategory(category);
+                        handleDeleteCategory(e, category);
                       }}
                       className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-100"
                     >
@@ -682,7 +708,8 @@ const MenuManager = () => {
                             <FaEdit size={11} />
                           </button>
                           <button
-                            onClick={() => handleDeleteItem(item)}
+                            type="button"
+                            onClick={(e) => handleDeleteItem(e, item)}
                             className="p-1 text-red-600 hover:bg-red-50 rounded"
                           >
                             <FaTrash size={11} />
