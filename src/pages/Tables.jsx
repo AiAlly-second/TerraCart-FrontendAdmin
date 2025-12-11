@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import api from '../utils/api';
+import io from 'socket.io-client';
 
 const STATUS_MAP = {
   AVAILABLE: {
@@ -14,6 +15,14 @@ const STATUS_MAP = {
   CLEANING: {
     label: 'Cleaning',
     classes: 'bg-slate-100 text-slate-600 border-slate-300'
+  },
+  MERGED: {
+    label: 'Merged',
+    classes: 'bg-purple-100 text-purple-700 border-purple-300'
+  },
+  RESERVED: {
+    label: 'Reserved',
+    classes: 'bg-yellow-100 text-yellow-700 border-yellow-300'
   }
 };
 
@@ -21,6 +30,7 @@ const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 const STATUS_SELECTABLE = ["AVAILABLE", "OCCUPIED"];
 
 const customerBaseUrl = (import.meta.env.VITE_CUSTOMER_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
+const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 
 const TableCard = ({
   table,
@@ -31,7 +41,11 @@ const TableCard = ({
   onViewWaitlist,
   busy,
 }) => {
-  const statusMeta = STATUS_MAP[table.status] || STATUS_MAP.AVAILABLE;
+  // Determine if table is merged (secondary table merged into another)
+  const isMerged = table.status === "MERGED" || table.mergedWith;
+  // Use MERGED status for display if table is merged, otherwise use actual status
+  const displayStatus = isMerged ? "MERGED" : table.status;
+  const statusMeta = STATUS_MAP[displayStatus] || STATUS_MAP.AVAILABLE;
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
 
   return (
@@ -40,7 +54,22 @@ const TableCard = ({
       <div>
           <h3 className="text-xl font-semibold text-slate-800">Table {table.number}</h3>
           {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
-          <p className="text-sm text-slate-500 mt-1">Capacity: {table.capacity}</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Capacity: {table.capacity}
+            {table.totalCapacity && table.totalCapacity > table.capacity && (
+              <span className="text-purple-600 ml-1">(Total: {table.totalCapacity} with merged tables)</span>
+            )}
+          </p>
+          {table.mergedTables && table.mergedTables.length > 0 && (
+            <p className="text-xs text-purple-600 mt-1 font-semibold">
+              🔗 Merged with: Tables {table.mergedTables.map(t => typeof t === 'object' ? t.number : t).join(', ')}
+            </p>
+          )}
+          {table.mergedWith && (
+            <p className="text-xs text-purple-600 mt-1 font-semibold">
+              🔗 Merged into another table
+            </p>
+          )}
           {table.currentOrder && (
             <p className="text-xs text-orange-600 mt-1">Active order: {table.currentOrder}</p>
           )}
@@ -63,14 +92,14 @@ const TableCard = ({
       <div className="bg-slate-50 rounded-lg px-4 py-3">
         <label className="text-xs uppercase tracking-wide text-slate-500 block mb-2">Status</label>
         <select
-          value={table.status}
+          value={displayStatus}
           onChange={(e) => onUpdateStatus(table._id, e.target.value)}
-          disabled={busy}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={busy || table.mergedTables?.length > 0 || table.mergedWith}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
         >
           {STATUS_OPTIONS.map((status) => {
             const isSelectable = STATUS_SELECTABLE.includes(status);
-            if (!isSelectable && status !== table.status) {
+            if (!isSelectable && status !== displayStatus) {
               return null;
             }
             return (
@@ -79,12 +108,19 @@ const TableCard = ({
                 value={status}
                 disabled={!isSelectable}
               >
-                {STATUS_MAP[status].label}
+                {STATUS_MAP[status]?.label || status}
                 {!isSelectable ? " (auto)" : ""}
               </option>
             );
           })}
         </select>
+        {(table.mergedTables?.length > 0 || table.mergedWith) && (
+          <p className="text-xs text-purple-600 mt-1">
+            {table.mergedTables?.length > 0 
+              ? "⚠️ This table has merged tables - status cannot be changed"
+              : "⚠️ This table is merged - status cannot be changed"}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg py-4">
@@ -111,7 +147,12 @@ const TableCard = ({
       <div className="flex justify-between items-center">
         <span className="text-xs text-slate-400">Last updated {new Date(table.updatedAt).toLocaleString()}</span>
         <button
-          onClick={() => onDelete(table)}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete(e, table);
+          }}
           className="text-xs text-red-600 hover:text-red-700"
           disabled={busy || Boolean(table.currentOrder)}
         >
@@ -146,6 +187,7 @@ const Tables = () => {
     busy: false,
     message: null,
   });
+  const socketRef = useRef(null);
 
   const sortedTables = useMemo(
     () => {
@@ -181,6 +223,46 @@ const Tables = () => {
 
   useEffect(() => {
     fetchTables();
+  }, []);
+
+  // --- Socket setup for live table status updates ---
+  useEffect(() => {
+    const socket = io(nodeApi);
+    socketRef.current = socket;
+
+    const handleTableStatusUpdated = (payload) => {
+      if (!payload?.id || !payload?.status) return;
+      setTables((prev) =>
+        prev.map((t) =>
+          (t._id === payload.id || t.id === payload.id)
+            ? { ...t, status: payload.status, currentOrder: payload.currentOrder || null, sessionToken: payload.sessionToken || t.sessionToken }
+            : t
+        )
+      );
+    };
+
+    const token =
+      localStorage.getItem('adminToken') ||
+      localStorage.getItem('franchiseAdminToken') ||
+      localStorage.getItem('superAdminToken');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userId = payload.id;
+        if (userId) {
+          socket.emit('join:cafe', userId);
+        }
+      } catch (e) {
+        console.warn('[Tables] Could not decode token for socket room:', e);
+      }
+    }
+
+    socket.on('table:status:updated', handleTableStatusUpdated);
+
+    return () => {
+      socket.off('table:status:updated', handleTableStatusUpdated);
+      socket.disconnect();
+    };
   }, []);
 
   const handleSubmit = async (e) => {
@@ -220,12 +302,29 @@ const Tables = () => {
     }
   };
 
-  const handleDelete = async (table) => {
+  const handleDelete = async (e, table) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (table.currentOrder) {
       alert('Cannot delete table with an active order.');
-        return;
+      return;
     }
-    if (!window.confirm(`Delete table ${table.number}?`)) return;
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE table "${table.number}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Table',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     setBusyId(table._id);
     try {
       await api.delete(`/tables/${table._id}`);
@@ -263,8 +362,27 @@ const Tables = () => {
   };
 
   const visibleTables = useMemo(() => {
-    if (statusFilter === "ALL") return sortedTables;
-    return sortedTables.filter((table) => table.status === statusFilter);
+    let filtered = sortedTables;
+    
+    // Filter by status if not "ALL"
+    if (statusFilter !== "ALL") {
+      filtered = filtered.filter((table) => {
+        // For merged tables, check both the actual status and if they have mergedWith
+        const isMerged = table.status === "MERGED" || table.mergedWith;
+        if (statusFilter === "MERGED" && isMerged) {
+          return true; // Show merged tables when filtering by MERGED
+        }
+        if (statusFilter !== "MERGED" && isMerged) {
+          return false; // Hide merged tables when filtering by other statuses
+        }
+        return table.status === statusFilter;
+      });
+    }
+    
+    // Show all tables including merged ones - don't filter them out
+    // They will be displayed with MERGED status
+    
+    return filtered;
   }, [sortedTables, statusFilter]);
 
   const updateTableWaitlistCount = (tableId, count) => {
@@ -523,7 +641,7 @@ const Tables = () => {
       </div>
       )}
       {waitlistModal.open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>

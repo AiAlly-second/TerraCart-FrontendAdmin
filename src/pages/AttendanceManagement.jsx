@@ -175,18 +175,18 @@ const AttendanceManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Franchise Attendance Management</h1>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Attendance Management</h1>
       </div>
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
+        <div className="border-b border-gray-200 overflow-x-auto">
+          <nav className="flex -mb-px min-w-max sm:min-w-0">
             <button
               onClick={() => setActiveTab('today')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
                 activeTab === 'today'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -196,7 +196,7 @@ const AttendanceManagement = () => {
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
                 activeTab === 'history'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -206,7 +206,7 @@ const AttendanceManagement = () => {
             </button>
             <button
               onClick={() => setActiveTab('stats')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
                 activeTab === 'stats'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -217,29 +217,29 @@ const AttendanceManagement = () => {
           </nav>
         </div>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-4 md:p-6">
           {/* Today's Attendance Tab */}
           {activeTab === 'today' && (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex justify-end">
                 <button
                   onClick={fetchTodayAttendance}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base"
                 >
                   Refresh
                 </button>
               </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Working Hours</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Employee</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Role</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Check-In</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Check-Out</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">Working Hours</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -250,46 +250,51 @@ const AttendanceManagement = () => {
 
                       return (
                         <tr key={employee._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">{employee.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap capitalize">{employee.employeeRole}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-2 sm:py-4">
+                            <div className="font-medium text-xs sm:text-sm">{employee.name}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 sm:hidden capitalize">{employee.employeeRole}</div>
+                          </td>
+                          <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap capitalize text-xs sm:text-sm hidden sm:table-cell">{employee.employeeRole}</td>
+                          <td className="px-3 sm:px-6 py-2 sm:py-4">
                             {hasCheckedIn ? (
-                              <span className="text-green-600 font-medium">{formatTime(todayRecord.checkIn.time)}</span>
+                              <span className="text-green-600 font-medium text-xs sm:text-sm">{formatTime(todayRecord.checkIn.time)}</span>
                             ) : (
-                              <span className="text-gray-400">Not checked in</span>
+                              <span className="text-gray-400 text-xs sm:text-sm">Not checked in</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
                             {hasCheckedOut ? (
-                              <span className="text-blue-600 font-medium">{formatTime(todayRecord.checkOut.time)}</span>
+                              <span className="text-blue-600 font-medium text-xs sm:text-sm">{formatTime(todayRecord.checkOut.time)}</span>
                             ) : (
-                              <span className="text-gray-400">Not checked out</span>
+                              <span className="text-gray-400 text-xs sm:text-sm">Not checked out</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-2 sm:py-4">
                             {todayRecord ? (
-                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(todayRecord.status)}`}>
+                              <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full ${getStatusBadge(todayRecord.status)}`}>
                                 {todayRecord.status.replace('_', ' ').toUpperCase()}
                               </span>
                             ) : (
-                              <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">ABSENT</span>
+                              <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-gray-100 text-gray-800">ABSENT</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell text-xs sm:text-sm">
                             {todayRecord?.workingHours ? formatHours(todayRecord.workingHours) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <td className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm font-medium">
                             {!hasCheckedIn ? (
                               <button
+                                type="button"
                                 onClick={() => handleCheckIn(employee._id)}
-                                className="text-green-600 hover:text-green-900 mr-3"
+                                className="text-green-600 hover:text-green-900 mr-2 sm:mr-3 text-[10px] sm:text-xs"
                               >
                                 Check In
                               </button>
                             ) : !hasCheckedOut ? (
                               <button
+                                type="button"
                                 onClick={() => handleCheckOut(employee._id)}
-                                className="text-blue-600 hover:text-blue-900"
+                                className="text-blue-600 hover:text-blue-900 text-[10px] sm:text-xs"
                               >
                                 Check Out
                               </button>

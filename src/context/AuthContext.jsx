@@ -115,9 +115,42 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
+      // Log response for debugging
+      if (import.meta.env.DEV) {
+        console.log('[AuthContext] Login response:', {
+          status: response.status,
+          ok: response.ok,
+          hasToken: !!data?.token,
+          hasUser: !!data?.user,
+          userRole: data?.user?.role,
+          message: data?.message,
+          code: data?.code
+        });
+      }
+
       // Check if user has an allowed role
-      if (!response.ok || !data?.token || !ALLOWED_ROLES.includes(data?.user?.role)) {
-        throw new Error(data?.message || 'Login failed or not authorized as admin');
+      if (!response.ok) {
+        // Return the actual error message from backend
+        const errorMessage = data?.message || 
+          (response.status === 401 ? 'Invalid email or password' : 
+           response.status === 403 ? data?.message || 'Account access denied' : 
+           'Login failed. Please try again.');
+        
+        console.error('[AuthContext] Login failed:', {
+          status: response.status,
+          message: errorMessage,
+          code: data?.code
+        });
+        
+        throw new Error(errorMessage);
+      }
+
+      if (!data?.token || !data?.user) {
+        throw new Error('Invalid response from server');
+      }
+
+      if (!ALLOWED_ROLES.includes(data?.user?.role)) {
+        throw new Error('User role not authorized for admin access');
       }
 
       const userRole = data.user.role;
@@ -128,11 +161,15 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
       setUser(data.user);
 
+      // Store login timestamp for token retry logic
+      sessionStorage.setItem('lastLoginTime', Date.now().toString());
+
       console.log('[AuthContext] Login successful, role:', userRole);
       console.log('[AuthContext] Token stored in:', storageKeys.token);
 
       return { success: true };
     } catch (error) {
+      console.error('[AuthContext] Login error:', error);
       return {
         success: false,
         message: error.message || 'Login failed',

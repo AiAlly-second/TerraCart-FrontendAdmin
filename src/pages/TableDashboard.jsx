@@ -79,55 +79,55 @@ const TableDashboard = () => {
   const mergedTables = tables.filter(t => t.isMerged);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Table Occupancy Dashboard</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Table Occupancy Dashboard</h1>
         <button
           onClick={() => setShowMergeModal(true)}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          className="px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm sm:text-base w-full sm:w-auto"
         >
           Merge Tables
         </button>
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-sm text-gray-600">Total Tables</div>
-          <div className="text-2xl font-bold">{tables.length}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+          <div className="text-xs sm:text-sm text-gray-600">Total Tables</div>
+          <div className="text-xl sm:text-2xl font-bold">{tables.length}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-sm text-gray-600">Available</div>
-          <div className="text-2xl font-bold text-green-600">{availableTables.length}</div>
+        <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+          <div className="text-xs sm:text-sm text-gray-600">Available</div>
+          <div className="text-xl sm:text-2xl font-bold text-green-600">{availableTables.length}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-sm text-gray-600">Occupied</div>
-          <div className="text-2xl font-bold text-red-600">{occupiedTables.length}</div>
+        <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+          <div className="text-xs sm:text-sm text-gray-600">Occupied</div>
+          <div className="text-xl sm:text-2xl font-bold text-red-600">{occupiedTables.length}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-sm text-gray-600">Merged</div>
-          <div className="text-2xl font-bold text-purple-600">{mergedTables.length}</div>
+        <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
+          <div className="text-xs sm:text-sm text-gray-600">Merged</div>
+          <div className="text-xl sm:text-2xl font-bold text-purple-600">{mergedTables.length}</div>
         </div>
       </div>
 
       {/* Table Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {tables.map((table) => (
           <div
             key={table.id}
-            className={`bg-white rounded-lg shadow-lg p-4 border-l-4 ${getStatusColor(table.status)} cursor-pointer hover:shadow-xl transition-shadow`}
+            className={`bg-white rounded-lg shadow-lg p-3 sm:p-4 border-l-4 ${getStatusColor(table.status)} cursor-pointer hover:shadow-xl transition-shadow`}
             onClick={() => setSelectedTable(table)}
           >
             <div className="flex justify-between items-start mb-2">
-              <div>
-                <h3 className="text-lg font-semibold">Table {table.number}</h3>
-                {table.name && <p className="text-sm text-gray-600">{table.name}</p>}
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base sm:text-lg font-semibold truncate">Table {table.number}</h3>
+                {table.name && <p className="text-xs sm:text-sm text-gray-600 truncate">{table.name}</p>}
               </div>
-              <span className={`px-2 py-1 text-xs rounded ${getStatusColor(table.status)} text-white`}>
+              <span className={`px-2 py-1 text-[10px] sm:text-xs rounded ${getStatusColor(table.status)} text-white flex-shrink-0 ml-2`}>
                 {table.status}
               </span>
             </div>
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1 text-xs sm:text-sm">
               <div>Capacity: {table.capacity} seats</div>
               {table.totalCapacity > table.capacity && (
                 <div className="text-purple-600">Total (merged): {table.totalCapacity} seats</div>
@@ -139,21 +139,22 @@ const TableDashboard = () => {
                 <div className="text-blue-600">Waitlist: {table.waitlistLength}</div>
               )}
               {table.mergedTables && table.mergedTables.length > 0 && (
-                <div className="text-purple-600">
+                <div className="text-purple-600 text-[10px] sm:text-xs">
                   Merged with: {table.mergedTables.map(t => t.number).join(', ')}
                 </div>
               )}
               {table.mergedWith && (
-                <div className="text-purple-600">Merged into Table {table.mergedWith}</div>
+                <div className="text-purple-600 text-[10px] sm:text-xs">Merged into Table {table.mergedWith}</div>
               )}
             </div>
             {table.isMerged && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleUnmerge(table.id);
                 }}
-                className="mt-2 w-full px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-sm"
+                className="mt-2 w-full px-2 sm:px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs sm:text-sm"
               >
                 Unmerge
               </button>
@@ -164,9 +165,9 @@ const TableDashboard = () => {
 
       {/* Merge Modal */}
       {showMergeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Merge Tables</h2>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Merge Tables</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Primary Table</label>
@@ -220,7 +221,7 @@ const TableDashboard = () => {
 
       {/* Table Detail Modal */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold mb-4">Table {selectedTable.number} Details</h2>
             <div className="space-y-2">

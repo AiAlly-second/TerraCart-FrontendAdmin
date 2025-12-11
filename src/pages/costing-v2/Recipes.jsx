@@ -7,7 +7,7 @@ import {
   recalculateRecipeCost,
   getIngredients,
 } from "../../services/costingV2Api";
-import { FaPlus, FaEdit, FaTrash, FaCalculator } from "react-icons/fa";
+import { FaPlus, FaEdit, FaTrash, FaCalculator, FaUtensils, FaCheck, FaExclamationTriangle } from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
 
 const Recipes = () => {
@@ -49,7 +49,6 @@ const Recipes = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Convert empty strings to 0 for qty before submission
       const submitData = {
         ...formData,
         ingredients: formData.ingredients.map(ing => ({
@@ -100,8 +99,27 @@ const Recipes = () => {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this recipe?")) return;
+  const handleDelete = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const recipe = recipes.find(r => r._id === id);
+    const recipeName = recipe?.name || 'this recipe';
+    
+    const { confirm } = await import('../../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${recipeName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Recipe',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await deleteRecipe(id);
       alert("Recipe deleted successfully!");
@@ -141,117 +159,211 @@ const Recipes = () => {
     setFormData({ ...formData, ingredients: newIngredients });
   };
 
+  const stats = {
+    total: recipes.length,
+    active: recipes.filter(r => r.isActive).length,
+    inactive: recipes.filter(r => !r.isActive).length,
+    avgCost: recipes.length ? (recipes.reduce((sum, r) => sum + (r.costPerPortion || 0), 0) / recipes.length) : 0,
+  };
+
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">Loading recipes...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-4 md:p-6">
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#d86d2a] border-t-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading recipes...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Recipes</h1>
-        <button
-          onClick={() => {
-            setEditing(null);
-            resetForm();
-            setModalOpen(true);
-          }}
-          className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
-        >
-          <FaPlus /> Add Recipe
-        </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-4 md:p-6">
+      {/* Header Section */}
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2">Recipes</h1>
+            <p className="text-sm sm:text-base text-gray-600">Track recipe costs and portions</p>
+          </div>
+          <button
+            onClick={() => {
+              setEditing(null);
+              resetForm();
+              setModalOpen(true);
+            }}
+            className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center"
+          >
+            <FaPlus className="text-sm sm:text-base" /> Add Recipe
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Portions</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Yield %</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Cost</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost/Portion</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {recipes.map((recipe) => (
-              <tr key={recipe._id}>
-                <td className="px-6 py-4 whitespace-nowrap font-medium">{recipe.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{recipe.portions}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{recipe.yieldPercent}%</td>
-                <td className="px-6 py-4 whitespace-nowrap">₹{Number(recipe.totalCostCached || 0).toFixed(2)}</td>
-                <td className="px-6 py-4 whitespace-nowrap font-semibold">
-                  ₹{Number(recipe.costPerPortion || 0).toFixed(2)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 rounded text-xs ${recipe.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs sm:text-sm opacity-90">Total Recipes</p>
+            <FaUtensils className="text-lg sm:text-xl" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold">{stats.total}</p>
+        </div>
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs sm:text-sm opacity-90">Active</p>
+            <FaCheck className="text-lg sm:text-xl" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold">{stats.active}</p>
+        </div>
+        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs sm:text-sm opacity-90">Inactive</p>
+            <FaExclamationTriangle className="text-lg sm:text-xl" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold">{stats.inactive}</p>
+        </div>
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs sm:text-sm opacity-90">Avg Cost/Portion</p>
+            <FaCalculator className="text-lg sm:text-xl" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold">₹{stats.avgCost.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* Recipes Grid */}
+      {recipes.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
+          <FaUtensils className="text-5xl text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg">No recipes found</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {recipes.map((recipe) => (
+            <div
+              key={recipe._id}
+              className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100"
+            >
+              {/* Card Header */}
+              <div className={`p-4 sm:p-5 ${recipe.isActive ? "bg-gradient-to-r from-green-50 to-green-100" : "bg-gradient-to-r from-gray-50 to-gray-100"}`}>
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-bold text-gray-800 text-base sm:text-lg truncate flex-1">{recipe.name}</h3>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-medium ml-2 ${recipe.isActive ? "bg-green-500 text-white" : "bg-gray-400 text-white"}`}>
                     {recipe.isActive ? "Active" : "Inactive"}
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap flex gap-2">
-                  <button
-                    onClick={() => handleRecalculate(recipe._id)}
-                    className="text-blue-600 hover:text-blue-800"
-                    title="Recalculate Cost"
-                  >
-                    <FaCalculator />
-                  </button>
-                  <button
-                    onClick={() => handleEdit(recipe)}
-                    className="text-yellow-600 hover:text-yellow-800"
-                    title="Edit"
-                  >
-                    <FaEdit />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(recipe._id)}
-                    className="text-red-600 hover:text-red-800"
-                    title="Delete"
-                  >
-                    <FaTrash />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
+                  <span className="px-2 py-1 bg-white/60 rounded-lg font-medium">
+                    Portions: {recipe.portions}
+                  </span>
+                  <span className="px-2 py-1 bg-white/60 rounded-lg font-medium">
+                    Yield: {recipe.yieldPercent}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm text-gray-600">Total Cost</span>
+                  <span className="text-lg sm:text-xl font-bold text-[#d86d2a]">₹{Number(recipe.totalCostCached || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm text-gray-600">Cost / Portion</span>
+                  <span className="text-sm sm:text-base font-semibold text-gray-800">₹{Number(recipe.costPerPortion || 0).toFixed(2)}</span>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2">Ingredients ({recipe.ingredients?.length || 0})</p>
+                  <div className="space-y-1.5">
+                    {recipe.ingredients && recipe.ingredients.length > 0 ? (
+                      <>
+                        {recipe.ingredients.slice(0, 3).map((ing, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs sm:text-sm bg-gray-50 rounded-lg p-2">
+                            <span className="font-medium text-gray-800 truncate flex-1">
+                              {ing.ingredientId?.name || "Unknown"}
+                            </span>
+                            <span className="text-gray-700 font-semibold ml-2">
+                              {formatUnit(ing.qty, ing.uom || "kg")}
+                            </span>
+                          </div>
+                        ))}
+                        {recipe.ingredients.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center py-1">
+                            +{recipe.ingredients.length - 3} more ingredients
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-gray-400 text-xs sm:text-sm">No ingredients added</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Footer */}
+              <div className="px-4 sm:px-5 py-3 bg-gray-50 border-t flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleRecalculate(recipe._id)}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Recalculate Cost"
+                >
+                  <FaCalculator className="text-sm sm:text-base" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleEdit(recipe)}
+                  className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <FaEdit className="text-sm sm:text-base" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(e, recipe._id)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete"
+                >
+                  <FaTrash className="text-sm sm:text-base" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4">{editing ? "Edit Recipe" : "Add Recipe"}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white p-4 sm:p-6 rounded-t-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold">{editing ? "Edit Recipe" : "Add Recipe"}</h2>
+            </div>
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
                   <input
                     type="text"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Portions *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Portions *</label>
                   <input
                     type="number"
                     required
                     min="1"
                     value={formData.portions}
                     onChange={(e) => setFormData({ ...formData, portions: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Yield % *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Yield % *</label>
                   <input
                     type="number"
                     required
@@ -259,106 +371,113 @@ const Recipes = () => {
                     max="100"
                     value={formData.yieldPercent}
                     onChange={(e) => setFormData({ ...formData, yieldPercent: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Instructions</label>
                 <textarea
                   value={formData.instructions}
                   onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   rows="3"
                 />
               </div>
 
               <div>
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between items-center mb-3">
                   <label className="block text-sm font-medium text-gray-700">Ingredients *</label>
                   <button
                     type="button"
                     onClick={addIngredient}
-                    className="text-sm text-[#d86d2a] hover:underline"
+                    className="text-sm text-[#d86d2a] hover:text-[#c75b1a] font-medium flex items-center gap-1"
                   >
-                    + Add Ingredient
+                    <FaPlus /> Add Ingredient
                   </button>
                 </div>
-                {formData.ingredients.map((ing, index) => (
-                  <div key={index} className="grid grid-cols-4 gap-2 mb-2">
-                    <select
-                      required
-                      value={ing.ingredientId}
-                      onChange={(e) => updateIngredient(index, "ingredientId", e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Select Ingredient</option>
-                      {ingredients.map((ingredient) => (
-                        <option key={ingredient._id} value={ingredient._id}>{ingredient.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      step="0.01"
-                      placeholder="Quantity"
-                      value={ing.qty === "" || ing.qty === null || ing.qty === undefined ? "" : ing.qty}
-                      onChange={(e) => updateIngredient(index, "qty", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
-                      className="px-3 py-2 border border-gray-300 rounded-lg"
-                    />
-                    <select
-                      required
-                      value={ing.uom}
-                      onChange={(e) => updateIngredient(index, "uom", e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="kg">kg</option>
-                      <option value="g">g</option>
-                      <option value="l">l</option>
-                      <option value="ml">ml</option>
-                      <option value="pcs">pcs</option>
-                      <option value="pack">pack</option>
-                      <option value="box">box</option>
-                      <option value="bottle">bottle</option>
-                      <option value="dozen">dozen</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => removeIngredient(index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                <div className="space-y-3">
+                  {formData.ingredients.map((ing, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 bg-gray-50 rounded-lg">
+                      <select
+                        required
+                        value={ing.ingredientId}
+                        onChange={(e) => updateIngredient(index, "ingredientId", e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm sm:col-span-2"
+                      >
+                        <option value="">Select Ingredient</option>
+                        {ingredients.map((ingredient) => (
+                          <option key={ingredient._id} value={ingredient._id}>{ingredient.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="0.01"
+                        placeholder="Quantity"
+                        value={ing.qty === "" || ing.qty === null || ing.qty === undefined ? "" : ing.qty}
+                        onChange={(e) => updateIngredient(index, "qty", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"
+                      />
+                      <select
+                        required
+                        value={ing.uom}
+                        onChange={(e) => updateIngredient(index, "uom", e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="l">l</option>
+                        <option value="ml">ml</option>
+                        <option value="pcs">pcs</option>
+                        <option value="pack">pack</option>
+                        <option value="box">box</option>
+                        <option value="bottle">bottle</option>
+                        <option value="dozen">dozen</option>
+                      </select>
+                      <div className="flex justify-end">
+                        {formData.ingredients.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeIngredient(index)}
+                            className="text-red-600 hover:text-red-800 px-3 py-2"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
                   checked={formData.isActive}
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="rounded"
+                  className="rounded border-gray-300 text-[#d86d2a] focus:ring-[#d86d2a]"
                 />
                 <label className="text-sm font-medium text-gray-700">Active</label>
               </div>
 
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-3 justify-end pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => {
                     setModalOpen(false);
                     setEditing(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a]"
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded-lg hover:shadow-lg font-medium transition-all"
                 >
                   {editing ? "Update" : "Create"}
                 </button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { confirm } from '../utils/confirm';
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -262,7 +263,10 @@ const Users = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (userId) => {
+  const handleDelete = async (e, userId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     // Find the user to check their role
     const userToDelete = users.find(u => u._id === userId);
     
@@ -272,7 +276,19 @@ const Users = () => {
       return;
     }
     
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    const userName = userToDelete?.name || 'this user';
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${userName}"?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete User',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
     
     try {
       await api.delete(`/users/${userId}`);
@@ -348,11 +364,11 @@ const Users = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Users</h1>
-          <p className="text-gray-600 mt-2">Manage all system users</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Users</h1>
+          <p className="text-xs sm:text-sm md:text-base text-gray-600 mt-1 sm:mt-2">Manage all system users</p>
         </div>
         <button
           onClick={() => {
@@ -360,49 +376,49 @@ const Users = () => {
             setFormData({ name: '', email: '', password: '', role: 'employee', franchiseId: '', cartName: '', location: '', phone: '', address: '' });
             setShowModal(true);
           }}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto justify-center"
         >
-          <FaPlus className="mr-2" />
-          Add New User
+          <FaPlus className="mr-1.5 sm:mr-2" />
+          <span className="whitespace-nowrap">Add New User</span>
         </button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Total Users</p>
-          <p className="text-2xl font-bold text-gray-800">{users.length}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-gray-500">Total Users</p>
+          <p className="text-xl sm:text-2xl font-bold text-gray-800">{users.length}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Active</p>
-          <p className="text-2xl font-bold text-green-600">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-gray-500">Active</p>
+          <p className="text-xl sm:text-2xl font-bold text-green-600">
             {users.filter(u => u.effectivelyActive !== undefined ? u.effectivelyActive : u.isActive !== false).length}
           </p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Inactive</p>
-          <p className="text-2xl font-bold text-red-600">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-gray-500">Inactive</p>
+          <p className="text-xl sm:text-2xl font-bold text-red-600">
             {users.filter(u => u.effectivelyActive !== undefined ? !u.effectivelyActive : u.isActive === false).length}
           </p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Franchises</p>
-          <p className="text-2xl font-bold text-blue-600">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-gray-500">Franchises</p>
+          <p className="text-xl sm:text-2xl font-bold text-blue-600">
             {users.filter(u => u.role === 'franchise_admin').length}
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="mb-4">
+      <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+        <div className="mb-3 sm:mb-4">
           <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <FaSearch className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm sm:text-base" />
             <input
               type="text"
               placeholder="Search users by name, email, or role..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -417,46 +433,47 @@ const Users = () => {
             <p>No users found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Created</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user._id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div>
-                        <p className="font-medium">{user.name}</p>
-                        {user.cartName && (
-                          <p className="text-xs text-gray-500">Cart: {user.cartName}</p>
-                        )}
-                        {user.cafeName && !user.cartName && (
-                          <p className="text-xs text-gray-500">Cart: {user.cafeName}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">{user.email}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[user.role] || roleColors.customer}`}>
-                        {getRoleLabel(user.role)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
+          <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-3 sm:px-0">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">Name</th>
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">Email</th>
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">Role</th>
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">Status</th>
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm hidden md:table-cell">Created</th>
+                    <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user._id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 sm:py-3 px-2 sm:px-4">
+                        <div>
+                          <p className="font-medium text-xs sm:text-sm">{user.name}</p>
+                          {user.cartName && (
+                            <p className="text-[10px] sm:text-xs text-gray-500">Cart: {user.cartName}</p>
+                          )}
+                          {user.cafeName && !user.cartName && (
+                            <p className="text-[10px] sm:text-xs text-gray-500">Cart: {user.cafeName}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-600 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">{user.email}</td>
+                      <td className="py-2 sm:py-3 px-2 sm:px-4">
+                        <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${roleColors[user.role] || roleColors.customer}`}>
+                          {getRoleLabel(user.role)}
+                        </span>
+                      </td>
+                    <td className="py-2 sm:py-3 px-2 sm:px-4">
                       {getStatusBadge(user)}
                     </td>
-                    <td className="py-3 px-4 text-gray-500 text-sm">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="flex justify-end space-x-2">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4">
+                      <div className="flex justify-end space-x-1 sm:space-x-2">
                         {/* Toggle Status Button - Only for franchise_admin and admin/cart_admin roles */}
                         {(user.role === 'franchise_admin' || user.role === 'admin' || user.role === 'cart_admin') && (
                           <button
@@ -476,28 +493,29 @@ const Users = () => {
                             }
                           >
                             {togglingStatus === user._id ? (
-                              <FaSpinner className="animate-spin" />
+                              <FaSpinner className="animate-spin text-sm sm:text-base" />
                             ) : (user.effectivelyActive !== undefined ? !user.effectivelyActive : user.isActive === false) ? (
-                              <FaToggleOff className="text-xl" />
+                              <FaToggleOff className="text-base sm:text-xl" />
                             ) : (
-                              <FaToggleOn className="text-xl" />
+                              <FaToggleOn className="text-base sm:text-xl" />
                             )}
                           </button>
                         )}
                         <button
                           onClick={() => handleEdit(user)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1 sm:p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                           title="Edit"
                         >
-                          <FaEdit />
+                          <FaEdit className="text-sm sm:text-base" />
                         </button>
                         {user.role !== 'super_admin' && (
                           <button
-                            onClick={() => handleDelete(user._id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            type="button"
+                            onClick={(e) => handleDelete(e, user._id)}
+                            className="p-1 sm:p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
                             title="Delete"
                           >
-                            <FaTrash />
+                            <FaTrash className="text-sm sm:text-base" />
                           </button>
                         )}
                       </div>
@@ -507,12 +525,13 @@ const Users = () => {
               </tbody>
             </table>
           </div>
+          </div>
         )}
       </div>
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
               {editingUser ? 'Edit User' : 'Create New User'}

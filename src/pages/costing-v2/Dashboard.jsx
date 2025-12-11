@@ -77,7 +77,7 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6">
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#d86d2a]"></div>
           <p className="mt-4 text-gray-600">Loading costing data...</p>
@@ -90,11 +90,11 @@ const Dashboard = () => {
   if ((user?.role === "super_admin" || user?.role === "franchise_admin") && hierarchicalData) {
     const isFranchiseAdmin = user?.role === "franchise_admin";
     return (
-      <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen p-4 sm:p-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Costing Overview</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Costing Overview</h1>
+          <p className="text-gray-600 text-sm sm:text-base">
             {isFranchiseAdmin 
               ? "Kiosk-by-kiosk view of your franchise" 
               : "Hierarchical view of all franchises and kiosks"}
@@ -131,12 +131,12 @@ const Dashboard = () => {
         {/* Grand Totals - Only show for super admin */}
         {!isFranchiseAdmin && hierarchicalData.grandTotals && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-3 sm:p-4 md:p-6 text-white">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm opacity-90">Total Sales</p>
-                <FaRupeeSign className="text-2xl opacity-75" />
+                <p className="text-xs sm:text-sm opacity-90">Total Sales</p>
+                <FaRupeeSign className="text-lg sm:text-xl md:text-2xl opacity-75" />
               </div>
-              <p className="text-3xl font-bold">
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold">
                 ₹{Number(hierarchicalData.grandTotals.sales || 0).toLocaleString("en-IN")}
               </p>
             </div>
