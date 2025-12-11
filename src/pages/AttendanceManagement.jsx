@@ -15,7 +15,16 @@ const AttendanceManagement = () => {
   useEffect(() => {
     fetchEmployees();
     fetchTodayAttendance();
-  }, []);
+    
+    // Set up auto-refresh every 30 seconds for real-time updates
+    const interval = setInterval(() => {
+      if (activeTab === 'today') {
+        fetchTodayAttendance();
+      }
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -158,6 +167,31 @@ const AttendanceManagement = () => {
     return `${hours}h ${mins}m`;
   };
 
+  const calculateRealTimeHours = (record) => {
+    if (!record?.checkIn?.time) return '-';
+    
+    const now = new Date();
+    const checkInTime = new Date(record.checkIn.time);
+    const breakMinutes = record.breakDuration || 0;
+    
+    // If on break, pause timer at break start
+    let workingMinutes = 0;
+    if (record.isOnBreak && record.breakStart) {
+      // PAUSED: Working timer is frozen at the moment break started
+      const breakStartTime = new Date(record.breakStart);
+      const workingTimeUntilBreak = Math.floor((breakStartTime - checkInTime) / (1000 * 60));
+      // breakDuration doesn't include current break, so subtract it
+      workingMinutes = Math.max(0, workingTimeUntilBreak - breakMinutes);
+    } else {
+      // ACTIVE: Working timer is running
+      const totalDurationMinutes = Math.floor((now - checkInTime) / (1000 * 60));
+      // Subtract completed break time
+      workingMinutes = Math.max(0, totalDurationMinutes - breakMinutes);
+    }
+    
+    return formatHours(workingMinutes);
+  };
+
   const getStatusBadge = (status) => {
     const badges = {
       present: 'bg-green-100 text-green-800',
@@ -279,7 +313,11 @@ const AttendanceManagement = () => {
                             )}
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell text-xs sm:text-sm">
-                            {todayRecord?.workingHours ? formatHours(todayRecord.workingHours) : '-'}
+                            {todayRecord?.workingHours 
+                              ? formatHours(Math.round(todayRecord.workingHours * 60))
+                              : hasCheckedIn && !hasCheckedOut
+                              ? calculateRealTimeHours(todayRecord)
+                              : '-'}
                           </td>
                           <td className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm font-medium">
                             {!hasCheckedIn ? (
@@ -392,8 +430,14 @@ const AttendanceManagement = () => {
                                 {record.status.replace('_', ' ').toUpperCase()}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">{formatHours(record.workingHours)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{formatHours(record.overtime)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {record.totalWorkingMinutes 
+                                ? formatHours(record.totalWorkingMinutes)
+                                : record.workingHours 
+                                ? formatHours(Math.round(record.workingHours * 60))
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">{formatHours(record.overtime || 0)}</td>
                           </tr>
                         ))
                       )}
