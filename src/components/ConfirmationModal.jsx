@@ -24,15 +24,20 @@ const ConfirmationModal = ({
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [inputError, setInputError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setInputValue('');
       setInputError('');
+      setIsProcessing(false);
     }
   }, [isOpen]);
 
   const handleConfirm = () => {
+    // Prevent multiple rapid clicks
+    if (isProcessing) return;
+    
     if (requireInput) {
       if (!inputValue.trim()) {
         setInputError('Please enter the confirmation text');
@@ -43,11 +48,16 @@ const ConfirmationModal = ({
         return;
       }
     }
+    
+    setIsProcessing(true);
+    // Only call onConfirm - it will handle closing the modal
     onConfirm();
-    onClose();
   };
 
   const handleClose = () => {
+    // Prevent closing if already processing
+    if (isProcessing) return;
+    
     setInputValue('');
     setInputError('');
     onClose();
@@ -58,7 +68,12 @@ const ConfirmationModal = ({
   return (
     <div 
       className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"
-      onClick={handleClose}
+      onClick={(e) => {
+        // Only close if clicking directly on the backdrop, not on child elements
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <div 
         className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
@@ -149,11 +164,12 @@ const ConfirmationModal = ({
           </button>
           <button
             onClick={handleConfirm}
+            disabled={isProcessing}
             className={`px-6 py-2 rounded-lg font-semibold text-white transition-colors ${
               danger
                 ? 'bg-[#ef4444] hover:bg-[#dc2626]'
                 : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
-            }`}
+            } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {confirmText}
           </button>
