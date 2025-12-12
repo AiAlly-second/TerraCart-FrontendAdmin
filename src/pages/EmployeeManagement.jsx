@@ -25,6 +25,53 @@ const getMaxDOBDate = () => {
   return maxDate.toISOString().split('T')[0];
 };
 
+// Validation functions
+const validateEmail = (email) => {
+  if (!email) return true; // Optional for editing
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const validatePhoneNumber = (phone) => {
+  if (!phone) return false; // Required field
+  // Remove spaces, dashes, and plus signs for validation
+  const cleaned = phone.replace(/[\s\-+]/g, '');
+  // Indian phone number: 10 digits, optionally starting with 91
+  const phoneRegex = /^(91)?[6-9]\d{9}$/;
+  return phoneRegex.test(cleaned);
+};
+
+const validateName = (name) => {
+  if (!name || !name.trim()) return false;
+  // Name should be at least 2 characters and contain only letters, spaces, and common name characters
+  const nameRegex = /^[a-zA-Z\s.'-]{2,50}$/;
+  return nameRegex.test(name.trim());
+};
+
+const validatePassword = (password) => {
+  if (!password) return false;
+  // Password must be at least 6 characters
+  return password.length >= 6;
+};
+
+const validateIMEI = (imei) => {
+  if (!imei) return true; // Optional field
+  // IMEI should be 15 digits
+  const imeiRegex = /^\d{15}$/;
+  return imeiRegex.test(imei.replace(/\s/g, ''));
+};
+
+const validateDateOfBirth = (dob) => {
+  if (!dob) return false;
+  const dobDate = new Date(dob);
+  const today = new Date();
+  // Date should not be in the future
+  if (dobDate > today) return false;
+  // Date should be reasonable (not more than 100 years ago)
+  const minDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+  return dobDate >= minDate;
+};
+
 const EmployeeManagement = () => {
   const { user } = useAuth();
   const userRole = user?.role;
@@ -41,6 +88,8 @@ const EmployeeManagement = () => {
   const [selectedCafe, setSelectedCafe] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [cafes, setCafes] = useState([]);
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
@@ -152,28 +201,136 @@ const EmployeeManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormErrors({});
+    setIsSubmitting(true);
 
-    // Validate required fields
-    if (!formData.name || !formData.dateOfBirth || !formData.mobile) {
-      alert('Please fill in all required fields (Name, DOB, Mobile)');
-      return;
+    // Trim all form data
+    const trimmedData = {
+      name: formData.name.trim(),
+      dateOfBirth: formData.dateOfBirth,
+      mobile: formData.mobile.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password.trim(),
+      role: formData.role,
+      franchiseId: formData.franchiseId,
+      cafeId: formData.cafeId,
+      kycVerified: formData.kycVerified,
+      disability: formData.disability,
+      deviceIssued: formData.deviceIssued,
+      imei: {
+        device: formData.imei.device.trim(),
+        phone: formData.imei.phone.trim()
+      },
+      isActive: formData.isActive
+    };
+
+    // Validation errors object
+    const errors = {};
+
+    // Name validation
+    if (!trimmedData.name) {
+      errors.name = 'Name is required';
+    } else if (!validateName(trimmedData.name)) {
+      errors.name = 'Name must be 2-50 characters and contain only letters, spaces, and common name characters';
     }
 
-    // DOB validation as per Indian Labor Laws (minimum 18 years)
-    const age = calculateAge(formData.dateOfBirth);
-    if (age < MINIMUM_WORKING_AGE) {
-      alert(`⚠️ Age Validation Failed!\n\nAs per Indian Labor Laws (Child and Adolescent Labour (Prohibition and Regulation) Act, 1986), the minimum working age is ${MINIMUM_WORKING_AGE} years.\n\nEmployee's age: ${age} years\nRequired age: ${MINIMUM_WORKING_AGE}+ years\n\nPlease verify the date of birth.`);
+    // Date of Birth validation
+    if (!trimmedData.dateOfBirth) {
+      errors.dateOfBirth = 'Date of birth is required';
+    } else if (!validateDateOfBirth(trimmedData.dateOfBirth)) {
+      errors.dateOfBirth = 'Date of birth must be a valid date (not in the future and not more than 100 years ago)';
+    } else {
+      const age = calculateAge(trimmedData.dateOfBirth);
+      if (age < MINIMUM_WORKING_AGE) {
+        errors.dateOfBirth = `Age must be at least ${MINIMUM_WORKING_AGE} years as per Indian Labor Laws. Current age: ${age} years`;
+      }
+    }
+
+    // Mobile validation
+    if (!trimmedData.mobile) {
+      errors.mobile = 'Mobile number is required';
+    } else if (!validatePhoneNumber(trimmedData.mobile)) {
+      errors.mobile = 'Please enter a valid 10-digit Indian mobile number (e.g., 9876543210 or +91 9876543210)';
+    }
+
+    // Email validation (required for new employees, optional for editing)
+    if (!editingEmployee) {
+      if (!trimmedData.email) {
+        errors.email = 'Email is required for new employees';
+      } else if (!validateEmail(trimmedData.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
+    } else if (trimmedData.email && !validateEmail(trimmedData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation (required for new employees)
+    if (!editingEmployee) {
+      if (!trimmedData.password) {
+        errors.password = 'Password is required';
+      } else if (!validatePassword(trimmedData.password)) {
+        errors.password = 'Password must be at least 6 characters long';
+      }
+    } else if (trimmedData.password && !validatePassword(trimmedData.password)) {
+      errors.password = 'Password must be at least 6 characters long';
+    }
+
+    // IMEI validation (if provided)
+    if (trimmedData.imei.device && !validateIMEI(trimmedData.imei.device)) {
+      errors.imeiDevice = 'Device IMEI must be exactly 15 digits';
+    }
+    if (trimmedData.imei.phone && !validateIMEI(trimmedData.imei.phone)) {
+      errors.imeiPhone = 'Phone IMEI must be exactly 15 digits';
+    }
+
+    // Role validation
+    if (!trimmedData.role) {
+      errors.role = 'Role is required';
+    }
+
+    // Franchise validation (for super admin and franchise admin)
+    if (!isCartAdmin) {
+      const franchiseIdToCheck = selectedFranchise || trimmedData.franchiseId;
+      if (!franchiseIdToCheck) {
+        errors.franchiseId = 'Franchise selection is required';
+      }
+    }
+
+    // Disability type validation (if disability is checked)
+    if (trimmedData.disability.hasDisability && !trimmedData.disability.type?.trim()) {
+      errors.disabilityType = 'Please specify the type of disability';
+    }
+
+    // If there are errors, display them and stop submission
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setIsSubmitting(false);
+      // Scroll to first error
+      const firstErrorField = Object.keys(errors)[0];
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`) || 
+                          document.querySelector(`#${firstErrorField}`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.focus();
+      }
       return;
     }
 
     try {
       const submitData = {
-        ...formData,
-        dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
-        franchiseId: selectedFranchise || undefined,
-        cafeId: selectedCafe || undefined,
-        employeeRole: formData.role, // Map role to employeeRole for Employee model compatibility
-        role: formData.role // Also send role for User creation
+        ...trimmedData,
+        dateOfBirth: trimmedData.dateOfBirth ? new Date(trimmedData.dateOfBirth) : undefined,
+        franchiseId: selectedFranchise || trimmedData.franchiseId || undefined,
+        cafeId: selectedCafe || trimmedData.cafeId || undefined,
+        employeeRole: trimmedData.role, // Map role to employeeRole for Employee model compatibility
+        role: trimmedData.role, // Also send role for User creation
+        // Clean mobile number
+        mobile: trimmedData.mobile.replace(/[\s\-]/g, ''),
+        // Clean IMEI numbers
+        imei: {
+          device: trimmedData.imei.device || undefined,
+          phone: trimmedData.imei.phone || undefined
+        }
       };
 
       if (editingEmployee) {
@@ -186,11 +343,25 @@ const EmployeeManagement = () => {
       
       setShowModal(false);
       setEditingEmployee(null);
+      setFormErrors({});
       resetForm();
       fetchData();
     } catch (error) {
       console.error('Error saving employee:', error);
-      alert(error.response?.data?.message || 'Failed to save employee');
+      const errorMessage = error.response?.data?.message || 'Failed to save employee';
+      
+      // Check if error is related to specific fields
+      if (errorMessage.includes('email') || errorMessage.includes('Email')) {
+        setFormErrors({ email: errorMessage });
+      } else if (errorMessage.includes('mobile') || errorMessage.includes('Mobile')) {
+        setFormErrors({ mobile: errorMessage });
+      } else {
+        setFormErrors({ general: errorMessage });
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -464,34 +635,96 @@ const EmployeeManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (e, employeeId) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // Helper function to find employee by ID from hierarchy structure
+  const findEmployeeById = (employeeId) => {
+    // Search in orphan employees
+    const orphanEmployee = orphanEmployees.find(emp => emp._id === employeeId);
+    if (orphanEmployee) return orphanEmployee;
     
-    const employee = employees.find(emp => emp._id === employeeId);
+    // Search in hierarchy (franchise employees and cafe employees)
+    for (const franchise of hierarchy) {
+      // Check franchise-level employees
+      if (franchise.employees) {
+        const franchiseEmployee = franchise.employees.find(emp => emp._id === employeeId);
+        if (franchiseEmployee) return franchiseEmployee;
+      }
+      
+      // Check cafe employees
+      if (franchise.cafes) {
+        for (const cafe of franchise.cafes) {
+          if (cafe.employees) {
+            const cafeEmployee = cafe.employees.find(emp => emp._id === employeeId);
+            if (cafeEmployee) return cafeEmployee;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
+  const handleDelete = async (e, employeeId) => {
+    // Handle event if provided
+    if (e && e.preventDefault) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (!employeeId) {
+      console.error('Employee ID is required for deletion');
+      alert('Error: Employee ID is missing');
+      return;
+    }
+    
+    // Find employee from hierarchy structure
+    const employee = findEmployeeById(employeeId);
     const employeeName = employee?.name || 'this employee';
     
-    const { confirm } = await import('../utils/confirm');
-    const confirmed = await confirm(
-      `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`,
-      {
-        title: 'Delete Employee',
-        warningMessage: 'WARNING: PERMANENTLY DELETE',
-        danger: true,
-        confirmText: 'Delete',
-        cancelText: 'Cancel'
-      }
-    );
-    
-    if (!confirmed) return;
-    
     try {
+      // Import confirm utility
+      const confirmModule = await import('../utils/confirm');
+      const confirm = confirmModule.confirm || confirmModule.default;
+      
+      if (!confirm) {
+        console.error('Confirm utility not available');
+        // Fallback to native confirm
+        const proceed = window.confirm(
+          `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`
+        );
+        if (!proceed) return;
+      } else {
+        const confirmed = await confirm(
+          `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`,
+          {
+            title: 'Delete Employee',
+            warningMessage: 'WARNING: PERMANENTLY DELETE',
+            danger: true,
+            confirmText: 'Delete',
+            cancelText: 'Cancel'
+          }
+        );
+        
+        if (!confirmed) {
+          console.log('Delete cancelled by user');
+          return;
+        }
+      }
+      
+      // Proceed with deletion
+      console.log('Deleting employee:', employeeId);
       await api.delete(`/employees/${employeeId}`);
       alert('Employee deleted successfully');
       fetchData();
     } catch (error) {
       console.error('Error deleting employee:', error);
-      alert('Failed to delete employee');
+      if (error.response?.status === 404) {
+        alert('Employee not found. It may have already been deleted.');
+        fetchData(); // Refresh to update the list
+      } else if (error.response?.status === 403) {
+        alert('You do not have permission to delete this employee.');
+      } else {
+        alert(error.response?.data?.message || 'Failed to delete employee. Please try again.');
+      }
     }
   };
 
@@ -524,10 +757,12 @@ const EmployeeManagement = () => {
     }
     
     setSelectedCafe(cafeId);
+    setFormErrors({});
   };
 
   const openCreateModal = () => {
     setEditingEmployee(null);
+    setFormErrors({});
     resetForm();
     setShowModal(true);
   };
@@ -838,7 +1073,8 @@ const EmployeeManagement = () => {
                         <FaEdit />
                       </button>
                       <button
-                        onClick={() => handleDelete(employee._id)}
+                        type="button"
+                        onClick={(e) => handleDelete(e, employee._id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded"
                       >
                         <FaTrash />
@@ -860,28 +1096,54 @@ const EmployeeManagement = () => {
               {editingEmployee ? 'Edit Employee' : 'Create Employee'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* General Error Display */}
+              {formErrors.general && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">{formErrors.general}</p>
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
                   <input
                     type="text"
+                    name="name"
                     required
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (formErrors.name) setFormErrors({ ...formErrors, name: null });
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter full name"
                   />
+                  {formErrors.name && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth * <span className="text-xs text-gray-500">(Min age: 18 years as per Indian Labor Laws)</span></label>
                   <input
                     type="date"
+                    name="dateOfBirth"
                     required
                     max={getMaxDOBDate()}
                     value={formData.dateOfBirth}
-                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      setFormData({ ...formData, dateOfBirth: e.target.value });
+                      if (formErrors.dateOfBirth) setFormErrors({ ...formErrors, dateOfBirth: null });
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.dateOfBirth ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
-                  {formData.dateOfBirth && (
+                  {formErrors.dateOfBirth && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.dateOfBirth}</p>
+                  )}
+                  {formData.dateOfBirth && !formErrors.dateOfBirth && (
                     <p className={`mt-1 text-xs ${calculateAge(formData.dateOfBirth) >= MINIMUM_WORKING_AGE ? 'text-green-600' : 'text-red-600'}`}>
                       Age: {calculateAge(formData.dateOfBirth)} years {calculateAge(formData.dateOfBirth) >= MINIMUM_WORKING_AGE ? '✓' : '(Below minimum age)'}
                     </p>
@@ -891,45 +1153,76 @@ const EmployeeManagement = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Mobile *</label>
                   <input
                     type="tel"
+                    name="mobile"
                     required
                     value={formData.mobile}
-                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      setFormData({ ...formData, mobile: e.target.value });
+                      if (formErrors.mobile) setFormErrors({ ...formErrors, mobile: null });
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.mobile ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="9876543210 or +91 9876543210"
                   />
+                  {formErrors.mobile && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.mobile}</p>
+                  )}
+                  {!formErrors.mobile && (
+                    <p className="mt-1 text-xs text-gray-500">10-digit Indian mobile number</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
                   <select
+                    name="role"
                     required
                     value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      setFormData({ ...formData, role: e.target.value });
+                      if (formErrors.role) setFormErrors({ ...formErrors, role: null });
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.role ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   >
                     {employeeRoles.map(role => (
                       <option key={role.value} value={role.value}>{role.label}</option>
                     ))}
                   </select>
+                  {formErrors.role && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.role}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email {!editingEmployee && '*'}</label>
                   <input
                     type="email"
+                    name="email"
                     required={!editingEmployee}
                     value={formData.email || ''}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (formErrors.email) setFormErrors({ ...formErrors, email: null });
+                    }}
                     placeholder={editingEmployee ? "No email (employee has no login account)" : "employee@example.com"}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                      formData.email ? 'border-gray-300' : 'border-gray-300'
+                      formErrors.email ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {editingEmployee 
-                      ? (formData.email 
-                          ? `Current login email: ${formData.email}` 
-                          : 'Employee has no login account. Add email to create login access.')
-                      : 'Required for login access'}
-                  </p>
-                  {editingEmployee && formData.email && (
+                  {formErrors.email && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
+                  )}
+                  {!formErrors.email && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {editingEmployee 
+                        ? (formData.email 
+                            ? `Current login email: ${formData.email}` 
+                            : 'Employee has no login account. Add email to create login access.')
+                        : 'Required for login access'}
+                    </p>
+                  )}
+                  {editingEmployee && formData.email && !formErrors.email && (
                     <p className="text-xs text-green-600 mt-1">
                       ✓ Email found - employee can login with this email
                     </p>
@@ -940,25 +1233,64 @@ const EmployeeManagement = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
                     <input
                       type="password"
+                      name="password"
                       required
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, password: e.target.value });
+                        if (formErrors.password) setFormErrors({ ...formErrors, password: null });
+                      }}
                       placeholder="Min 6 characters"
                       minLength={6}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.password ? 'border-red-500' : 'border-gray-300'
+                      }`}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
+                    {formErrors.password && (
+                      <p className="mt-1 text-xs text-red-600">{formErrors.password}</p>
+                    )}
+                    {!formErrors.password && (
+                      <p className="text-xs text-gray-500 mt-1">Employee will use this to login</p>
+                    )}
+                  </div>
+                )}
+                {editingEmployee && formData.password && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">New Password (leave blank to keep current)</label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={(e) => {
+                        setFormData({ ...formData, password: e.target.value });
+                        if (formErrors.password) setFormErrors({ ...formErrors, password: null });
+                      }}
+                      placeholder="Min 6 characters"
+                      minLength={6}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.password ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.password && (
+                      <p className="mt-1 text-xs text-red-600">{formErrors.password}</p>
+                    )}
                   </div>
                 )}
                 {!isCartAdmin && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Franchise *</label>
                       <select
+                        name="franchiseId"
                         value={selectedFranchise?.toString() || ''}
-                        onChange={(e) => handleFranchiseChange(e.target.value)}
+                        onChange={(e) => {
+                          handleFranchiseChange(e.target.value);
+                          if (formErrors.franchiseId) setFormErrors({ ...formErrors, franchiseId: null });
+                        }}
                         disabled={userRole === 'franchise_admin'} // Disable for franchise admin (they can only add to their own franchise)
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-600"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-600 ${
+                          formErrors.franchiseId ? 'border-red-500' : 'border-gray-300'
+                        }`}
                       >
                         <option value="">Select Franchise</option>
                         {franchises.map(franchise => (
@@ -970,7 +1302,10 @@ const EmployeeManagement = () => {
                           </option>
                         ))}
                       </select>
-                      {userRole === 'franchise_admin' && (
+                      {formErrors.franchiseId && (
+                        <p className="mt-1 text-xs text-red-600">{formErrors.franchiseId}</p>
+                      )}
+                      {!formErrors.franchiseId && userRole === 'franchise_admin' && (
                         <p className="text-xs text-gray-500 mt-1">Your franchise is automatically selected</p>
                       )}
                     </div>
@@ -1052,17 +1387,27 @@ const EmployeeManagement = () => {
                   onClick={() => {
                     setShowModal(false);
                     setEditingEmployee(null);
+                    setFormErrors({});
                     resetForm();
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingEmployee ? 'Update' : 'Create'}
+                  {isSubmitting ? (
+                    <>
+                      <FaSpinner className="animate-spin" size={14} />
+                      <span>{editingEmployee ? 'Updating...' : 'Creating...'}</span>
+                    </>
+                  ) : (
+                    <span>{editingEmployee ? 'Update' : 'Create'}</span>
+                  )}
                 </button>
               </div>
             </form>

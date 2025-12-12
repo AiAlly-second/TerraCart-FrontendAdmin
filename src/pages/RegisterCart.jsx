@@ -26,24 +26,86 @@ const RegisterCart = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [existingCart, setExistingCart] = useState(null);
-  const [searchingExisting, setSearchingExisting] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+
+  // Validation functions
+  const validateEmail = (email) => {
+    if (!email || !email.trim()) return 'Email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return 'Please enter a valid email address';
+    }
+    return '';
+  };
+
+  const validatePhoneNumber = (phone) => {
+    if (!phone || !phone.trim()) return ''; // Phone is optional
+    // Remove spaces, dashes, and country code for validation
+    const cleaned = phone.replace(/[\s\-+]/g, '').replace(/^91/, '');
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(cleaned)) {
+      return 'Please enter a valid 10-digit Indian mobile number';
+    }
+    return '';
+  };
+
+  const validateName = (name) => {
+    if (!name || !name.trim()) return 'Manager name is required';
+    if (name.trim().length < 2) return 'Name must be at least 2 characters';
+    if (name.trim().length > 50) return 'Name must be less than 50 characters';
+    return '';
+  };
+
+  const validatePassword = (password) => {
+    if (!password || !password.trim()) return 'Password is required';
+    if (password.length < 6) return 'Password must be at least 6 characters';
+    return '';
+  };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+    // Clear error for this field when user starts typing
+    if (formErrors[name]) {
+      setFormErrors({ ...formErrors, [name]: '' });
+    }
     setError("");
   };
 
   const handleFileChange = (e) => {
     const { name, files: fileList } = e.target;
     if (fileList && fileList[0]) {
+      // Check file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (fileList[0].size > maxSize) {
+        setFormErrors({ ...formErrors, [name]: 'File size must be less than 10MB' });
+        // Clear the file input
+        e.target.value = '';
+        return;
+      }
+      
       setFiles({
         ...files,
         [name]: fileList[0],
       });
+      // Clear error for this field
+      if (formErrors[name]) {
+        setFormErrors({ ...formErrors, [name]: '' });
+      }
+    } else {
+      // File was removed, clear it from state
+      setFiles({
+        ...files,
+        [name]: null,
+      });
+      // Set error if this is a required field
+      const requiredFields = ['aadharCard', 'panCard', 'shopActLicense', 'fssaiLicense'];
+      if (requiredFields.includes(name)) {
+        setFormErrors({ ...formErrors, [name]: `${name === 'aadharCard' ? 'Aadhar Card' : name === 'panCard' ? 'PAN Card' : name === 'shopActLicense' ? 'Shop Act License' : 'FSSAI License'} is required` });
+      }
     }
     setError("");
   };
@@ -52,27 +114,87 @@ const RegisterCart = () => {
     e.preventDefault();
     setError("");
     setSuccess(false);
+    setFormErrors({});
 
-    // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.cartName || !formData.location) {
-      setError("Please fill in all required fields");
-      return;
+    // Trim all form data
+    const trimmedData = {
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password.trim(),
+      confirmPassword: formData.confirmPassword.trim(),
+      cartName: formData.cartName.trim(),
+      location: formData.location.trim(),
+      phone: formData.phone.trim(),
+      address: formData.address.trim(),
+      shopActLicenseExpiry: formData.shopActLicenseExpiry,
+      fssaiLicenseExpiry: formData.fssaiLicenseExpiry,
+    };
+
+    const errors = {};
+
+    // Validate name
+    const nameError = validateName(trimmedData.name);
+    if (nameError) errors.name = nameError;
+
+    // Validate email
+    const emailError = validateEmail(trimmedData.email);
+    if (emailError) errors.email = emailError;
+
+    // Validate password
+    const passwordError = validatePassword(trimmedData.password);
+    if (passwordError) errors.password = passwordError;
+
+    // Validate confirm password
+    if (!trimmedData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (trimmedData.password !== trimmedData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError("Please enter a valid email address");
-      return;
+    // Validate cart name
+    if (!trimmedData.cartName) {
+      errors.cartName = 'Cart name is required';
+    } else if (trimmedData.cartName.length < 2) {
+      errors.cartName = 'Cart name must be at least 2 characters';
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
-      return;
+    // Validate location
+    if (!trimmedData.location) {
+      errors.location = 'Location is required';
+    } else if (trimmedData.location.length < 2) {
+      errors.location = 'Location must be at least 2 characters';
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
+    // Validate phone (optional but if provided, must be valid)
+    if (trimmedData.phone) {
+      const phoneError = validatePhoneNumber(trimmedData.phone);
+      if (phoneError) errors.phone = phoneError;
+    }
+
+    // Validate required documents
+    if (!files.aadharCard) {
+      errors.aadharCard = 'Aadhar Card is required';
+    }
+    if (!files.panCard) {
+      errors.panCard = 'PAN Card is required';
+    }
+    if (!files.shopActLicense) {
+      errors.shopActLicense = 'Shop Act License is required';
+    }
+    if (!files.fssaiLicense) {
+      errors.fssaiLicense = 'FSSAI License is required';
+    }
+
+    // If there are errors, display them and stop submission
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      // Scroll to first error
+      const firstErrorField = Object.keys(errors)[0];
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.focus();
+      }
       return;
     }
 
@@ -149,43 +271,27 @@ const RegisterCart = () => {
       
       console.log("Extracted error message:", errorMessage);
       
-      // Provide more helpful error messages
+      // Map backend errors to form fields
       const lowerErrorMessage = errorMessage.toLowerCase();
-      let finalErrorMessage = errorMessage;
+      const backendErrors = {};
       
       if (lowerErrorMessage.includes("email already registered") || lowerErrorMessage.includes("already registered")) {
-        // Try to find the existing cart
-        setSearchingExisting(true);
-        try {
-          const usersResponse = await api.get("/users");
-          const allUsers = usersResponse.data || [];
-          const existingUser = allUsers.find(
-            u => u.email && u.email.toLowerCase().trim() === formData.email.toLowerCase().trim()
-          );
-          
-          if (existingUser) {
-            setExistingCart({
-              id: existingUser._id,
-              name: existingUser.cartName || existingUser.name || "Unnamed Cart",
-              email: existingUser.email,
-              location: existingUser.location || "Not specified",
-              status: existingUser.isApproved ? (existingUser.isActive !== false ? "Active" : "Inactive") : "Pending Approval",
-              cartCode: existingUser.cartCode,
-            });
-            finalErrorMessage = `This email address is already registered. The cart "${existingUser.cartName || existingUser.name || 'Unnamed Cart'}" is using this email.`;
-          } else {
-            finalErrorMessage = `This email address (${formData.email}) is already registered. Please use a different email address.`;
-          }
-        } catch (searchErr) {
-          console.error("Error searching for existing cart:", searchErr);
-          finalErrorMessage = `This email address (${formData.email}) is already registered. Please use a different email address.`;
-        } finally {
-          setSearchingExisting(false);
-        }
+        backendErrors.email = `This email address is already registered. Please use a different email address.`;
+      } else if (lowerErrorMessage.includes("email")) {
+        backendErrors.email = errorMessage;
+      } else if (lowerErrorMessage.includes("password")) {
+        backendErrors.password = errorMessage;
+      } else if (lowerErrorMessage.includes("cart name") || lowerErrorMessage.includes("cartname")) {
+        backendErrors.cartName = errorMessage;
+      } else if (lowerErrorMessage.includes("location")) {
+        backendErrors.location = errorMessage;
+      } else {
+        setError(errorMessage);
       }
       
-      console.log("Setting error message:", finalErrorMessage);
-      setError(finalErrorMessage);
+      if (Object.keys(backendErrors).length > 0) {
+        setFormErrors(prev => ({ ...prev, ...backendErrors }));
+      }
       
       // Force re-render and scroll to error message
       setTimeout(() => {
@@ -221,50 +327,6 @@ const RegisterCart = () => {
           <p className="mt-2 text-center text-sm text-[#6b4423]">
             Fill in the details below to register a new cart under your franchise.
           </p>
-          <div className="mt-3 text-center">
-            <button
-              onClick={async () => {
-                const email = prompt("Enter your email address to find your existing cart:");
-                if (!email) return;
-                
-                setSearchingExisting(true);
-                setError("");
-                setExistingCart(null);
-                
-                try {
-                  const usersResponse = await api.get("/users");
-                  const allUsers = usersResponse.data || [];
-                  const foundCart = allUsers.find(
-                    u => u.role === "admin" && u.email && u.email.toLowerCase().trim() === email.toLowerCase().trim()
-                  );
-                  
-                  if (foundCart) {
-                    setExistingCart({
-                      id: foundCart._id,
-                      name: foundCart.cartName || foundCart.name || "Unnamed Cart",
-                      email: foundCart.email,
-                      location: foundCart.location || "Not specified",
-                      status: foundCart.isApproved ? (foundCart.isActive !== false ? "Active" : "Inactive") : "Pending Approval",
-                      cartCode: foundCart.cartCode,
-                    });
-                    setError(`✅ Cart found for email: ${email}`);
-                  } else {
-                    setError(`❌ No cart found with email: ${email}. You can proceed with registration.`);
-                    setExistingCart(null);
-                  }
-                } catch (err) {
-                  console.error("Error searching for cart:", err);
-                  setError("Failed to search for cart. Please try again.");
-                } finally {
-                  setSearchingExisting(false);
-                }
-              }}
-              className="text-sm text-[#d86d2a] hover:text-[#c75b1a] underline font-medium"
-              type="button"
-            >
-              🔍 Find My Existing Cart
-            </button>
-          </div>
         </div>
 
         {success && (
@@ -286,85 +348,9 @@ const RegisterCart = () => {
               <div className="flex-1">
                 <p className="font-bold text-base">Registration Error</p>
                 <p className="text-sm mt-1 font-medium">{error}</p>
-                
-                {/* Show existing cart information if found */}
-                {existingCart && (
-                  <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
-                    <div className="flex items-start gap-2 mb-3">
-                      <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                      </svg>
-                      <p className="text-sm font-bold text-blue-900">Your Cart Already Exists!</p>
-                    </div>
-                    <div className="bg-white p-3 rounded border border-blue-200 mb-3">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-700 w-24">Cart Name:</span>
-                          <span className="text-gray-900">{existingCart.name}</span>
-                        </div>
-                        {existingCart.cartCode && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-700 w-24">Cart Code:</span>
-                            <span className="px-2 py-1 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white text-xs font-mono font-bold rounded">
-                              {existingCart.cartCode}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-700 w-24">Location:</span>
-                          <span className="text-gray-900">{existingCart.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-700 w-24">Status:</span>
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            existingCart.status === "Active" ? "bg-green-100 text-green-800" :
-                            existingCart.status === "Inactive" ? "bg-red-100 text-red-800" :
-                            "bg-yellow-100 text-yellow-800"
-                          }`}>
-                            {existingCart.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        onClick={() => navigate(`/carts/${existingCart.id}`)}
-                        className="flex-1 px-4 py-2 bg-[#d86d2a] hover:bg-[#c75b1a] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
-                        type="button"
-                      >
-                        📋 View Cart Details
-                      </button>
-                      <button
-                        onClick={() => navigate("/carts")}
-                        className="flex-1 px-4 py-2 border border-[#e2c1ac] text-[#4a2e1f] hover:bg-[#fef4ec] text-sm font-semibold rounded-lg transition-colors"
-                        type="button"
-                      >
-                        📋 All Carts
-                      </button>
-                      <button
-                        onClick={() => {
-                          setError("");
-                          setExistingCart(null);
-                          setFormData(prev => ({ ...prev, email: "" }));
-                        }}
-                        className="flex-1 px-4 py-2 border border-blue-300 text-blue-700 hover:bg-blue-100 text-sm font-semibold rounded-lg transition-colors"
-                        type="button"
-                      >
-                        Use Different Email
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {searchingExisting && (
-                  <p className="text-sm mt-2 text-gray-600">Searching for existing cart...</p>
-                )}
               </div>
               <button
-                onClick={() => {
-                  setError("");
-                  setExistingCart(null);
-                }}
+                onClick={() => setError("")}
                 className="text-red-600 hover:text-red-800 flex-shrink-0 p-1 hover:bg-red-100 rounded"
                 aria-label="Dismiss error"
                 type="button"
@@ -390,9 +376,16 @@ const RegisterCart = () => {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.name 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="John Doe"
               />
+              {formErrors.name && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
+              )}
             </div>
 
             <div>
@@ -406,9 +399,16 @@ const RegisterCart = () => {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.email 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="manager@cart.com"
               />
+              {formErrors.email && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -422,9 +422,19 @@ const RegisterCart = () => {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.password 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="Minimum 6 characters"
               />
+              {formErrors.password && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+              )}
+              {!formErrors.password && (
+                <p className="mt-1 text-xs text-[#6b4423]">Password must be at least 6 characters</p>
+              )}
             </div>
 
             <div>
@@ -438,9 +448,16 @@ const RegisterCart = () => {
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.confirmPassword 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="Confirm password"
               />
+              {formErrors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.confirmPassword}</p>
+              )}
             </div>
 
             <div>
@@ -454,9 +471,16 @@ const RegisterCart = () => {
                 required
                 value={formData.cartName}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.cartName 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="Terra Cart Downtown"
               />
+              {formErrors.cartName && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.cartName}</p>
+              )}
             </div>
 
             <div>
@@ -470,9 +494,16 @@ const RegisterCart = () => {
                 required
                 value={formData.location}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.location 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="Downtown, City"
               />
+              {formErrors.location && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>
+              )}
             </div>
 
             <div>
@@ -485,9 +516,19 @@ const RegisterCart = () => {
                 type="tel"
                 value={formData.phone}
                 onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.phone 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                }`}
                 placeholder="+91 1234567890"
               />
+              {formErrors.phone && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+              )}
+              {!formErrors.phone && (
+                <p className="mt-1 text-xs text-[#6b4423]">Optional: 10-digit Indian mobile number</p>
+              )}
             </div>
 
             <div className="md:col-span-2">
@@ -506,16 +547,16 @@ const RegisterCart = () => {
             </div>
           </div>
 
-          {/* Document Upload Section - All Optional */}
+          {/* Document Upload Section - Required */}
           <div className="mt-8 border-t border-[#e2c1ac] pt-6">
-            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">Owner Documents (Optional)</h3>
+            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">Owner Documents <span className="text-red-500">*</span></h3>
             <p className="text-sm text-[#6b4423] mb-4">
-              📄 Documents can be uploaded later. You can create the cart now and add documents anytime.
+              📄 All documents are required for cart registration.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="aadharCard" className="block text-sm font-medium text-[#4a2e1f]">
-                  Aadhar Card of Owner
+                  Aadhar Card of Owner <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="aadharCard"
@@ -523,16 +564,21 @@ const RegisterCart = () => {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
-                  className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
+                  className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
+                    formErrors.aadharCard ? 'border border-red-500 rounded-lg' : ''
+                  }`}
                 />
                 {files.aadharCard && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.aadharCard.name}</p>
+                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.aadharCard.name}</p>
+                )}
+                {formErrors.aadharCard && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.aadharCard}</p>
                 )}
               </div>
 
               <div>
                 <label htmlFor="panCard" className="block text-sm font-medium text-[#4a2e1f]">
-                  PAN Card
+                  PAN Card <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="panCard"
@@ -540,16 +586,21 @@ const RegisterCart = () => {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
-                  className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
+                  className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
+                    formErrors.panCard ? 'border border-red-500 rounded-lg' : ''
+                  }`}
                 />
                 {files.panCard && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.panCard.name}</p>
+                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.panCard.name}</p>
+                )}
+                {formErrors.panCard && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.panCard}</p>
                 )}
               </div>
 
               <div>
                 <label htmlFor="shopActLicense" className="block text-sm font-medium text-[#4a2e1f]">
-                  Shop Act License
+                  Shop Act License <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="shopActLicense"
@@ -557,10 +608,15 @@ const RegisterCart = () => {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
-                  className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
+                  className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
+                    formErrors.shopActLicense ? 'border border-red-500 rounded-lg' : ''
+                  }`}
                 />
                 {files.shopActLicense && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.shopActLicense.name}</p>
+                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.shopActLicense.name}</p>
+                )}
+                {formErrors.shopActLicense && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.shopActLicense}</p>
                 )}
                 <input
                   type="date"
@@ -575,7 +631,7 @@ const RegisterCart = () => {
 
               <div>
                 <label htmlFor="fssaiLicense" className="block text-sm font-medium text-[#4a2e1f]">
-                  FSSAI License
+                  FSSAI License <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="fssaiLicense"
@@ -583,10 +639,15 @@ const RegisterCart = () => {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
-                  className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
+                  className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
+                    formErrors.fssaiLicense ? 'border border-red-500 rounded-lg' : ''
+                  }`}
                 />
                 {files.fssaiLicense && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.fssaiLicense.name}</p>
+                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.fssaiLicense.name}</p>
+                )}
+                {formErrors.fssaiLicense && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.fssaiLicense}</p>
                 )}
                 <input
                   type="date"
@@ -601,7 +662,7 @@ const RegisterCart = () => {
 
             </div>
             <p className="mt-4 text-xs text-[#6b4423]">
-              All documents are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
+              All documents are required. Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
             </p>
           </div>
 

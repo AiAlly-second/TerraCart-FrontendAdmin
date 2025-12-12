@@ -115,19 +115,38 @@ const Carts = () => {
 
   const handleToggleStatus = async (cartId) => {
     const cart = carts.find(c => c.id === cartId);
-    const newStatus = cart?.isActive ? 'deactivate' : 'activate';
-    
-    if (!window.confirm(`Are you sure you want to ${newStatus} this cart?`)) {
-      return;
-    }
+    const cartName = cart?.cartName || cart?.name || 'this cart';
+    const isCurrentlyActive = cart?.isActive !== false;
+    const action = isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE';
     
     try {
+      const { confirm } = await import('../utils/confirm');
+      const confirmed = await confirm(
+        `Are you sure you want to ${action} cart "${cartName}"?\n\n${
+          isCurrentlyActive 
+            ? '⚠️ This will prevent the cart from accepting new orders.'
+            : '✅ The cart will be able to accept new orders again.'
+        }`,
+        {
+          title: `${action} Cart`,
+          warningMessage: isCurrentlyActive ? 'WARNING: DEACTIVATION' : 'Activation',
+          danger: isCurrentlyActive,
+          confirmText: action,
+          cancelText: 'Cancel'
+        }
+      );
+      
+      if (!confirmed) return;
+      
       setTogglingId(cartId);
       const response = await api.patch(`/users/${cartId}/toggle-cafe-status`);
-      alert(response.data.message || `Cart ${newStatus}d successfully!`);
+      alert(response.data.message || `Cart ${action.toLowerCase()}d successfully!`);
       fetchCarts();
     } catch (error) {
-      alert(error.response?.data?.message || `Failed to ${newStatus} cart`);
+      console.error('Error toggling cart status:', error);
+      if (error.response?.status !== 400) { // Don't show alert if user cancelled
+        alert(error.response?.data?.message || `Failed to ${action.toLowerCase()} cart`);
+      }
     } finally {
       setTogglingId(null);
     }

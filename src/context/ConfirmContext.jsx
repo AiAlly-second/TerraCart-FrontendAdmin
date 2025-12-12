@@ -51,18 +51,22 @@ export const ConfirmProvider = ({ children }) => {
   }, []);
 
   const closeConfirm = useCallback(() => {
-    if (confirmState.onCancel) {
-      confirmState.onCancel();
-    }
-    setConfirmState(prev => ({ ...prev, isOpen: false }));
-  }, [confirmState]);
+    setConfirmState(prev => {
+      if (prev.onCancel) {
+        prev.onCancel();
+      }
+      return { ...prev, isOpen: false };
+    });
+  }, []);
 
   const handleConfirm = useCallback(() => {
-    if (confirmState.onConfirm) {
-      confirmState.onConfirm();
-    }
-    setConfirmState(prev => ({ ...prev, isOpen: false }));
-  }, [confirmState]);
+    setConfirmState(prev => {
+      if (prev.onConfirm) {
+        prev.onConfirm();
+      }
+      return { ...prev, isOpen: false };
+    });
+  }, []);
 
   const value = {
     showConfirm

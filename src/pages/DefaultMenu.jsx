@@ -270,10 +270,27 @@ const DefaultMenu = () => {
     setShowCategoryModal(true);
   };
 
-  const handleDeleteCategory = (index) => {
-    if (!window.confirm('Are you sure you want to delete this category and all its items?')) {
-      return;
-    }
+  const handleDeleteCategory = async (e, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const category = defaultMenu.categories[index];
+    const categoryName = category?.name || 'this category';
+    
+    const { confirm } = await import('../utils/confirm');
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE category "${categoryName}" and ALL its items?\n\nThis action cannot be undone.`,
+      {
+        title: 'Delete Category',
+        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        danger: true,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+    
+    if (!confirmed) return;
+    
     const newCategories = [...defaultMenu.categories];
     newCategories.splice(index, 1);
     setDefaultMenu({ ...defaultMenu, categories: newCategories });
