@@ -1,14 +1,7 @@
-<<<<<<< HEAD
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import api from "../utils/api";
-import io from "socket.io-client";
-=======
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import QRCode from 'react-qr-code';
-import api from '../utils/api';
-import { createSocketConnection } from '../utils/socket';
->>>>>>> 20f90b1beb1f7316c5062fa770e309cc93bc2f81
+import { createSocketConnection } from "../utils/socket";
 
 const STATUS_MAP = {
   AVAILABLE: {

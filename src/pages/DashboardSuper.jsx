@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -9,20 +8,10 @@ import {
   FaSpinner,
 } from "react-icons/fa";
 import api from "../utils/api";
-import io from "socket.io-client";
-
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi);
-=======
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { FaBuilding, FaUsers, FaRupeeSign, FaChartLine, FaSpinner } from 'react-icons/fa';
-import api from '../utils/api';
-import { getSocket } from '../utils/socket';
+import { getSocket } from "../utils/socket";
 
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
->>>>>>> 20f90b1beb1f7316c5062fa770e309cc93bc2f81
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
