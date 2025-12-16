@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import io from "socket.io-client";
+import { getSocket } from "../utils/socket";
 
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi);
+// Use centralized socket connection with proper CORS configuration
+const socket = getSocket();
 
 const StatCard = ({ title, value, icon, onClick, clickable = false, subtitle, color = "default" }) => {
   const colorClasses = {

@@ -20,6 +20,23 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: false,
+    proxy: {
+      // Proxy Socket.IO requests to avoid CORS issues in development
+      "/socket.io": {
+        target: "https://terracart-backendmain-2.onrender.com",
+        changeOrigin: true,
+        ws: true, // Enable WebSocket proxying
+        secure: true,
+        rewrite: (path) => path, // Don't rewrite the path
+      },
+      // Proxy API requests
+      "/api": {
+        target: "https://terracart-backendmain-2.onrender.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path,
+      },
+    },
   },
   preview: {
     port: 4174,
