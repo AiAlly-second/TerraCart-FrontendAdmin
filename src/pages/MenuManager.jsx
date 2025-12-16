@@ -132,7 +132,7 @@ const MenuManager = () => {
       if (spiceRes?.data?.spiceLevels) {
         setSpiceLevels(spiceRes.data.spiceLevels);
       }
-      if (menuRes.data?.length && !selectedCategoryId) {
+      if (menuRes.data?.length && !selectedCategoryId && menuRes.data[0]?._id) {
         setSelectedCategoryId(menuRes.data[0]._id);
       }
     } catch (err) {
@@ -170,6 +170,10 @@ const MenuManager = () => {
   };
 
   const handleEditCategory = (category) => {
+    if (!category || !category._id) {
+      console.error("Cannot edit: invalid category", category);
+      return;
+    }
     setCategoryForm({
       name: category.name || "",
       description: category.description || "",
@@ -180,14 +184,30 @@ const MenuManager = () => {
     setEditingCategoryId(category._id);
   };
 
-  const handleDeleteCategory = async (category) => {
-    if (
-      !window.confirm(
-        `Delete category "${category.name}"? This requires the category to be empty.`
-      )
-    ) {
+  const handleDeleteCategory = async (e, category) => {
+    if (!category || !category._id) {
+      console.error("Cannot delete: invalid category", category);
       return;
     }
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE category "${
+        category.name || "this category"
+      }"?\n\nThis requires the category to be empty. This action cannot be undone.`,
+      {
+        title: "Delete Category",
+        warningMessage: "WARNING: PERMANENTLY DELETE",
+        danger: true,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+      }
+    );
+
+    if (!confirmed) return;
+
     try {
       await api.delete(`/menu/categories/${category._id}`);
       if (selectedCategoryId === category._id) {
@@ -257,7 +277,36 @@ const MenuManager = () => {
     }
   };
 
+  // Move a menu item from the current category to another category (cart/franchise level)
+  const handleMoveItemToCategory = async (item, targetCategoryId) => {
+    if (
+      !item ||
+      !item._id ||
+      !targetCategoryId ||
+      targetCategoryId === selectedCategoryId
+    ) {
+      return;
+    }
+    try {
+      await api.patch(`/menu/items/${item._id}`, {
+        categoryId: targetCategoryId,
+      });
+      // Reload menu so UI reflects new category assignment
+      await loadMenu();
+      // Optionally, keep current category selected; item will disappear from this list
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Failed to move item to the selected category"
+      );
+    }
+  };
+
   const handleEditItem = (item) => {
+    if (!item || !item._id) {
+      console.error("Cannot edit: invalid item", item);
+      return;
+    }
     setItemForm({
       name: item.name || "",
       description: item.description || "",
@@ -267,8 +316,8 @@ const MenuManager = () => {
       sortOrder: item.sortOrder ?? 0,
       isAvailable: item.isAvailable ?? true,
       isFeatured: item.isFeatured ?? false,
-      tags: (item.tags || []).join(", "),
-      allergens: (item.allergens || []).join(", "),
+      tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
+      allergens: Array.isArray(item.allergens) ? item.allergens.join(", ") : "",
       calories: item.calories ?? "",
     });
     setEditingItemId(item._id);
@@ -279,8 +328,30 @@ const MenuManager = () => {
     setEditingItemId(null);
   };
 
-  const handleDeleteItem = async (item) => {
-    if (!window.confirm(`Remove "${item.name}" from the menu?`)) return;
+  const handleDeleteItem = async (e, item) => {
+    if (!item || !item._id) {
+      console.error("Cannot delete: invalid item", item);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${
+        item.name || "this item"
+      }" from the menu?\n\nThis action cannot be undone.`,
+      {
+        title: "Delete Menu Item",
+        warningMessage: "WARNING: PERMANENTLY DELETE",
+        danger: true,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+      }
+    );
+
+    if (!confirmed) return;
+
     try {
       await api.delete(`/menu/items/${item._id}`);
       await loadMenu();
@@ -290,6 +361,10 @@ const MenuManager = () => {
   };
 
   const handleToggleAvailability = async (item) => {
+    if (!item || !item._id) {
+      console.error("Cannot toggle availability: invalid item", item);
+      return;
+    }
     try {
       await api.patch(`/menu/items/${item._id}/availability`, {
         isAvailable: !item.isAvailable,
@@ -414,9 +489,9 @@ const MenuManager = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        handleDeleteCategory(category);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCategory(e, category);
                       }}
                       className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-100"
                     >
@@ -568,9 +643,9 @@ const MenuManager = () => {
               <>
                 {/* Items Grid View */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
-                  {(selectedCategory.items || []).map((item) => (
+                  {(selectedCategory?.items || []).map((item) => (
                     <div
-                      key={item._id}
+                      key={item?._id || Math.random()}
                       className={`bg-white rounded-lg border overflow-hidden shadow-sm hover:shadow transition-all ${
                         item.isAvailable
                           ? "border-slate-200"
@@ -579,10 +654,10 @@ const MenuManager = () => {
                     >
                       {/* Item Image */}
                       <div className="h-32 md:h-36 bg-gradient-to-br from-slate-100 to-slate-200 relative">
-                        {item.image ? (
+                        {item?.image ? (
                           <img
                             src={getImageUrl(item.image)}
-                            alt={item.name}
+                            alt={item?.name || "Menu item"}
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               console.error(
@@ -623,7 +698,7 @@ const MenuManager = () => {
                         {/* Price */}
                         <div className="absolute bottom-1 right-1">
                           <span className="px-1.5 py-0.5 bg-blue-600 text-white font-bold rounded text-xs shadow">
-                            ₹{item.price?.toFixed(0)}
+                            ₹{item?.price ? Number(item.price).toFixed(0) : "0"}
                           </span>
                         </div>
                       </div>
@@ -632,12 +707,12 @@ const MenuManager = () => {
                       <div className="p-2">
                         <h4
                           className="font-semibold text-sm text-slate-800 truncate"
-                          title={item.name}
+                          title={item?.name || "Unnamed item"}
                         >
-                          {item.name}
+                          {item?.name || "Unnamed item"}
                         </h4>
 
-                        {item.description && (
+                        {item?.description && (
                           <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                             {item.description}
                           </p>
@@ -645,48 +720,88 @@ const MenuManager = () => {
 
                         {/* Meta Tags */}
                         <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px]">
-                          {item.spiceLevel && item.spiceLevel !== "NONE" && (
+                          {item?.spiceLevel && item.spiceLevel !== "NONE" && (
                             <span>🌶️</span>
                           )}
-                          {item.calories && (
+                          {item?.calories && (
                             <span className="text-slate-400">
                               {item.calories}cal
                             </span>
                           )}
-                          {item.tags?.length > 0 && (
-                            <span className="text-purple-500">
-                              {item.tags[0]}
-                            </span>
-                          )}
-                          {item.allergens?.length > 0 && (
-                            <span className="text-red-400">⚠️</span>
-                          )}
+                          {item?.tags &&
+                            Array.isArray(item.tags) &&
+                            item.tags.length > 0 && (
+                              <span className="text-purple-500">
+                                {item.tags[0]}
+                              </span>
+                            )}
+                          {item?.allergens &&
+                            Array.isArray(item.allergens) &&
+                            item.allergens.length > 0 && (
+                              <span className="text-red-400">⚠️</span>
+                            )}
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
-                          <button
-                            onClick={() => handleToggleAvailability(item)}
-                            className={`flex-1 text-[10px] px-1 py-1 rounded border ${
-                              item.isAvailable
-                                ? "border-amber-200 text-amber-600"
-                                : "border-green-200 text-green-600"
-                            }`}
-                          >
-                            {item.isAvailable ? "Hide" : "Show"}
-                          </button>
-                          <button
-                            onClick={() => handleEditItem(item)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                          >
-                            <FaEdit size={11} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(item)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <FaTrash size={11} />
-                          </button>
+                        <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() =>
+                                item && handleToggleAvailability(item)
+                              }
+                              className={`flex-1 text-[10px] px-1 py-1 rounded border ${
+                                item?.isAvailable !== false
+                                  ? "border-amber-200 text-amber-600"
+                                  : "border-green-200 text-green-600"
+                              }`}
+                            >
+                              {item?.isAvailable !== false ? "Hide" : "Show"}
+                            </button>
+                            <button
+                              onClick={() => item && handleEditItem(item)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            >
+                              <FaEdit size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => item && handleDeleteItem(e, item)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <FaTrash size={11} />
+                            </button>
+                          </div>
+
+                          {/* Move item to another category */}
+                          {menu?.length > 1 && (
+                            <div className="flex items-center gap-1">
+                              <label className="text-[9px] text-slate-400">
+                                Move to
+                              </label>
+                              <select
+                                className="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] bg-white"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const targetId = e.target.value;
+                                  if (!targetId) return;
+                                  handleMoveItemToCategory(item, targetId);
+                                  // Reset to placeholder so user can move again
+                                  e.target.value = "";
+                                }}
+                              >
+                                <option value="">Select category</option>
+                                {menu
+                                  .filter(
+                                    (cat) => cat._id !== selectedCategoryId
+                                  )
+                                  .map((cat) => (
+                                    <option key={cat._id} value={cat._id}>
+                                      {cat.name || "Unnamed Category"}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

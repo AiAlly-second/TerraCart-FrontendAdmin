@@ -14,8 +14,9 @@ export const setConfirmContext = (context) => {
 export const confirm = async (message, options = {}) => {
   if (!confirmContext) {
     // Fallback to native confirm if context is not available
+    // Note: window.confirm is now async, so we need to await it
     console.warn('Confirm context not available, falling back to native confirm');
-    return window.confirm(message);
+    return await window.confirm(message);
   }
 
   // Determine if it's a dangerous action

@@ -53,7 +53,14 @@ const SignUp = () => {
     setSuccess(false);
 
     // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.cafeName || !formData.location || !formData.franchiseId) {
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.password ||
+      !formData.cafeName ||
+      !formData.location ||
+      !formData.franchiseId
+    ) {
       setError("Please fill in all required fields including Franchise ID");
       return;
     }
@@ -81,22 +88,37 @@ const SignUp = () => {
       formDataToSend.append("franchiseId", formData.franchiseId);
       if (formData.phone) formDataToSend.append("phone", formData.phone);
       if (formData.address) formDataToSend.append("address", formData.address);
-      
+
       // Append expiry dates if provided (only for documents that can expire)
-      if (formData.shopActLicenseExpiry) formDataToSend.append("shopActLicenseExpiry", formData.shopActLicenseExpiry);
-      if (formData.fssaiLicenseExpiry) formDataToSend.append("fssaiLicenseExpiry", formData.fssaiLicenseExpiry);
+      if (formData.shopActLicenseExpiry)
+        formDataToSend.append(
+          "shopActLicenseExpiry",
+          formData.shopActLicenseExpiry
+        );
+      if (formData.fssaiLicenseExpiry)
+        formDataToSend.append(
+          "fssaiLicenseExpiry",
+          formData.fssaiLicenseExpiry
+        );
 
       // Append files if selected
-      if (files.aadharCard) formDataToSend.append("aadharCard", files.aadharCard);
+      if (files.aadharCard)
+        formDataToSend.append("aadharCard", files.aadharCard);
       if (files.panCard) formDataToSend.append("panCard", files.panCard);
-      if (files.shopActLicense) formDataToSend.append("shopActLicense", files.shopActLicense);
-      if (files.fssaiLicense) formDataToSend.append("fssaiLicense", files.fssaiLicense);
+      if (files.shopActLicense)
+        formDataToSend.append("shopActLicense", files.shopActLicense);
+      if (files.fssaiLicense)
+        formDataToSend.append("fssaiLicense", files.fssaiLicense);
 
-      const response = await api.post("/users/register-cafe-admin-public", formDataToSend, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const response = await api.post(
+        "/users/register-cafe-admin-public",
+        formDataToSend,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       setSuccess(true);
       setFormData({
@@ -124,16 +146,22 @@ const SignUp = () => {
         navigate("/");
       }, 3000);
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed. Please try again.");
+      setError(
+        err.response?.data?.message || "Registration failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#f5e3d5]" style={{
-      backgroundImage: 'linear-gradient(135deg, #f5e3d5 0%, #fef4ec 50%, #f3ddcb 100%)'
-    }}>
+    <div
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#f5e3d5]"
+      style={{
+        backgroundImage:
+          "linear-gradient(135deg, #f5e3d5 0%, #fef4ec 50%, #f3ddcb 100%)",
+      }}
+    >
       <div className="w-full max-w-4xl space-y-8 bg-white p-8 rounded-xl shadow-lg border border-[#e2c1ac]">
         <div className="flex justify-center">
           <img src={Logo} alt="Terra Cart Logo" className="h-20" />
@@ -143,7 +171,8 @@ const SignUp = () => {
             Register New Cart Admin
           </h2>
           <p className="mt-2 text-center text-sm text-[#6b4423]">
-            Fill in the details below. Your account will be reviewed by franchise admin.
+            Fill in the details below. Your account will be reviewed by
+            franchise admin.
           </p>
         </div>
 
@@ -151,8 +180,8 @@ const SignUp = () => {
           <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
             <p className="font-semibold">Registration Successful!</p>
             <p className="text-sm mt-1">
-              Your cart admin account has been created. Waiting for franchise admin approval.
-              You will be redirected to login page...
+              Your cart admin account has been created. Waiting for franchise
+              admin approval. You will be redirected to login page...
             </p>
           </div>
         )}
@@ -166,7 +195,10 @@ const SignUp = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="franchiseId" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="franchiseId"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Franchise ID <span className="text-red-500">*</span>
               </label>
               <input
@@ -179,12 +211,17 @@ const SignUp = () => {
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-[#e2c1ac] placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 placeholder="Enter Franchise ID"
               />
-              <p className="mt-1 text-xs text-[#6b4423]">Get this from your franchise administrator</p>
+              <p className="mt-1 text-xs text-[#6b4423]">
+                Get this from your franchise administrator
+              </p>
             </div>
 
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-[#4a2e1f]">
-                Manager Name <span className="text-red-500">*</span>
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
+                Name <span className="text-red-500">*</span>
               </label>
               <input
                 id="name"
@@ -199,7 +236,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Email <span className="text-red-500">*</span>
               </label>
               <input
@@ -215,7 +255,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Password <span className="text-red-500">*</span>
               </label>
               <input
@@ -231,7 +274,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Confirm Password <span className="text-red-500">*</span>
               </label>
               <input
@@ -247,7 +293,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="cafeName" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="cafeName"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Cart Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -263,7 +312,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="location"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Location <span className="text-red-500">*</span>
               </label>
               <input
@@ -279,7 +331,10 @@ const SignUp = () => {
             </div>
 
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Phone
               </label>
               <input
@@ -294,7 +349,10 @@ const SignUp = () => {
             </div>
 
             <div className="md:col-span-2">
-              <label htmlFor="address" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="address"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Address
               </label>
               <textarea
@@ -311,13 +369,19 @@ const SignUp = () => {
 
           {/* Document Upload Section - All Optional */}
           <div className="mt-8 border-t border-[#e2c1ac] pt-6">
-            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">Owner Documents (Optional)</h3>
+            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">
+              Owner Documents (Optional)
+            </h3>
             <p className="text-sm text-[#6b4423] mb-4">
-              📄 Documents can be uploaded later. You can register now and add documents anytime.
+              📄 Documents can be uploaded later. You can register now and add
+              documents anytime.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="aadharCard" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="aadharCard"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   Aadhar Card of Owner
                 </label>
                 <input
@@ -329,12 +393,17 @@ const SignUp = () => {
                   className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                 />
                 {files.aadharCard && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.aadharCard.name}</p>
+                  <p className="mt-1 text-xs text-[#6b4423]">
+                    Selected: {files.aadharCard.name}
+                  </p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="panCard" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="panCard"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   PAN Card
                 </label>
                 <input
@@ -346,12 +415,17 @@ const SignUp = () => {
                   className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                 />
                 {files.panCard && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.panCard.name}</p>
+                  <p className="mt-1 text-xs text-[#6b4423]">
+                    Selected: {files.panCard.name}
+                  </p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="shopActLicense" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="shopActLicense"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   Shop Act License
                 </label>
                 <input
@@ -363,7 +437,9 @@ const SignUp = () => {
                   className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                 />
                 {files.shopActLicense && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.shopActLicense.name}</p>
+                  <p className="mt-1 text-xs text-[#6b4423]">
+                    Selected: {files.shopActLicense.name}
+                  </p>
                 )}
                 <input
                   type="date"
@@ -373,11 +449,16 @@ const SignUp = () => {
                   onChange={handleChange}
                   className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 />
-                <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Expiry Date (Optional)
+                </p>
               </div>
 
               <div>
-                <label htmlFor="fssaiLicense" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="fssaiLicense"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   FSSAI License
                 </label>
                 <input
@@ -389,7 +470,9 @@ const SignUp = () => {
                   className="mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5]"
                 />
                 {files.fssaiLicense && (
-                  <p className="mt-1 text-xs text-[#6b4423]">Selected: {files.fssaiLicense.name}</p>
+                  <p className="mt-1 text-xs text-[#6b4423]">
+                    Selected: {files.fssaiLicense.name}
+                  </p>
                 )}
                 <input
                   type="date"
@@ -399,12 +482,14 @@ const SignUp = () => {
                   onChange={handleChange}
                   className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 />
-                <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Expiry Date (Optional)
+                </p>
               </div>
-
             </div>
             <p className="mt-4 text-xs text-[#6b4423]">
-              All documents are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
+              All documents are optional. Accepted formats: PDF, JPG, PNG, WEBP
+              (Max 10MB per file)
             </p>
           </div>
 
@@ -419,7 +504,9 @@ const SignUp = () => {
               type="submit"
               disabled={loading}
               className={`px-6 py-2 font-bold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md ${
-                loading ? 'bg-[#c75b1a] cursor-not-allowed opacity-70' : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
+                loading
+                  ? "bg-[#c75b1a] cursor-not-allowed opacity-70"
+                  : "bg-[#d86d2a] hover:bg-[#c75b1a]"
               }`}
             >
               {loading ? "Registering..." : "Register Cart Admin"}

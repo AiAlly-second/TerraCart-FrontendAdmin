@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { FaExclamationTriangle, FaTimes } from 'react-icons/fa';
-import Input from './Input';
+import React, { useState, useEffect } from "react";
+import { FaExclamationTriangle, FaTimes } from "react-icons/fa";
+import Input from "./Input";
 
 /**
  * Enhanced Confirmation Modal with input confirmation support
@@ -10,32 +10,32 @@ const ConfirmationModal = ({
   isOpen,
   onClose,
   onConfirm,
-  title = 'Confirm Action',
-  message = '',
-  warningMessage = '',
+  title = "Confirm Action",
+  message = "",
+  warningMessage = "",
   items = [],
-  confirmText = 'OK',
-  cancelText = 'Cancel',
+  confirmText = "OK",
+  cancelText = "Cancel",
   danger = false,
   requireInput = false,
-  inputPlaceholder = '',
-  inputMatch = '',
-  inputLabel = 'Type to confirm'
+  inputPlaceholder = "",
+  inputMatch = "",
+  inputLabel = "Type to confirm",
 }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [inputError, setInputError] = useState('');
+  const [inputValue, setInputValue] = useState("");
+  const [inputError, setInputError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
-      setInputValue('');
-      setInputError('');
+      setInputValue("");
+      setInputError("");
     }
   }, [isOpen]);
 
   const handleConfirm = () => {
     if (requireInput) {
       if (!inputValue.trim()) {
-        setInputError('Please enter the confirmation text');
+        setInputError("Please enter the confirmation text");
         return;
       }
       if (inputMatch && inputValue.trim() !== inputMatch) {
@@ -43,35 +43,46 @@ const ConfirmationModal = ({
         return;
       }
     }
+    // CRITICAL: Only call onConfirm, not onClose
+    // The onConfirm handler in ConfirmContext will close the modal
     onConfirm();
-    onClose();
   };
 
   const handleClose = () => {
-    setInputValue('');
-    setInputError('');
+    setInputValue("");
+    setInputError("");
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[10000] p-4"
+    <div
+      className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"
       onClick={handleClose}
     >
-      <div 
+      <div
         className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`px-6 py-4 border-b ${danger ? 'bg-[#fef2f2] border-[#ef4444]' : 'bg-[#fef4ec] border-[#e2c1ac]'}`}>
+        <div
+          className={`px-6 py-4 border-b ${
+            danger
+              ? "bg-[#fef2f2] border-[#ef4444]"
+              : "bg-[#fef4ec] border-[#e2c1ac]"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {danger && (
                 <FaExclamationTriangle className="text-2xl text-[#ef4444]" />
               )}
-              <h3 className={`text-xl font-bold ${danger ? 'text-[#991b1b]' : 'text-[#4a2e1f]'}`}>
+              <h3
+                className={`text-xl font-bold ${
+                  danger ? "text-[#991b1b]" : "text-[#4a2e1f]"
+                }`}
+              >
                 {title}
               </h3>
             </div>
@@ -101,9 +112,7 @@ const ConfirmationModal = ({
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {/* Main Message */}
           {message && (
-            <p className="text-[#4a2e1f] mb-4 leading-relaxed">
-              {message}
-            </p>
+            <p className="text-[#4a2e1f] mb-4 leading-relaxed">{message}</p>
           )}
 
           {/* Items List */}
@@ -129,7 +138,7 @@ const ConfirmationModal = ({
                 value={inputValue}
                 onChange={(e) => {
                   setInputValue(e.target.value);
-                  setInputError('');
+                  setInputError("");
                 }}
                 placeholder={inputPlaceholder}
                 error={inputError}
@@ -151,8 +160,8 @@ const ConfirmationModal = ({
             onClick={handleConfirm}
             className={`px-6 py-2 rounded-lg font-semibold text-white transition-colors ${
               danger
-                ? 'bg-[#ef4444] hover:bg-[#dc2626]'
-                : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
+                ? "bg-[#ef4444] hover:bg-[#dc2626]"
+                : "bg-[#d86d2a] hover:bg-[#c75b1a]"
             }`}
           >
             {confirmText}
@@ -164,4 +173,3 @@ const ConfirmationModal = ({
 };
 
 export default ConfirmationModal;
-

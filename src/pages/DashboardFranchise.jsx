@@ -330,23 +330,23 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 min-h-screen">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 md:mb-6 gap-3 md:gap-4">
-        <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-[#4a2e1f]">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#4a2e1f] truncate">
           {franchiseName} Dashboard
         </h1>
         
         {/* Franchise ID Quick Access */}
-        <div className="flex items-center gap-2 md:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 shadow-lg">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-base md:text-xl">🏢</span>
+        <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 shadow-lg">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-sm sm:text-base md:text-xl">🏢</span>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] md:text-xs text-white/70 font-medium">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70 font-medium">
                 {franchiseCode ? 'Franchise Code' : 'Franchise ID'}
               </p>
-              <span className={`font-mono font-bold text-white tracking-wider block truncate ${franchiseCode ? 'text-sm md:text-xl' : 'text-xs md:text-base'}`}>
+              <span className={`font-mono font-bold text-white tracking-wider block truncate ${franchiseCode ? 'text-xs sm:text-sm md:text-xl' : 'text-[10px] sm:text-xs md:text-base'}`}>
                 {getDisplayId()}
               </span>
               {!franchiseCode && franchiseId && (

@@ -344,7 +344,7 @@ const Investments = () => {
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">
               {editingInvestment ? 'Edit Investment' : 'Add Investment'}
@@ -586,7 +586,7 @@ const Investments = () => {
 
           {/* Asset Create/Edit Modal */}
           {assetModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-2xl font-bold text-[#4a2e1f] mb-4">
                   {editingAsset ? 'Edit Outlet Asset' : 'Add Outlet Asset'}

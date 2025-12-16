@@ -17,6 +17,7 @@ const Payments = () => {
   const [error, setError] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [busyId, setBusyId] = useState(null);
 
   const loadPayments = async () => {
@@ -37,22 +38,42 @@ const Payments = () => {
   }, []);
 
   const filteredPayments = useMemo(() => {
+    let filtered = payments;
+    
+    // Filter by status
     switch (filterStatus) {
       case "ACTIVE":
-        return payments.filter((p) =>
+        filtered = filtered.filter((p) =>
           ["PENDING", "PROCESSING", "CASH_PENDING"].includes(p.status)
         );
+        break;
       case "PAID":
-        return payments.filter((p) => p.status === "PAID");
+        filtered = filtered.filter((p) => p.status === "PAID");
+        break;
       case "CANCELLED":
-        return payments.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        filtered = filtered.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
+        break;
       default:
-        return payments;
+        // ALL - no status filter
+        break;
     }
-  }, [payments, filterStatus]);
+    
+    // Filter by date if provided
+    if (filterDate) {
+      filtered = filtered.filter((p) => {
+        const paymentDate = new Date(p.createdAt);
+        const filterDateObj = new Date(filterDate);
+        return paymentDate.toDateString() === filterDateObj.toDateString();
+      });
+    }
+    
+    return filtered;
+  }, [payments, filterStatus, filterDate]);
 
   const handleMarkPaid = async (payment) => {
-    if (!window.confirm(`Mark payment ${payment.id} as paid?`)) return;
+    // CRITICAL: window.confirm is now async, must await it
+    const confirmed = await window.confirm(`Mark payment ${payment.id} as paid?`);
+    if (!confirmed) return;
     setBusyId(payment.id);
     try {
       await api.post(`/payments/${payment.id}/mark-paid`);
@@ -87,28 +108,35 @@ const Payments = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8">
+      <div className="flex flex-col gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Payments</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800">Payments</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Track online and cash payments. You can mark payments as paid or cancel them from here.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
           >
             <option value="ALL">All</option>
             <option value="ACTIVE">Active payments</option>
             <option value="PAID">Paid</option>
             <option value="CANCELLED">Cancelled/Failed</option>
           </select>
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
+            placeholder="Filter by date"
+          />
           <button
             onClick={loadPayments}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-100"
+            className="px-3 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-100 whitespace-nowrap"
           >
             Refresh
           </button>
@@ -121,32 +149,35 @@ const Payments = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-2 sm:mx-0">
             {loading ? (
-              <div className="p-8 text-center text-slate-500">Loading payments...</div>
+              <div className="p-6 sm:p-8 text-center text-slate-500 text-sm sm:text-base">Loading payments...</div>
             ) : filteredPayments.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">
+              <div className="p-6 sm:p-8 text-center text-slate-500 text-sm sm:text-base">
                 No payments match the selected filter.
               </div>
             ) : (
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs">
                       Order
                     </th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs hidden sm:table-cell">
+                      Date & Time
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs">
                       Amount
                     </th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs hidden md:table-cell">
                       Method
                     </th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs">
                       Status
                     </th>
-                    <th className="px-4 py-2 text-right font-semibold text-slate-600">
+                    <th className="px-2 sm:px-4 py-2 text-right font-semibold text-slate-600 text-[10px] sm:text-xs">
                       Actions
                     </th>
                   </tr>
@@ -155,50 +186,60 @@ const Payments = () => {
                   {filteredPayments.map((payment) => (
                     <tr
                       key={payment.id}
-                      className={`hover:bg-slate-50 ${
+                      className={`hover:bg-slate-50 cursor-pointer ${
                         selectedPayment?.id === payment.id ? "bg-blue-50/40" : ""
                       }`}
                       onClick={() => setSelectedPayment(payment)}
                     >
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-slate-800">{payment.orderId}</p>
-                        <p className="text-xs text-slate-500">
-                          {new Date(payment.createdAt).toLocaleString()}
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
+                        <p className="font-semibold text-slate-800 text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{payment.orderId}</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 sm:hidden">
+                          {new Date(payment.createdAt).toLocaleDateString()}
                         </p>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">₹{payment.amount.toFixed(2)}</td>
-                      <td className="px-4 py-3 capitalize text-slate-600">{payment.method.toLowerCase()}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">
+                        <p className="text-xs sm:text-sm text-slate-700">
+                          {new Date(payment.createdAt).toLocaleDateString()}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-slate-500">
+                          {new Date(payment.createdAt).toLocaleTimeString()}
+                        </p>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-700 text-xs sm:text-sm font-medium">₹{payment.amount.toFixed(2)}</td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 capitalize text-slate-600 text-xs sm:text-sm hidden md:table-cell">{payment.method.toLowerCase()}</td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <span
-                          className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border ${
+                          className={`inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full border ${
                             STATUS_BADGE[payment.status] || "bg-slate-100 text-slate-600 border-slate-200"
                           }`}
                         >
                           {payment.status.replace("_", " ")}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end items-center gap-2">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
+                        <div className="flex justify-end items-center gap-1 sm:gap-2">
                           {payment.status !== "PAID" && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleMarkPaid(payment);
                               }}
                               disabled={busyId === payment.id}
-                              className="text-xs px-3 py-1.5 rounded-md bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
+                              className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 whitespace-nowrap"
                             >
                               Mark paid
                             </button>
                           )}
                           {["PENDING", "PROCESSING", "CASH_PENDING"].includes(payment.status) && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCancel(payment);
                               }}
                               disabled={busyId === payment.id}
-                              className="text-xs px-3 py-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50"
+                              className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50 whitespace-nowrap"
                             >
                               Cancel
                             </button>
@@ -213,8 +254,8 @@ const Payments = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
-          <h2 className="text-lg font-semibold text-slate-800">Payment details</h2>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-5 space-y-3 sm:space-y-4">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-800">Payment details</h2>
 
           {!selectedPayment ? (
             <p className="text-sm text-slate-500">
