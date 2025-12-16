@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import io from "socket.io-client";
+import { getSocket } from "../utils/socket";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 
-// Use Vite environment variable if available, fallback to localhost:5001
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi);
+// Use centralized socket connection with proper CORS configuration
+const socket = getSocket();
 
 // Reusable Stat Card with equal height and small fonts
 const StatCard = ({ title, value, icon, onClick, clickable = false }) => (

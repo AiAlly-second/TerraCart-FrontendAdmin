@@ -8,10 +8,10 @@ import {
   FaSpinner,
 } from "react-icons/fa";
 import api from "../utils/api";
-import io from "socket.io-client";
+import { getSocket } from "../utils/socket";
 
-const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-const socket = io(nodeApi);
+// Use centralized socket connection with proper CORS configuration
+const socket = getSocket();
 
 const Dashboard = () => {
   const [stats, setStats] = useState({

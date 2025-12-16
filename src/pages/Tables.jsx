@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import api from "../utils/api";
-import io from "socket.io-client";
+import { createSocketConnection } from "../utils/socket";
 
 const STATUS_MAP = {
   AVAILABLE: {
@@ -245,7 +245,7 @@ const Tables = () => {
 
   // --- Socket setup for live table status updates ---
   useEffect(() => {
-    const socket = io(nodeApi);
+    const socket = createSocketConnection();
     socketRef.current = socket;
 
     const handleTableStatusUpdated = (payload) => {
