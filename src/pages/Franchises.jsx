@@ -1,17 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FaBuilding, FaPlus, FaEdit, FaTrash, FaSpinner, FaSearch, 
-  FaToggleOn, FaToggleOff, FaChevronDown, FaChevronRight, FaStore, 
-  FaCheckCircle, FaTimesCircle, FaClock, FaEnvelope, FaPhone, 
-  FaIdCard, FaCalendarAlt, FaEye, FaTimes, FaUsers
-} from 'react-icons/fa';
-import api from '../utils/api';
-import { confirmFranchiseDelete, confirm } from '../utils/confirm';
+import React, { useState, useEffect } from "react";
+import {
+  FaBuilding,
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaSpinner,
+  FaSearch,
+  FaToggleOn,
+  FaToggleOff,
+  FaChevronDown,
+  FaChevronRight,
+  FaStore,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaClock,
+  FaEnvelope,
+  FaPhone,
+  FaIdCard,
+  FaCalendarAlt,
+  FaEye,
+  FaTimes,
+  FaUsers,
+} from "react-icons/fa";
+import api from "../utils/api";
+import { confirmFranchiseDelete, confirm } from "../utils/confirm";
 
 const Franchises = () => {
   const [franchises, setFranchises] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingFranchise, setEditingFranchise] = useState(null);
   const [expandedFranchises, setExpandedFranchises] = useState(new Set());
@@ -19,13 +36,14 @@ const Franchises = () => {
   const [loadingCarts, setLoadingCarts] = useState({});
   const [viewDetails, setViewDetails] = useState(null);
   const [showCartModal, setShowCartModal] = useState(false);
-  const [selectedFranchiseForCart, setSelectedFranchiseForCart] = useState(null);
+  const [selectedFranchiseForCart, setSelectedFranchiseForCart] =
+    useState(null);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    mobile: '',
-    gstNumber: '',
+    name: "",
+    email: "",
+    password: "",
+    mobile: "",
+    gstNumber: "",
   });
   const [files, setFiles] = useState({
     udyamCertificate: null,
@@ -33,22 +51,22 @@ const Franchises = () => {
     panCard: null,
   });
   const [documentExpiryDates, setDocumentExpiryDates] = useState({
-    udyamCertificateExpiry: '',
-    aadharCardExpiry: '',
-    panCardExpiry: '',
+    udyamCertificateExpiry: "",
+    aadharCardExpiry: "",
+    panCardExpiry: "",
   });
   const [cartFormData, setCartFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    cartName: '',
-    location: '',
-    phone: '',
-    address: '',
-    gstNumber: '',
-    shopActLicenseExpiry: '',
-    fssaiLicenseExpiry: '',
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    cartName: "",
+    location: "",
+    phone: "",
+    address: "",
+    gstNumber: "",
+    shopActLicenseExpiry: "",
+    fssaiLicenseExpiry: "",
   });
   const [cartFiles, setCartFiles] = useState({
     aadharCard: null,
@@ -71,23 +89,26 @@ const Franchises = () => {
   const fetchFranchises = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/users');
+      const response = await api.get("/users");
       const allUsers = response.data || [];
-      const franchiseUsers = allUsers.filter(u => u.role === 'franchise_admin');
+      const franchiseUsers = allUsers.filter(
+        (u) => u.role === "franchise_admin"
+      );
       setFranchises(franchiseUsers);
-      
+
       try {
         // Always fetch fresh cart statistics from API
-        const cartStatsResponse = await api.get('/users/stats/carts');
+        const cartStatsResponse = await api.get("/users/stats/carts");
         const cartStats = cartStatsResponse.data || {};
         if (cartStats.franchiseStats) {
           const statsMap = {};
-          cartStats.franchiseStats.forEach(stat => {
-            const franchiseId = stat.franchiseId?.toString() || stat.franchiseId;
+          cartStats.franchiseStats.forEach((stat) => {
+            const franchiseId =
+              stat.franchiseId?.toString() || stat.franchiseId;
             // Preserve existing carts if they exist (for expanded franchises)
             // But always update the stats from API
             const existingCarts = franchiseCarts[franchiseId]?.carts || null;
-            
+
             statsMap[franchiseId] = {
               // Always use fresh stats from API
               totalCarts: stat.totalCarts || 0,
@@ -95,17 +116,17 @@ const Franchises = () => {
               inactiveCarts: stat.inactiveCarts || 0,
               pendingApproval: stat.pendingApproval || 0,
               // Preserve carts if they exist, otherwise let them be fetched fresh
-              ...(existingCarts ? { carts: existingCarts } : {})
+              ...(existingCarts ? { carts: existingCarts } : {}),
             };
           });
           setFranchiseCarts(statsMap);
         }
       } catch (err) {
-        console.error('Error fetching cart statistics:', err);
+        console.error("Error fetching cart statistics:", err);
       }
     } catch (error) {
-      console.error('Error fetching franchises:', error);
-      alert('Failed to fetch franchises');
+      console.error("Error fetching franchises:", error);
+      alert("Failed to fetch franchises");
     } finally {
       setLoading(false);
     }
@@ -116,73 +137,87 @@ const Franchises = () => {
     if (!forceRefresh && franchiseCarts[franchiseId]?.carts) {
       return;
     }
-    
+
     try {
-      setLoadingCarts(prev => ({ ...prev, [franchiseId]: true }));
+      setLoadingCarts((prev) => ({ ...prev, [franchiseId]: true }));
       // Always fetch fresh data from API
-      const response = await api.get('/users');
+      const response = await api.get("/users");
       const allUsers = response.data || [];
-      
+
       // Normalize franchiseId for comparison - handle both string and ObjectId formats
       const targetFranchiseId = franchiseId?.toString() || franchiseId;
-      
+
       // Filter carts that belong to this franchise
-      const carts = allUsers.filter(u => {
+      const carts = allUsers.filter((u) => {
         // Must be a cart (admin role)
-        if (u.role !== 'admin') {
+        if (u.role !== "admin") {
           return false;
         }
-        
+
         // Must have a franchiseId
         if (!u.franchiseId) {
-          console.warn(`[Franchises] Cart ${u._id} (${u.cartName || u.name}) has no franchiseId`);
+          console.warn(
+            `[Franchises] Cart ${u._id} (${
+              u.cartName || u.name
+            }) has no franchiseId`
+          );
           return false;
         }
-        
+
         // Handle different franchiseId formats: ObjectId, string, or populated object
         let cartFranchiseId = u.franchiseId;
-        if (cartFranchiseId && typeof cartFranchiseId === 'object') {
+        if (cartFranchiseId && typeof cartFranchiseId === "object") {
           // If it's an object, extract the _id if it exists, otherwise use the object itself
           cartFranchiseId = cartFranchiseId._id || cartFranchiseId;
         }
-        
+
         // Convert to string for comparison
-        const cartFranchiseIdStr = cartFranchiseId?.toString() || String(cartFranchiseId);
+        const cartFranchiseIdStr =
+          cartFranchiseId?.toString() || String(cartFranchiseId);
         const matches = cartFranchiseIdStr === targetFranchiseId;
-        
+
         if (!matches && u.franchiseId) {
           // Debug: log mismatches for troubleshooting
-          const debugCartFranchiseId = typeof u.franchiseId === 'object' 
-            ? (u.franchiseId._id?.toString() || u.franchiseId.toString())
-            : u.franchiseId.toString();
+          const debugCartFranchiseId =
+            typeof u.franchiseId === "object"
+              ? u.franchiseId._id?.toString() || u.franchiseId.toString()
+              : u.franchiseId.toString();
           console.debug(
             `[Franchises] Cart ${u._id} franchiseId mismatch: ` +
-            `cart=${debugCartFranchiseId}, target=${targetFranchiseId}`
+              `cart=${debugCartFranchiseId}, target=${targetFranchiseId}`
           );
         }
-        
+
         return matches;
       });
-      
+
       console.log(
         `[Franchises] Fetched ${carts.length} carts for franchise ${franchiseId} ` +
-        `(from ${allUsers.filter(u => u.role === 'admin').length} total carts)`
+          `(from ${
+            allUsers.filter((u) => u.role === "admin").length
+          } total carts)`
       );
-      
+
       if (carts.length === 0) {
         console.warn(
           `[Franchises] No carts found for franchise ${franchiseId}. ` +
-          `This might indicate a data issue or the franchise has no carts yet.`
+            `This might indicate a data issue or the franchise has no carts yet.`
         );
       }
-      
+
       // Calculate cart stats from fetched carts
       const totalCarts = carts.length;
-      const activeCarts = carts.filter(c => c.isActive !== false && c.isApproved === true).length;
-      const inactiveCarts = carts.filter(c => c.isActive === false || c.isApproved !== true).length;
-      const pendingApproval = carts.filter(c => c.isApproved === false).length;
-      
-      setFranchiseCarts(prev => ({
+      const activeCarts = carts.filter(
+        (c) => c.isActive !== false && c.isApproved === true
+      ).length;
+      const inactiveCarts = carts.filter(
+        (c) => c.isActive === false || c.isApproved !== true
+      ).length;
+      const pendingApproval = carts.filter(
+        (c) => c.isApproved === false
+      ).length;
+
+      setFranchiseCarts((prev) => ({
         ...prev,
         [franchiseId]: {
           ...prev[franchiseId],
@@ -191,13 +226,13 @@ const Franchises = () => {
           activeCarts: activeCarts,
           inactiveCarts: inactiveCarts,
           pendingApproval: pendingApproval,
-        }
+        },
       }));
     } catch (error) {
-      console.error('Error fetching carts:', error);
-      alert('Failed to fetch carts. Please try again.');
+      console.error("Error fetching carts:", error);
+      alert("Failed to fetch carts. Please try again.");
     } finally {
-      setLoadingCarts(prev => ({ ...prev, [franchiseId]: false }));
+      setLoadingCarts((prev) => ({ ...prev, [franchiseId]: false }));
     }
   };
 
@@ -215,95 +250,97 @@ const Franchises = () => {
 
   const handleToggleCartStatus = async (cartId, currentStatus) => {
     // Find the cart to get its name and approval status
-    let cartName = 'this cart';
+    let cartName = "this cart";
     let cartIsApproved = true;
     for (const franchise of franchises) {
       const carts = franchiseCarts[franchise._id]?.carts || [];
-      const cart = carts.find(c => c._id === cartId);
+      const cart = carts.find((c) => c._id === cartId);
       if (cart) {
-        cartName = cart.cartName || cart.name || 'this cart';
+        cartName = cart.cartName || cart.name || "this cart";
         cartIsApproved = cart.isApproved !== false;
         break;
       }
     }
-    
+
     // If cart is not approved, this is an approval action
     if (!cartIsApproved) {
       try {
-        const { confirm } = await import('../utils/confirm');
+        const { confirm } = await import("../utils/confirm");
         const confirmed = await confirm(
           `Are you sure you want to APPROVE cart "${cartName}"?\n\n✅ This will approve the cart and activate it.\n\nThe cart will be able to accept new orders.`,
           {
-            title: 'Approve Cart',
-            warningMessage: 'Cart Approval',
+            title: "Approve Cart",
+            warningMessage: "Cart Approval",
             danger: false,
-            confirmText: 'Approve',
-            cancelText: 'Cancel'
+            confirmText: "Approve",
+            cancelText: "Cancel",
           }
         );
-        
+
         if (!confirmed) return;
       } catch (error) {
         if (error.response?.status !== 400) {
-          console.error('Error in confirmation:', error);
+          console.error("Error in confirmation:", error);
         }
         return;
       }
     } else {
       // Cart is approved, this is a toggle status action
       const isCurrentlyActive = currentStatus !== false;
-      const action = isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE';
-      
+      const action = isCurrentlyActive ? "DEACTIVATE" : "ACTIVATE";
+
       try {
-        const { confirm } = await import('../utils/confirm');
+        const { confirm } = await import("../utils/confirm");
         const confirmed = await confirm(
           `Are you sure you want to ${action} cart "${cartName}"?\n\n${
-            isCurrentlyActive 
-              ? '⚠️ This will prevent the cart from accepting new orders.'
-              : '✅ The cart will be able to accept new orders again.'
+            isCurrentlyActive
+              ? "⚠️ This will prevent the cart from accepting new orders."
+              : "✅ The cart will be able to accept new orders again."
           }`,
           {
             title: `${action} Cart`,
-            warningMessage: isCurrentlyActive ? 'WARNING: DEACTIVATION' : 'Activation',
+            warningMessage: isCurrentlyActive
+              ? "WARNING: DEACTIVATION"
+              : "Activation",
             danger: isCurrentlyActive,
             confirmText: action,
-            cancelText: 'Cancel'
+            cancelText: "Cancel",
           }
         );
-        
+
         if (!confirmed) return;
       } catch (error) {
         if (error.response?.status !== 400) {
-          console.error('Error in confirmation:', error);
+          console.error("Error in confirmation:", error);
         }
         return;
       }
     }
-    
+
     try {
       const response = await api.patch(`/users/${cartId}/toggle-cafe-status`);
       if (response.data?.success) {
-        alert(response.data.message || 'Cart status updated successfully');
-        const franchise = franchises.find(f => 
-          franchiseCarts[f._id]?.carts?.some(c => c._id === cartId)
+        alert(response.data.message || "Cart status updated successfully");
+        const franchise = franchises.find((f) =>
+          franchiseCarts[f._id]?.carts?.some((c) => c._id === cartId)
         );
         if (franchise) {
           const franchiseId = franchise._id?.toString() || franchise._id;
-          
+
           // Collapse the franchise dropdown to force refresh on next expand
           const newExpanded = new Set(expandedFranchises);
           newExpanded.delete(franchiseId);
           setExpandedFranchises(newExpanded);
-          
+
           // Clear cached carts and reset stats temporarily for immediate UI update
-          setFranchiseCarts(prev => {
+          setFranchiseCarts((prev) => {
             const updated = { ...prev };
             if (updated[franchiseId]) {
               delete updated[franchiseId].carts;
             }
             return updated;
           });
-          
+
           // Refresh franchises and stats
           await fetchFranchises();
         } else {
@@ -311,12 +348,16 @@ const Franchises = () => {
           await fetchFranchises();
         }
       } else {
-        alert(response.data?.message || 'Failed to update cart status');
+        alert(response.data?.message || "Failed to update cart status");
       }
     } catch (error) {
-      console.error('Error toggling cart status:', error);
-      if (error.response?.status !== 400) { // Don't show alert if user cancelled
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to update cart status';
+      console.error("Error toggling cart status:", error);
+      if (error.response?.status !== 400) {
+        // Don't show alert if user cancelled
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to update cart status";
         alert(`Error: ${errorMessage}`);
       }
     }
@@ -327,17 +368,20 @@ const Franchises = () => {
       // Fetch full cart details
       const response = await api.get(`/users/${cart._id}`);
       const cartData = response.data;
-      
+
       // Format expiry dates for date inputs (YYYY-MM-DD format)
       const formatDateForInput = (date) => {
         if (!date) return "";
         const d = new Date(date);
         if (isNaN(d.getTime())) return "";
-        return d.toISOString().split('T')[0];
+        return d.toISOString().split("T")[0];
       };
-      
+
       setEditingCart(cartData);
-      setSelectedFranchiseForCart(franchises.find(f => f._id === cartData.franchiseId) || selectedFranchiseForCart);
+      setSelectedFranchiseForCart(
+        franchises.find((f) => f._id === cartData.franchiseId) ||
+          selectedFranchiseForCart
+      );
       setCartFormData({
         name: cartData.name || "",
         email: cartData.email || "",
@@ -368,7 +412,8 @@ const Franchises = () => {
       setShowCartModal(true);
     } catch (error) {
       console.error("Error fetching cart details:", error);
-      const errorMessage = error.response?.data?.message || "Failed to fetch cart details";
+      const errorMessage =
+        error.response?.data?.message || "Failed to fetch cart details";
       alert(errorMessage);
     }
   };
@@ -378,44 +423,44 @@ const Franchises = () => {
     const confirmed = await confirm(
       `Are you sure you want to delete cart "${cartName}"?\n\nThis action cannot be undone.`,
       {
-        title: 'Delete Cart',
-        confirmText: 'Delete',
-        cancelText: 'Cancel',
+        title: "Delete Cart",
+        confirmText: "Delete",
+        cancelText: "Cancel",
         danger: true,
-        requireInput: false
+        requireInput: false,
       }
     );
-    
+
     if (!confirmed) {
       return;
     }
-    
+
     try {
       await api.delete(`/users/${cartId}`);
-      alert('Cart deleted successfully');
-      
+      alert("Cart deleted successfully");
+
       // Find the franchise that owns this cart
-      const franchise = franchises.find(f => 
-        franchiseCarts[f._id]?.carts?.some(c => c._id === cartId)
+      const franchise = franchises.find((f) =>
+        franchiseCarts[f._id]?.carts?.some((c) => c._id === cartId)
       );
-      
+
       if (franchise) {
         const franchiseId = franchise._id?.toString() || franchise._id;
-        
+
         // Collapse the franchise dropdown to force refresh on next expand
         const newExpanded = new Set(expandedFranchises);
         newExpanded.delete(franchiseId);
         setExpandedFranchises(newExpanded);
-        
+
         // Clear cached carts
-        setFranchiseCarts(prev => {
+        setFranchiseCarts((prev) => {
           const updated = { ...prev };
           if (updated[franchiseId]) {
             delete updated[franchiseId].carts;
           }
           return updated;
         });
-        
+
         // Refresh franchises and stats
         await fetchFranchises();
       } else {
@@ -423,57 +468,58 @@ const Franchises = () => {
         await fetchFranchises();
       }
     } catch (error) {
-      console.error('Error deleting cart:', error);
-      alert(error.response?.data?.message || 'Failed to delete cart');
+      console.error("Error deleting cart:", error);
+      alert(error.response?.data?.message || "Failed to delete cart");
     }
   };
 
   // Validation functions
   const validateEmail = (email) => {
-    if (!email || !email.trim()) return 'Email is required';
+    if (!email || !email.trim()) return "Email is required";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      return 'Please enter a valid email address';
+      return "Please enter a valid email address";
     }
-    return '';
+    return "";
   };
 
   const validatePhoneNumber = (phone) => {
-    if (!phone || !phone.trim()) return ''; // Phone is optional
+    if (!phone || !phone.trim()) return ""; // Phone is optional
     // Remove spaces, dashes, and country code for validation
-    const cleaned = phone.replace(/[\s\-+]/g, '').replace(/^91/, '');
+    const cleaned = phone.replace(/[\s\-+]/g, "").replace(/^91/, "");
     const phoneRegex = /^[6-9]\d{9}$/;
     if (!phoneRegex.test(cleaned)) {
-      return 'Please enter a valid 10-digit Indian mobile number';
+      return "Please enter a valid 10-digit Indian mobile number";
     }
-    return '';
+    return "";
   };
 
   const validateName = (name) => {
-    if (!name || !name.trim()) return 'Manager name is required';
-    if (name.trim().length < 2) return 'Name must be at least 2 characters';
-    if (name.trim().length > 50) return 'Name must be less than 50 characters';
-    return '';
+    if (!name || !name.trim()) return "Name is required";
+    if (name.trim().length < 2) return "Name must be at least 2 characters";
+    if (name.trim().length > 50) return "Name must be less than 50 characters";
+    return "";
   };
 
   const validatePassword = (password) => {
-    if (!password || !password.trim()) return 'Password is required';
-    if (password.length < 6) return 'Password must be at least 6 characters';
-    return '';
+    if (!password || !password.trim()) return "Password is required";
+    if (password.length < 6) return "Password must be at least 6 characters";
+    return "";
   };
 
   const validateGSTNumber = (gst) => {
     if (!gst) return true; // Optional field
     // GST format: 15 characters, alphanumeric
     // Format: 29ABCDE1234F1Z5 (2 digits + 10 alphanumeric + 1 letter + 1 digit + 1 letter + 1 digit)
-    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    const gstRegex =
+      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     return gstRegex.test(gst.toUpperCase());
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
-    
+
     // Trim all form data
     const trimmedData = {
       name: formData.name.trim(),
@@ -487,19 +533,19 @@ const Franchises = () => {
     if (!editingFranchise) {
       // Required fields validation
       if (!trimmedData.name) {
-        setFormError('Franchise name is required');
+        setFormError("Franchise name is required");
         return;
       }
       if (!trimmedData.email) {
-        setFormError('Email is required');
+        setFormError("Email is required");
         return;
       }
       if (!trimmedData.password) {
-        setFormError('Password is required');
+        setFormError("Password is required");
         return;
       }
       if (trimmedData.password.length < 6) {
-        setFormError('Password must be at least 6 characters long');
+        setFormError("Password must be at least 6 characters long");
         return;
       }
     }
@@ -522,28 +568,34 @@ const Franchises = () => {
 
     // GST number validation
     if (trimmedData.gstNumber && !validateGSTNumber(trimmedData.gstNumber)) {
-      setFormError('Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)');
+      setFormError(
+        "Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)"
+      );
       return;
     }
 
     // Password validation for edit mode (if password is provided)
-    if (editingFranchise && trimmedData.password && trimmedData.password.length < 6) {
-      setFormError('Password must be at least 6 characters long');
+    if (
+      editingFranchise &&
+      trimmedData.password &&
+      trimmedData.password.length < 6
+    ) {
+      setFormError("Password must be at least 6 characters long");
       return;
     }
 
     // Document validation for create mode only
     if (!editingFranchise) {
       if (!files.udyamCertificate) {
-        setFormError('Udyam Certificate is required');
+        setFormError("Udyam Certificate is required");
         return;
       }
       if (!files.aadharCard) {
-        setFormError('Aadhar Card is required');
+        setFormError("Aadhar Card is required");
         return;
       }
       if (!files.panCard) {
-        setFormError('PAN Card is required');
+        setFormError("PAN Card is required");
         return;
       }
     }
@@ -553,91 +605,124 @@ const Franchises = () => {
       if (editingFranchise) {
         // Use FormData for updates to support file uploads
         const formDataToSend = new FormData();
-        formDataToSend.append('name', trimmedData.name);
-        formDataToSend.append('email', trimmedData.email);
-        formDataToSend.append('role', 'franchise_admin');
+        formDataToSend.append("name", trimmedData.name);
+        formDataToSend.append("email", trimmedData.email);
+        formDataToSend.append("role", "franchise_admin");
         if (trimmedData.mobile) {
-          const cleanedMobile = trimmedData.mobile.replace(/[\s\-]/g, '');
-          formDataToSend.append('mobile', cleanedMobile);
+          const cleanedMobile = trimmedData.mobile.replace(/[\s\-]/g, "");
+          formDataToSend.append("mobile", cleanedMobile);
         }
         if (trimmedData.gstNumber) {
-          formDataToSend.append('gstNumber', trimmedData.gstNumber);
+          formDataToSend.append("gstNumber", trimmedData.gstNumber);
         }
         if (trimmedData.password) {
-          formDataToSend.append('password', trimmedData.password);
+          formDataToSend.append("password", trimmedData.password);
         }
-        
+
         // Add document files if provided
         if (files.udyamCertificate) {
-          formDataToSend.append('udyamCertificate', files.udyamCertificate);
+          formDataToSend.append("udyamCertificate", files.udyamCertificate);
         }
         if (files.aadharCard) {
-          formDataToSend.append('aadharCard', files.aadharCard);
+          formDataToSend.append("aadharCard", files.aadharCard);
         }
         if (files.panCard) {
-          formDataToSend.append('panCard', files.panCard);
+          formDataToSend.append("panCard", files.panCard);
         }
-        
+
         // Add expiry dates if provided
         if (documentExpiryDates.udyamCertificateExpiry) {
-          formDataToSend.append('udyamCertificateExpiry', documentExpiryDates.udyamCertificateExpiry);
+          formDataToSend.append(
+            "udyamCertificateExpiry",
+            documentExpiryDates.udyamCertificateExpiry
+          );
         }
         if (documentExpiryDates.aadharCardExpiry) {
-          formDataToSend.append('aadharCardExpiry', documentExpiryDates.aadharCardExpiry);
+          formDataToSend.append(
+            "aadharCardExpiry",
+            documentExpiryDates.aadharCardExpiry
+          );
         }
         if (documentExpiryDates.panCardExpiry) {
-          formDataToSend.append('panCardExpiry', documentExpiryDates.panCardExpiry);
+          formDataToSend.append(
+            "panCardExpiry",
+            documentExpiryDates.panCardExpiry
+          );
         }
-        
+
         await api.put(`/users/${editingFranchise._id}`, formDataToSend, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: { "Content-Type": "multipart/form-data" },
         });
-        alert('Franchise updated successfully');
+        alert("Franchise updated successfully");
       } else {
         const formDataToSend = new FormData();
-        formDataToSend.append('name', trimmedData.name);
-        formDataToSend.append('email', trimmedData.email);
-        formDataToSend.append('password', trimmedData.password);
-        formDataToSend.append('role', 'franchise_admin');
+        formDataToSend.append("name", trimmedData.name);
+        formDataToSend.append("email", trimmedData.email);
+        formDataToSend.append("password", trimmedData.password);
+        formDataToSend.append("role", "franchise_admin");
         if (trimmedData.mobile) {
           // Clean phone number: remove spaces, dashes, keep +91 if present
-          const cleanedMobile = trimmedData.mobile.replace(/[\s\-]/g, '');
-          formDataToSend.append('mobile', cleanedMobile);
+          const cleanedMobile = trimmedData.mobile.replace(/[\s\-]/g, "");
+          formDataToSend.append("mobile", cleanedMobile);
         }
         if (trimmedData.gstNumber) {
-          formDataToSend.append('gstNumber', trimmedData.gstNumber);
+          formDataToSend.append("gstNumber", trimmedData.gstNumber);
         }
-        
-        if (files.udyamCertificate) formDataToSend.append('udyamCertificate', files.udyamCertificate);
-        if (files.aadharCard) formDataToSend.append('aadharCard', files.aadharCard);
-        if (files.panCard) formDataToSend.append('panCard', files.panCard);
-        
+
+        if (files.udyamCertificate)
+          formDataToSend.append("udyamCertificate", files.udyamCertificate);
+        if (files.aadharCard)
+          formDataToSend.append("aadharCard", files.aadharCard);
+        if (files.panCard) formDataToSend.append("panCard", files.panCard);
+
         // Add expiry dates if provided
         if (documentExpiryDates.udyamCertificateExpiry) {
-          formDataToSend.append('udyamCertificateExpiry', documentExpiryDates.udyamCertificateExpiry);
+          formDataToSend.append(
+            "udyamCertificateExpiry",
+            documentExpiryDates.udyamCertificateExpiry
+          );
         }
         if (documentExpiryDates.aadharCardExpiry) {
-          formDataToSend.append('aadharCardExpiry', documentExpiryDates.aadharCardExpiry);
+          formDataToSend.append(
+            "aadharCardExpiry",
+            documentExpiryDates.aadharCardExpiry
+          );
         }
         if (documentExpiryDates.panCardExpiry) {
-          formDataToSend.append('panCardExpiry', documentExpiryDates.panCardExpiry);
+          formDataToSend.append(
+            "panCardExpiry",
+            documentExpiryDates.panCardExpiry
+          );
         }
-        
-        await api.post('/users', formDataToSend, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+
+        await api.post("/users", formDataToSend, {
+          headers: { "Content-Type": "multipart/form-data" },
         });
-        alert('Franchise created successfully');
+        alert("Franchise created successfully");
       }
       setShowModal(false);
       setEditingFranchise(null);
-      setFormData({ name: '', email: '', password: '', mobile: '', gstNumber: '' });
+      setFormData({
+        name: "",
+        email: "",
+        password: "",
+        mobile: "",
+        gstNumber: "",
+      });
       setFiles({ udyamCertificate: null, aadharCard: null, panCard: null });
-      setDocumentExpiryDates({ udyamCertificateExpiry: '', aadharCardExpiry: '', panCardExpiry: '' });
+      setDocumentExpiryDates({
+        udyamCertificateExpiry: "",
+        aadharCardExpiry: "",
+        panCardExpiry: "",
+      });
       setFormError(null);
       fetchFranchises();
     } catch (error) {
-      console.error('Error saving franchise:', error);
-      setFormError(error.response?.data?.message || 'Failed to save franchise. Please try again.');
+      console.error("Error saving franchise:", error);
+      setFormError(
+        error.response?.data?.message ||
+          "Failed to save franchise. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -648,27 +733,29 @@ const Franchises = () => {
       // Fetch full franchise details to get all document paths
       const response = await api.get(`/users/${franchise._id}`);
       const franchiseData = response.data;
-      
+
       setEditingFranchise(franchiseData);
       setFormData({
-        name: franchiseData.name || '',
-        email: franchiseData.email || '',
-        password: '',
-        mobile: franchiseData.mobile || '',
-        gstNumber: franchiseData.gstNumber || '',
+        name: franchiseData.name || "",
+        email: franchiseData.email || "",
+        password: "",
+        mobile: franchiseData.mobile || "",
+        gstNumber: franchiseData.gstNumber || "",
       });
       setFiles({ udyamCertificate: null, aadharCard: null, panCard: null });
-      
+
       // Format expiry dates for date input (YYYY-MM-DD)
       const formatDateForInput = (date) => {
-        if (!date) return '';
+        if (!date) return "";
         const d = new Date(date);
-        if (isNaN(d.getTime())) return '';
-        return d.toISOString().split('T')[0];
+        if (isNaN(d.getTime())) return "";
+        return d.toISOString().split("T")[0];
       };
-      
+
       setDocumentExpiryDates({
-        udyamCertificateExpiry: formatDateForInput(franchiseData.udyamCertificateExpiry),
+        udyamCertificateExpiry: formatDateForInput(
+          franchiseData.udyamCertificateExpiry
+        ),
         aadharCardExpiry: formatDateForInput(franchiseData.aadharCardExpiry),
         panCardExpiry: formatDateForInput(franchiseData.panCardExpiry),
       });
@@ -676,40 +763,43 @@ const Franchises = () => {
       setShowModal(true);
     } catch (error) {
       console.error("Error fetching franchise details:", error);
-      const errorMessage = error.response?.data?.message || "Failed to fetch franchise details";
+      const errorMessage =
+        error.response?.data?.message || "Failed to fetch franchise details";
       alert(errorMessage);
     }
   };
 
   const handleToggleStatus = async (franchiseId) => {
-    const franchise = franchises.find(f => f._id === franchiseId);
-    const franchiseName = franchise?.name || 'this franchise';
+    const franchise = franchises.find((f) => f._id === franchiseId);
+    const franchiseName = franchise?.name || "this franchise";
     const isCurrentlyActive = franchise?.isActive !== false;
-    const action = isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE';
-    
+    const action = isCurrentlyActive ? "DEACTIVATE" : "ACTIVATE";
+
     try {
-      const { confirm } = await import('../utils/confirm');
+      const { confirm } = await import("../utils/confirm");
       const confirmed = await confirm(
         `Are you sure you want to ${action} franchise "${franchiseName}"?\n\n${
-          isCurrentlyActive 
-            ? '⚠️ WARNING: All carts under this franchise will also be deactivated.\n\nThis will prevent all carts from accepting new orders.'
-            : '✅ All carts under this franchise will also be activated.\n\nCarts will be able to accept new orders again.'
+          isCurrentlyActive
+            ? "⚠️ WARNING: All carts under this franchise will also be deactivated.\n\nThis will prevent all carts from accepting new orders."
+            : "✅ All carts under this franchise will also be activated.\n\nCarts will be able to accept new orders again."
         }`,
         {
           title: `${action} Franchise`,
-          warningMessage: isCurrentlyActive ? 'WARNING: DEACTIVATION' : 'Activation',
+          warningMessage: isCurrentlyActive
+            ? "WARNING: DEACTIVATION"
+            : "Activation",
           danger: isCurrentlyActive,
           confirmText: action,
-          cancelText: 'Cancel'
+          cancelText: "Cancel",
         }
       );
-      
+
       if (!confirmed) return;
-      
+
       const response = await api.patch(`/users/${franchiseId}/toggle-status`);
       if (response.data?.success) {
-        alert(response.data.message || 'Franchise status updated successfully');
-        setFranchiseCarts(prev => {
+        alert(response.data.message || "Franchise status updated successfully");
+        setFranchiseCarts((prev) => {
           const updated = { ...prev };
           if (updated[franchiseId]) {
             delete updated[franchiseId].carts;
@@ -722,63 +812,75 @@ const Franchises = () => {
         }
       }
     } catch (error) {
-      console.error('Error toggling franchise status:', error);
-      if (error.response?.status !== 400) { // Don't show alert if user cancelled
-        alert(error.response?.data?.message || 'Failed to update franchise status');
+      console.error("Error toggling franchise status:", error);
+      if (error.response?.status !== 400) {
+        // Don't show alert if user cancelled
+        alert(
+          error.response?.data?.message || "Failed to update franchise status"
+        );
       }
     }
   };
 
   const handleDelete = async (franchiseId) => {
-    const franchise = franchises.find(f => f._id === franchiseId);
-    const franchiseName = franchise?.name || 'this franchise';
-    
+    const franchise = franchises.find((f) => f._id === franchiseId);
+    const franchiseName = franchise?.name || "this franchise";
+
     const items = [
-      'The franchise account and login',
-      'ALL carts under this franchise',
-      'ALL cart login credentials',
-      'ALL employees (franchise and cart level)',
-      'ALL menu items and categories',
-      'ALL tables and waitlist entries',
-      'ALL non-paid orders and payments',
-      'Paid orders will be PRESERVED for revenue tracking'
+      "The franchise account and login",
+      "ALL carts under this franchise",
+      "ALL cart login credentials",
+      "ALL employees (franchise and cart level)",
+      "ALL menu items and categories",
+      "ALL tables and waitlist entries",
+      "ALL non-paid orders and payments",
+      "Paid orders will be PRESERVED for revenue tracking",
     ];
-    
+
     const confirmed = await confirmFranchiseDelete(franchiseName);
-    
+
     if (!confirmed) {
       return;
     }
-    
+
     try {
       const response = await api.delete(`/users/${franchiseId}`);
       alert(
         `✅ Franchise Permanently Deleted!\n\n` +
-        `Franchise "${franchiseName}" has been permanently deleted.\n\n` +
-        (response.data?.preservedPaidOrders > 0 
-          ? `${response.data.preservedPaidOrders} paid orders preserved for revenue tracking.\n\n`
-          : ''
-        ) +
-        `All associated carts, employees, and data have been removed.`,
-        'success'
+          `Franchise "${franchiseName}" has been permanently deleted.\n\n` +
+          (response.data?.preservedPaidOrders > 0
+            ? `${response.data.preservedPaidOrders} paid orders preserved for revenue tracking.\n\n`
+            : "") +
+          `All associated carts, employees, and data have been removed.`,
+        "success"
       );
       fetchFranchises();
     } catch (error) {
-      console.error('Error deleting franchise:', error);
-      alert(error.response?.data?.message || 'Failed to delete franchise. Please try again.', 'error');
+      console.error("Error deleting franchise:", error);
+      alert(
+        error.response?.data?.message ||
+          "Failed to delete franchise. Please try again.",
+        "error"
+      );
     }
   };
 
-  const filteredFranchises = franchises.filter(franchise =>
-    franchise.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    franchise.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredFranchises = franchises.filter(
+    (franchise) =>
+      franchise.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      franchise.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Stats calculations
   const totalFranchises = franchises.length;
-  const activeFranchises = franchises.filter(f => f.isActive !== false).length;
+  const activeFranchises = franchises.filter(
+    (f) => f.isActive !== false
+  ).length;
   const inactiveFranchises = totalFranchises - activeFranchises;
-  const totalCarts = Object.values(franchiseCarts).reduce((sum, f) => sum + (f.totalCarts || 0), 0);
+  const totalCarts = Object.values(franchiseCarts).reduce(
+    (sum, f) => sum + (f.totalCarts || 0),
+    0
+  );
 
   return (
     <div className="space-y-4">
@@ -789,14 +891,30 @@ const Franchises = () => {
             <FaBuilding className="text-blue-600 flex-shrink-0" />
             <span className="truncate">Franchise Management</span>
           </h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage all franchise locations and their carts</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            Manage all franchise locations and their carts
+          </p>
         </div>
         <button
           onClick={() => {
             setEditingFranchise(null);
-            setFormData({ name: '', email: '', password: '', mobile: '', gstNumber: '' });
-            setFiles({ udyamCertificate: null, aadharCard: null, panCard: null });
-            setDocumentExpiryDates({ udyamCertificateExpiry: '', aadharCardExpiry: '', panCardExpiry: '' });
+            setFormData({
+              name: "",
+              email: "",
+              password: "",
+              mobile: "",
+              gstNumber: "",
+            });
+            setFiles({
+              udyamCertificate: null,
+              aadharCard: null,
+              panCard: null,
+            });
+            setDocumentExpiryDates({
+              udyamCertificateExpiry: "",
+              aadharCardExpiry: "",
+              panCardExpiry: "",
+            });
             setFormError(null);
             setShowModal(true);
           }}
@@ -813,7 +931,9 @@ const Franchises = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500 font-medium">Total</p>
-              <p className="text-xl font-bold text-gray-800">{totalFranchises}</p>
+              <p className="text-xl font-bold text-gray-800">
+                {totalFranchises}
+              </p>
             </div>
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <FaBuilding className="text-blue-600" />
@@ -824,7 +944,9 @@ const Franchises = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-green-600 font-medium">Active</p>
-              <p className="text-xl font-bold text-green-700">{activeFranchises}</p>
+              <p className="text-xl font-bold text-green-700">
+                {activeFranchises}
+              </p>
             </div>
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
               <FaCheckCircle className="text-green-600" />
@@ -835,7 +957,9 @@ const Franchises = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-red-600 font-medium">Inactive</p>
-              <p className="text-xl font-bold text-red-700">{inactiveFranchises}</p>
+              <p className="text-xl font-bold text-red-700">
+                {inactiveFranchises}
+              </p>
             </div>
             <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
               <FaTimesCircle className="text-red-600" />
@@ -858,7 +982,10 @@ const Franchises = () => {
       {/* Search & Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
         <div className="relative">
-          <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          <FaSearch
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            size={14}
+          />
           <input
             type="text"
             placeholder="Search by name or email..."
@@ -879,7 +1006,9 @@ const Franchises = () => {
           <div className="text-center py-12 text-gray-500">
             <FaBuilding className="mx-auto text-4xl mb-3 text-gray-300" />
             <p className="font-medium">No franchises found</p>
-            <p className="text-sm mt-1">Create your first franchise to get started</p>
+            <p className="text-sm mt-1">
+              Create your first franchise to get started
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -889,9 +1018,12 @@ const Franchises = () => {
               const cartStats = franchiseCarts[franchise._id] || {};
               const carts = franchiseCarts[franchise._id]?.carts || [];
               const isLoadingCarts = loadingCarts[franchise._id];
-              
+
               return (
-                <div key={franchise._id} className={`${!isActive && 'bg-gray-50'}`}>
+                <div
+                  key={franchise._id}
+                  className={`${!isActive && "bg-gray-50"}`}
+                >
                   {/* Franchise Row */}
                   <div className="p-2 sm:p-3 hover:bg-gray-50 transition-colors">
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -900,13 +1032,21 @@ const Franchises = () => {
                         onClick={() => toggleFranchiseExpand(franchise._id)}
                         className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
                       >
-                        {isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
+                        {isExpanded ? (
+                          <FaChevronDown size={12} />
+                        ) : (
+                          <FaChevronRight size={12} />
+                        )}
                       </button>
 
                       {/* Avatar */}
-                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 ${
-                        isActive ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gray-400'
-                      }`}>
+                      <div
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 ${
+                          isActive
+                            ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                            : "bg-gray-400"
+                        }`}
+                      >
                         {franchise.name.charAt(0).toUpperCase()}
                       </div>
 
@@ -918,11 +1058,17 @@ const Franchises = () => {
                               {franchise.franchiseCode}
                             </span>
                           )}
-                          <span className="font-semibold text-gray-800 text-xs sm:text-sm truncate">{franchise.name}</span>
-                          <span className={`px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
-                            isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
-                          }`}>
-                            {isActive ? 'Active' : 'Inactive'}
+                          <span className="font-semibold text-gray-800 text-xs sm:text-sm truncate">
+                            {franchise.name}
+                          </span>
+                          <span
+                            className={`px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
+                              isActive
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-200 text-gray-600"
+                            }`}
+                          >
+                            {isActive ? "Active" : "Inactive"}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 mt-0.5 text-[10px] sm:text-xs text-gray-500 flex-wrap">
@@ -941,7 +1087,9 @@ const Franchises = () => {
                         <div className="flex items-center gap-2 mt-1 sm:hidden text-[10px]">
                           <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
                             <FaStore size={9} />
-                            <span className="font-medium">{cartStats.totalCarts || 0}</span>
+                            <span className="font-medium">
+                              {cartStats.totalCarts || 0}
+                            </span>
                           </div>
                           <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-600 rounded">
                             <FaCheckCircle size={9} />
@@ -960,7 +1108,9 @@ const Franchises = () => {
                       <div className="hidden md:flex items-center gap-3 text-xs">
                         <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
                           <FaStore size={10} />
-                          <span className="font-medium">{cartStats.totalCarts || 0}</span>
+                          <span className="font-medium">
+                            {cartStats.totalCarts || 0}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded">
                           <FaCheckCircle size={10} />
@@ -986,11 +1136,17 @@ const Franchises = () => {
                         <button
                           onClick={() => handleToggleStatus(franchise._id)}
                           className={`p-1.5 rounded transition-colors ${
-                            isActive ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'
+                            isActive
+                              ? "text-green-500 hover:bg-green-50"
+                              : "text-gray-400 hover:bg-gray-100"
                           }`}
-                          title={isActive ? 'Deactivate' : 'Activate'}
+                          title={isActive ? "Deactivate" : "Activate"}
                         >
-                          {isActive ? <FaToggleOn size={16} /> : <FaToggleOff size={16} />}
+                          {isActive ? (
+                            <FaToggleOn size={16} />
+                          ) : (
+                            <FaToggleOff size={16} />
+                          )}
                         </button>
                         <button
                           onClick={() => handleEdit(franchise)}
@@ -1009,7 +1165,7 @@ const Franchises = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Expanded Carts Section */}
                   {isExpanded && (
                     <div className="bg-gray-50 border-t border-gray-100 px-3 py-2">
@@ -1022,18 +1178,19 @@ const Franchises = () => {
                           <button
                             onClick={() => {
                               setSelectedFranchiseForCart(franchise);
+                              // Pre-fill GST number from franchise admin (editable in the cart form)
                               setCartFormData({
-                                name: '',
-                                email: '',
-                                password: '',
-                                confirmPassword: '',
-                                cartName: '',
-                                location: '',
-                                phone: '',
-                                address: '',
-                                gstNumber: '',
-                                shopActLicenseExpiry: '',
-                                fssaiLicenseExpiry: '',
+                                name: "",
+                                email: "",
+                                password: "",
+                                confirmPassword: "",
+                                cartName: "",
+                                location: "",
+                                phone: "",
+                                address: "",
+                                gstNumber: franchise.gstNumber || "",
+                                shopActLicenseExpiry: "",
+                                fssaiLicenseExpiry: "",
                               });
                               setCartFiles({
                                 aadharCard: null,
@@ -1054,7 +1211,10 @@ const Franchises = () => {
                         </div>
                         {isLoadingCarts ? (
                           <div className="flex justify-center py-4">
-                            <FaSpinner className="animate-spin text-gray-400" size={14} />
+                            <FaSpinner
+                              className="animate-spin text-gray-400"
+                              size={14}
+                            />
                           </div>
                         ) : carts.length === 0 ? (
                           <p className="text-xs text-gray-400 py-3 text-center bg-white rounded border border-dashed border-gray-200">
@@ -1063,12 +1223,17 @@ const Franchises = () => {
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                             {carts.map((cart) => {
-                              const cartIsActive = cart.isActive !== false && cart.isApproved === true && isActive;
+                              const cartIsActive =
+                                cart.isActive !== false &&
+                                cart.isApproved === true &&
+                                isActive;
                               return (
-                                <div 
+                                <div
                                   key={cart._id}
                                   className={`bg-white border rounded-lg p-2.5 ${
-                                    cartIsActive ? 'border-gray-200' : 'border-amber-200 bg-amber-50'
+                                    cartIsActive
+                                      ? "border-gray-200"
+                                      : "border-amber-200 bg-amber-50"
                                   }`}
                                 >
                                   <div className="flex items-start justify-between gap-2">
@@ -1080,40 +1245,64 @@ const Franchises = () => {
                                           </span>
                                         )}
                                         <span className="font-medium text-xs text-gray-800 truncate">
-                                          {cart.cartName || cart.cafeName || cart.name}
+                                          {cart.cartName ||
+                                            cart.cafeName ||
+                                            cart.name}
                                         </span>
                                       </div>
-                                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{cart.email}</p>
+                                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+                                        {cart.email}
+                                      </p>
                                       <div className="flex items-center gap-1 mt-1">
-                                        <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded ${
-                                          cart.isApproved === false 
-                                            ? 'bg-yellow-100 text-yellow-700'
-                                            : cartIsActive 
-                                            ? 'bg-green-100 text-green-700' 
-                                            : 'bg-red-100 text-red-700'
-                                        }`}>
-                                          {cart.isApproved === false ? 'Pending' : cartIsActive ? 'Active' : 'Inactive'}
+                                        <span
+                                          className={`px-1.5 py-0.5 text-[9px] font-medium rounded ${
+                                            cart.isApproved === false
+                                              ? "bg-yellow-100 text-yellow-700"
+                                              : cartIsActive
+                                              ? "bg-green-100 text-green-700"
+                                              : "bg-red-100 text-red-700"
+                                          }`}
+                                        >
+                                          {cart.isApproved === false
+                                            ? "Pending"
+                                            : cartIsActive
+                                            ? "Active"
+                                            : "Inactive"}
                                         </span>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-0.5">
                                       {cart.isApproved ? (
                                         <button
-                                          onClick={() => handleToggleCartStatus(cart._id, cartIsActive)}
+                                          onClick={() =>
+                                            handleToggleCartStatus(
+                                              cart._id,
+                                              cartIsActive
+                                            )
+                                          }
                                           disabled={!isActive && !cartIsActive}
                                           className={`p-1 rounded ${
                                             !isActive && !cartIsActive
-                                              ? 'text-gray-300 cursor-not-allowed'
+                                              ? "text-gray-300 cursor-not-allowed"
                                               : cartIsActive
-                                              ? 'text-green-500 hover:bg-green-50'
-                                              : 'text-gray-400 hover:bg-gray-100'
+                                              ? "text-green-500 hover:bg-green-50"
+                                              : "text-gray-400 hover:bg-gray-100"
                                           }`}
                                         >
-                                          {cartIsActive ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
+                                          {cartIsActive ? (
+                                            <FaToggleOn size={14} />
+                                          ) : (
+                                            <FaToggleOff size={14} />
+                                          )}
                                         </button>
                                       ) : (
                                         <button
-                                          onClick={() => handleToggleCartStatus(cart._id, cartIsActive)}
+                                          onClick={() =>
+                                            handleToggleCartStatus(
+                                              cart._id,
+                                              cartIsActive
+                                            )
+                                          }
                                           className="p-1 text-yellow-600 hover:bg-yellow-50 rounded"
                                           title="Approve"
                                         >
@@ -1137,7 +1326,10 @@ const Franchises = () => {
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          handleDeleteCart(cart._id, cart.cafeName || cart.name);
+                                          handleDeleteCart(
+                                            cart._id,
+                                            cart.cafeName || cart.name
+                                          );
                                         }}
                                         className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
                                         title="Delete Cart"
@@ -1175,7 +1367,10 @@ const Franchises = () => {
                     </span>
                   )}
                 </div>
-                <button onClick={() => setViewDetails(null)} className="p-1 hover:bg-white/20 rounded">
+                <button
+                  onClick={() => setViewDetails(null)}
+                  className="p-1 hover:bg-white/20 rounded"
+                >
                   <FaTimes size={16} />
                 </button>
               </div>
@@ -1199,7 +1394,10 @@ const Franchises = () => {
               )}
               <div className="flex items-center gap-3 text-sm">
                 <FaCalendarAlt className="text-gray-400" size={14} />
-                <span className="text-gray-700">Created: {new Date(viewDetails.createdAt).toLocaleDateString()}</span>
+                <span className="text-gray-700">
+                  Created:{" "}
+                  {new Date(viewDetails.createdAt).toLocaleDateString()}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <FaUsers className="text-gray-400" size={14} />
@@ -1208,10 +1406,14 @@ const Franchises = () => {
                 </span>
               </div>
               <div className="pt-3 border-t">
-                <span className={`px-2 py-1 text-xs font-medium rounded ${
-                  viewDetails.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {viewDetails.isActive !== false ? 'Active' : 'Inactive'}
+                <span
+                  className={`px-2 py-1 text-xs font-medium rounded ${
+                    viewDetails.isActive !== false
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {viewDetails.isActive !== false ? "Active" : "Inactive"}
                 </span>
               </div>
             </div>
@@ -1227,18 +1429,23 @@ const Franchises = () => {
             <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-3 sm:px-5 py-3 sm:py-4 text-white flex justify-between items-center">
               <div className="min-w-0 flex-1">
                 <h2 className="text-base sm:text-lg font-bold tracking-wide truncate">
-                  {editingFranchise ? 'Edit Franchise' : 'Create New Franchise'}
+                  {editingFranchise ? "Edit Franchise" : "Create New Franchise"}
                 </h2>
                 <p className="text-[10px] sm:text-xs text-orange-100 mt-1 hidden sm:block">
-                  Primary details for the franchise owner. You can add carts later.
+                  Primary details for the franchise owner. You can add carts
+                  later.
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   setShowModal(false);
                   setEditingFranchise(null);
                   setFormError(null);
-                  setDocumentExpiryDates({ udyamCertificateExpiry: '', aadharCardExpiry: '', panCardExpiry: '' });
+                  setDocumentExpiryDates({
+                    udyamCertificateExpiry: "",
+                    aadharCardExpiry: "",
+                    panCardExpiry: "",
+                  });
                 }}
                 className="p-1 hover:bg-white/15 rounded-full transition-colors"
               >
@@ -1249,9 +1456,14 @@ const Franchises = () => {
             {formError && (
               <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <FaTimesCircle className="text-red-600 mt-0.5 flex-shrink-0" size={16} />
+                  <FaTimesCircle
+                    className="text-red-600 mt-0.5 flex-shrink-0"
+                    size={16}
+                  />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-red-800">Validation Error</p>
+                    <p className="text-sm font-medium text-red-800">
+                      Validation Error
+                    </p>
                     <p className="text-sm text-red-700 mt-1">{formError}</p>
                   </div>
                   <button
@@ -1274,68 +1486,80 @@ const Franchises = () => {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Franchise Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
-                      // Clear error when user starts typing
-                      if (formError) setFormError(null);
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter franchise name"
-                  />
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Franchise Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        // Clear error when user starts typing
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter franchise name"
+                    />
                   </div>
                   <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email *</label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => {
-                      setFormData({ ...formData, email: e.target.value });
-                      // Clear error when user starts typing
-                      if (formError) setFormError(null);
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="email@example.com"
-                  />
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        // Clear error when user starts typing
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="email@example.com"
+                    />
                   </div>
                   <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Mobile</label>
-                  <input
-                    type="tel"
-                    value={formData.mobile}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData({ ...formData, mobile: value });
-                      // Clear error when user starts typing
-                      if (formError) setFormError(null);
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="9876543210 or +91 9876543210"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">10-digit Indian mobile number</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">GST Number</label>
-                  <input
-                    type="text"
-                    value={formData.gstNumber}
-                    onChange={(e) => {
-                      const value = e.target.value.toUpperCase();
-                      setFormData({ ...formData, gstNumber: value });
-                      // Clear error when user starts typing
-                      if (formError) setFormError(null);
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="29ABCDE1234F1Z5"
-                    maxLength={15}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">15 characters, alphanumeric</p>
-                </div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Mobile
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.mobile}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData({ ...formData, mobile: value });
+                        // Clear error when user starts typing
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="9876543210 or +91 9876543210"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      10-digit Indian mobile number
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.gstNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase();
+                        setFormData({ ...formData, gstNumber: value });
+                        // Clear error when user starts typing
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="29ABCDE1234F1Z5"
+                      maxLength={15}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      15 characters, alphanumeric
+                    </p>
+                  </div>
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Password{" "}
@@ -1362,133 +1586,165 @@ const Franchises = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white/70 rounded-xl border border-orange-300 p-4 mt-1">
                 <h3 className="text-xs font-semibold text-gray-700 mb-1">
-                  {editingFranchise ? 'Documents (Optional)' : 'Required Documents *'}
+                  {editingFranchise
+                    ? "Documents (Optional)"
+                    : "Required Documents *"}
                 </h3>
                 <p className="text-[11px] text-gray-500 mb-3">
-                  {editingFranchise 
-                    ? 'Update documents if needed. Leave blank to keep existing documents.'
-                    : 'Please upload all required compliance documents to complete franchise registration.'}
+                  {editingFranchise
+                    ? "Update documents if needed. Leave blank to keep existing documents."
+                    : "Please upload all required compliance documents to complete franchise registration."}
                 </p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Udyam Certificate {!editingFranchise && '*'}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Udyam Certificate {!editingFranchise && "*"}
+                    </label>
+                    {editingFranchise && editingFranchise.udyamCertificate && (
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${editingFranchise.udyamCertificate}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
+                    )}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => {
+                        setFiles({
+                          ...files,
+                          udyamCertificate: e.target.files[0],
+                        });
+                        // Clear error when user selects file
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    />
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Expiry Date (Optional)
                       </label>
-                      {editingFranchise && editingFranchise.udyamCertificate && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          Current: <a 
-                            href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${editingFranchise.udyamCertificate}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-600 hover:underline"
-                          >
-                            View Document
-                          </a>
-                        </p>
-                      )}
                       <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        onChange={(e) => {
-                          setFiles({ ...files, udyamCertificate: e.target.files[0] });
-                          // Clear error when user selects file
-                          if (formError) setFormError(null);
-                        }}
+                        type="date"
+                        value={documentExpiryDates.udyamCertificateExpiry}
+                        onChange={(e) =>
+                          setDocumentExpiryDates({
+                            ...documentExpiryDates,
+                            udyamCertificateExpiry: e.target.value,
+                          })
+                        }
                         className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
-                      <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Expiry Date (Optional)
-                        </label>
-                        <input
-                          type="date"
-                          value={documentExpiryDates.udyamCertificateExpiry}
-                          onChange={(e) => setDocumentExpiryDates({ ...documentExpiryDates, udyamCertificateExpiry: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                        />
-                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Aadhar Card {!editingFranchise && '*'}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Aadhar Card {!editingFranchise && "*"}
+                    </label>
+                    {editingFranchise && editingFranchise.aadharCard && (
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${editingFranchise.aadharCard}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
+                    )}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => {
+                        setFiles({ ...files, aadharCard: e.target.files[0] });
+                        // Clear error when user selects file
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    />
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Expiry Date (Optional)
                       </label>
-                      {editingFranchise && editingFranchise.aadharCard && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          Current: <a 
-                            href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${editingFranchise.aadharCard}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-600 hover:underline"
-                          >
-                            View Document
-                          </a>
-                        </p>
-                      )}
                       <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        onChange={(e) => {
-                          setFiles({ ...files, aadharCard: e.target.files[0] });
-                          // Clear error when user selects file
-                          if (formError) setFormError(null);
-                        }}
+                        type="date"
+                        value={documentExpiryDates.aadharCardExpiry}
+                        onChange={(e) =>
+                          setDocumentExpiryDates({
+                            ...documentExpiryDates,
+                            aadharCardExpiry: e.target.value,
+                          })
+                        }
                         className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
-                      <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Expiry Date (Optional)
-                        </label>
-                        <input
-                          type="date"
-                          value={documentExpiryDates.aadharCardExpiry}
-                          onChange={(e) => setDocumentExpiryDates({ ...documentExpiryDates, aadharCardExpiry: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                        />
-                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        PAN Card {!editingFranchise && '*'}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      PAN Card {!editingFranchise && "*"}
+                    </label>
+                    {editingFranchise && editingFranchise.panCard && (
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${editingFranchise.panCard}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
+                    )}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => {
+                        setFiles({ ...files, panCard: e.target.files[0] });
+                        // Clear error when user selects file
+                        if (formError) setFormError(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    />
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Expiry Date (Optional)
                       </label>
-                      {editingFranchise && editingFranchise.panCard && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          Current: <a 
-                            href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${editingFranchise.panCard}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-600 hover:underline"
-                          >
-                            View Document
-                          </a>
-                        </p>
-                      )}
                       <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        onChange={(e) => {
-                          setFiles({ ...files, panCard: e.target.files[0] });
-                          // Clear error when user selects file
-                          if (formError) setFormError(null);
-                        }}
+                        type="date"
+                        value={documentExpiryDates.panCardExpiry}
+                        onChange={(e) =>
+                          setDocumentExpiryDates({
+                            ...documentExpiryDates,
+                            panCardExpiry: e.target.value,
+                          })
+                        }
                         className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                       />
-                      <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Expiry Date (Optional)
-                        </label>
-                        <input
-                          type="date"
-                          value={documentExpiryDates.panCardExpiry}
-                          onChange={(e) => setDocumentExpiryDates({ ...documentExpiryDates, panCardExpiry: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
+              </div>
             </form>
             {/* Modal footer */}
             <div className="px-5 py-3 border-t bg-gradient-to-r from-white via-[#fff7eb] to-white flex gap-3">
@@ -1498,7 +1754,11 @@ const Franchises = () => {
                   setShowModal(false);
                   setEditingFranchise(null);
                   setFormError(null);
-                  setDocumentExpiryDates({ udyamCertificateExpiry: '', aadharCardExpiry: '', panCardExpiry: '' });
+                  setDocumentExpiryDates({
+                    udyamCertificateExpiry: "",
+                    aadharCardExpiry: "",
+                    panCardExpiry: "",
+                  });
                 }}
                 className="flex-1 px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
                 disabled={isSubmitting}
@@ -1514,10 +1774,12 @@ const Franchises = () => {
                 {isSubmitting ? (
                   <>
                     <FaSpinner className="animate-spin" size={14} />
-                    <span>{editingFranchise ? 'Updating...' : 'Creating...'}</span>
+                    <span>
+                      {editingFranchise ? "Updating..." : "Creating..."}
+                    </span>
                   </>
                 ) : (
-                  <span>{editingFranchise ? 'Update' : 'Create'}</span>
+                  <span>{editingFranchise ? "Update" : "Create"}</span>
                 )}
               </button>
             </div>
@@ -1531,12 +1793,17 @@ const Franchises = () => {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] p-4 text-white flex justify-between items-center">
               <div>
-                <h2 className="text-lg font-bold">{editingCart ? 'Edit Cart' : 'Add New Cart'}</h2>
+                <h2 className="text-lg font-bold">
+                  {editingCart ? "Edit Cart" : "Add New Cart"}
+                </h2>
                 <p className="text-sm text-orange-100 mt-1">
-                  Under: {selectedFranchiseForCart.name} {selectedFranchiseForCart.franchiseCode ? `(${selectedFranchiseForCart.franchiseCode})` : ''}
+                  Under: {selectedFranchiseForCart.name}{" "}
+                  {selectedFranchiseForCart.franchiseCode
+                    ? `(${selectedFranchiseForCart.franchiseCode})`
+                    : ""}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   setShowCartModal(false);
                   setSelectedFranchiseForCart(null);
@@ -1554,7 +1821,10 @@ const Franchises = () => {
             {cartFormError && (
               <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <FaTimesCircle className="text-red-600 mt-0.5 flex-shrink-0" size={16} />
+                  <FaTimesCircle
+                    className="text-red-600 mt-0.5 flex-shrink-0"
+                    size={16}
+                  />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-red-800">Error</p>
                     <p className="text-sm text-red-700 mt-1">{cartFormError}</p>
@@ -1568,15 +1838,15 @@ const Franchises = () => {
                 </div>
               </div>
             )}
-            <form 
+            <form
               id="cart-form"
               onSubmit={async (e) => {
                 e.preventDefault();
-                
+
                 // Clear previous errors
                 setCartFormError(null);
                 setCartFormErrors({});
-                
+
                 // Trim all form data
                 const trimmedData = {
                   name: cartFormData.name.trim(),
@@ -1607,23 +1877,25 @@ const Franchises = () => {
 
                 // Validate confirm password
                 if (!trimmedData.confirmPassword) {
-                  errors.confirmPassword = 'Please confirm your password';
-                } else if (trimmedData.password !== trimmedData.confirmPassword) {
-                  errors.confirmPassword = 'Passwords do not match';
+                  errors.confirmPassword = "Please confirm your password";
+                } else if (
+                  trimmedData.password !== trimmedData.confirmPassword
+                ) {
+                  errors.confirmPassword = "Passwords do not match";
                 }
 
                 // Validate cart name
                 if (!trimmedData.cartName) {
-                  errors.cartName = 'Cart name is required';
+                  errors.cartName = "Cart name is required";
                 } else if (trimmedData.cartName.length < 2) {
-                  errors.cartName = 'Cart name must be at least 2 characters';
+                  errors.cartName = "Cart name must be at least 2 characters";
                 }
 
                 // Validate location
                 if (!trimmedData.location) {
-                  errors.location = 'Location is required';
+                  errors.location = "Location is required";
                 } else if (trimmedData.location.length < 2) {
-                  errors.location = 'Location must be at least 2 characters';
+                  errors.location = "Location must be at least 2 characters";
                 }
 
                 // Validate phone (optional but if provided, must be valid)
@@ -1635,47 +1907,66 @@ const Franchises = () => {
                 // Validate GST number (optional but if provided, must be valid)
                 if (trimmedData.gstNumber) {
                   if (!validateGSTNumber(trimmedData.gstNumber)) {
-                    errors.gstNumber = 'Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)';
+                    errors.gstNumber =
+                      "Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)";
                   }
                 }
 
                 // Validate required documents only for create mode
                 if (!editingCart) {
                   if (!cartFiles.aadharCard) {
-                    errors.aadharCard = 'Aadhar Card is required';
+                    errors.aadharCard = "Aadhar Card is required";
                   }
                   if (!cartFiles.panCard) {
-                    errors.panCard = 'PAN Card is required';
+                    errors.panCard = "PAN Card is required";
                   }
                   if (!cartFiles.shopActLicense) {
-                    errors.shopActLicense = 'Shop Act License is required';
+                    errors.shopActLicense = "Shop Act License is required";
                   }
                   if (!cartFiles.fssaiLicense) {
-                    errors.fssaiLicense = 'FSSAI License is required';
+                    errors.fssaiLicense = "FSSAI License is required";
                   }
                 }
 
                 // Validate file sizes (max 10MB)
                 const maxSize = 10 * 1024 * 1024; // 10MB
-                if (cartFiles.aadharCard && cartFiles.aadharCard.size > maxSize) {
-                  errors.aadharCard = 'Aadhar Card file size must be less than 10MB';
+                if (
+                  cartFiles.aadharCard &&
+                  cartFiles.aadharCard.size > maxSize
+                ) {
+                  errors.aadharCard =
+                    "Aadhar Card file size must be less than 10MB";
                 }
                 if (cartFiles.panCard && cartFiles.panCard.size > maxSize) {
-                  errors.panCard = 'PAN Card file size must be less than 10MB';
+                  errors.panCard = "PAN Card file size must be less than 10MB";
                 }
-                if (cartFiles.shopActLicense && cartFiles.shopActLicense.size > maxSize) {
-                  errors.shopActLicense = 'Shop Act License file size must be less than 10MB';
+                if (
+                  cartFiles.shopActLicense &&
+                  cartFiles.shopActLicense.size > maxSize
+                ) {
+                  errors.shopActLicense =
+                    "Shop Act License file size must be less than 10MB";
                 }
-                if (cartFiles.fssaiLicense && cartFiles.fssaiLicense.size > maxSize) {
-                  errors.fssaiLicense = 'FSSAI License file size must be less than 10MB';
+                if (
+                  cartFiles.fssaiLicense &&
+                  cartFiles.fssaiLicense.size > maxSize
+                ) {
+                  errors.fssaiLicense =
+                    "FSSAI License file size must be less than 10MB";
                 }
 
                 // For edit mode, password is optional
-                if (editingCart && trimmedData.password && trimmedData.password.length > 0) {
+                if (
+                  editingCart &&
+                  trimmedData.password &&
+                  trimmedData.password.length > 0
+                ) {
                   if (trimmedData.password.length < 6) {
-                    errors.password = 'Password must be at least 6 characters';
-                  } else if (trimmedData.password !== trimmedData.confirmPassword) {
-                    errors.confirmPassword = 'Passwords do not match';
+                    errors.password = "Password must be at least 6 characters";
+                  } else if (
+                    trimmedData.password !== trimmedData.confirmPassword
+                  ) {
+                    errors.confirmPassword = "Passwords do not match";
                   }
                 }
 
@@ -1684,9 +1975,14 @@ const Franchises = () => {
                   setCartFormErrors(errors);
                   // Scroll to first error
                   const firstErrorField = Object.keys(errors)[0];
-                  const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+                  const errorElement = document.querySelector(
+                    `[name="${firstErrorField}"]`
+                  );
                   if (errorElement) {
-                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    errorElement.scrollIntoView({
+                      behavior: "smooth",
+                      block: "center",
+                    });
                     errorElement.focus();
                   }
                   return;
@@ -1695,59 +1991,115 @@ const Franchises = () => {
                 setIsSubmittingCart(true);
                 try {
                   const formDataToSend = new FormData();
-                  formDataToSend.append('name', trimmedData.name);
-                  formDataToSend.append('email', trimmedData.email);
-                  
+                  formDataToSend.append("name", trimmedData.name);
+                  formDataToSend.append("email", trimmedData.email);
+
                   if (editingCart) {
                     // Edit mode: PUT request
-                    if (trimmedData.password && trimmedData.password.length > 0) {
-                      formDataToSend.append('password', trimmedData.password);
+                    if (
+                      trimmedData.password &&
+                      trimmedData.password.length > 0
+                    ) {
+                      formDataToSend.append("password", trimmedData.password);
                     }
-                    formDataToSend.append('cartName', trimmedData.cartName);
-                    formDataToSend.append('location', trimmedData.location);
+                    formDataToSend.append("cartName", trimmedData.cartName);
+                    formDataToSend.append("location", trimmedData.location);
                     if (trimmedData.phone) {
-                      const cleanedPhone = trimmedData.phone.replace(/[\s\-]/g, '');
-                      formDataToSend.append('phone', cleanedPhone);
+                      const cleanedPhone = trimmedData.phone.replace(
+                        /[\s\-]/g,
+                        ""
+                      );
+                      formDataToSend.append("phone", cleanedPhone);
                     }
-                    if (trimmedData.address) formDataToSend.append('address', trimmedData.address);
-                    if (trimmedData.gstNumber) formDataToSend.append('gstNumber', trimmedData.gstNumber);
-                    if (trimmedData.shopActLicenseExpiry) formDataToSend.append('shopActLicenseExpiry', trimmedData.shopActLicenseExpiry);
-                    if (trimmedData.fssaiLicenseExpiry) formDataToSend.append('fssaiLicenseExpiry', trimmedData.fssaiLicenseExpiry);
-                    
+                    if (trimmedData.address)
+                      formDataToSend.append("address", trimmedData.address);
+                    if (trimmedData.gstNumber)
+                      formDataToSend.append("gstNumber", trimmedData.gstNumber);
+                    if (trimmedData.shopActLicenseExpiry)
+                      formDataToSend.append(
+                        "shopActLicenseExpiry",
+                        trimmedData.shopActLicenseExpiry
+                      );
+                    if (trimmedData.fssaiLicenseExpiry)
+                      formDataToSend.append(
+                        "fssaiLicenseExpiry",
+                        trimmedData.fssaiLicenseExpiry
+                      );
+
                     // Only append files if new ones are selected
-                    if (cartFiles.aadharCard) formDataToSend.append('aadharCard', cartFiles.aadharCard);
-                    if (cartFiles.panCard) formDataToSend.append('panCard', cartFiles.panCard);
-                    if (cartFiles.shopActLicense) formDataToSend.append('shopActLicense', cartFiles.shopActLicense);
-                    if (cartFiles.fssaiLicense) formDataToSend.append('fssaiLicense', cartFiles.fssaiLicense);
+                    if (cartFiles.aadharCard)
+                      formDataToSend.append("aadharCard", cartFiles.aadharCard);
+                    if (cartFiles.panCard)
+                      formDataToSend.append("panCard", cartFiles.panCard);
+                    if (cartFiles.shopActLicense)
+                      formDataToSend.append(
+                        "shopActLicense",
+                        cartFiles.shopActLicense
+                      );
+                    if (cartFiles.fssaiLicense)
+                      formDataToSend.append(
+                        "fssaiLicense",
+                        cartFiles.fssaiLicense
+                      );
 
                     await api.put(`/users/${editingCart._id}`, formDataToSend, {
-                      headers: { 'Content-Type': 'multipart/form-data' },
+                      headers: { "Content-Type": "multipart/form-data" },
                     });
                   } else {
                     // Create mode: POST request
-                    formDataToSend.append('password', trimmedData.password);
-                    formDataToSend.append('cartName', trimmedData.cartName);
-                    formDataToSend.append('location', trimmedData.location);
-                    formDataToSend.append('franchiseId', selectedFranchiseForCart._id);
+                    formDataToSend.append("password", trimmedData.password);
+                    formDataToSend.append("cartName", trimmedData.cartName);
+                    formDataToSend.append("location", trimmedData.location);
+                    formDataToSend.append(
+                      "franchiseId",
+                      selectedFranchiseForCart._id
+                    );
                     if (trimmedData.phone) {
-                      const cleanedPhone = trimmedData.phone.replace(/[\s\-]/g, '');
-                      formDataToSend.append('phone', cleanedPhone);
+                      const cleanedPhone = trimmedData.phone.replace(
+                        /[\s\-]/g,
+                        ""
+                      );
+                      formDataToSend.append("phone", cleanedPhone);
                     }
-                    if (trimmedData.address) formDataToSend.append('address', trimmedData.address);
-                    if (trimmedData.gstNumber) formDataToSend.append('gstNumber', trimmedData.gstNumber);
-                    if (trimmedData.shopActLicenseExpiry) formDataToSend.append('shopActLicenseExpiry', trimmedData.shopActLicenseExpiry);
-                    if (trimmedData.fssaiLicenseExpiry) formDataToSend.append('fssaiLicenseExpiry', trimmedData.fssaiLicenseExpiry);
-                    
-                    if (cartFiles.aadharCard) formDataToSend.append('aadharCard', cartFiles.aadharCard);
-                    if (cartFiles.panCard) formDataToSend.append('panCard', cartFiles.panCard);
-                    if (cartFiles.shopActLicense) formDataToSend.append('shopActLicense', cartFiles.shopActLicense);
-                    if (cartFiles.fssaiLicense) formDataToSend.append('fssaiLicense', cartFiles.fssaiLicense);
+                    if (trimmedData.address)
+                      formDataToSend.append("address", trimmedData.address);
+                    if (trimmedData.gstNumber)
+                      formDataToSend.append("gstNumber", trimmedData.gstNumber);
+                    if (trimmedData.shopActLicenseExpiry)
+                      formDataToSend.append(
+                        "shopActLicenseExpiry",
+                        trimmedData.shopActLicenseExpiry
+                      );
+                    if (trimmedData.fssaiLicenseExpiry)
+                      formDataToSend.append(
+                        "fssaiLicenseExpiry",
+                        trimmedData.fssaiLicenseExpiry
+                      );
 
-                    await api.post('/users/register-cafe-admin', formDataToSend, {
-                      headers: { 'Content-Type': 'multipart/form-data' },
-                    });
+                    if (cartFiles.aadharCard)
+                      formDataToSend.append("aadharCard", cartFiles.aadharCard);
+                    if (cartFiles.panCard)
+                      formDataToSend.append("panCard", cartFiles.panCard);
+                    if (cartFiles.shopActLicense)
+                      formDataToSend.append(
+                        "shopActLicense",
+                        cartFiles.shopActLicense
+                      );
+                    if (cartFiles.fssaiLicense)
+                      formDataToSend.append(
+                        "fssaiLicense",
+                        cartFiles.fssaiLicense
+                      );
+
+                    await api.post(
+                      "/users/register-cafe-admin",
+                      formDataToSend,
+                      {
+                        headers: { "Content-Type": "multipart/form-data" },
+                      }
+                    );
                   }
-                  
+
                   // Success - reset form and close modal
                   setCartFormError(null);
                   setCartFormErrors({});
@@ -1756,17 +2108,17 @@ const Franchises = () => {
                   setEditingCart(null);
                   setCartExistingDocs({});
                   setCartFormData({
-                    name: '',
-                    email: '',
-                    password: '',
-                    confirmPassword: '',
-                    cartName: '',
-                    location: '',
-                    phone: '',
-                    address: '',
-                    gstNumber: '',
-                    shopActLicenseExpiry: '',
-                    fssaiLicenseExpiry: '',
+                    name: "",
+                    email: "",
+                    password: "",
+                    confirmPassword: "",
+                    cartName: "",
+                    location: "",
+                    phone: "",
+                    address: "",
+                    gstNumber: "",
+                    shopActLicenseExpiry: "",
+                    fssaiLicenseExpiry: "",
                   });
                   setCartFiles({
                     aadharCard: null,
@@ -1774,18 +2126,20 @@ const Franchises = () => {
                     shopActLicense: null,
                     fssaiLicense: null,
                   });
-                  
+
                   // Get franchise ID before clearing
-                  const franchiseId = selectedFranchiseForCart?._id?.toString() || selectedFranchiseForCart?._id;
-                  
+                  const franchiseId =
+                    selectedFranchiseForCart?._id?.toString() ||
+                    selectedFranchiseForCart?._id;
+
                   // Collapse the franchise dropdown to force refresh on next expand
                   if (franchiseId) {
                     const newExpanded = new Set(expandedFranchises);
                     newExpanded.delete(franchiseId);
                     setExpandedFranchises(newExpanded);
-                    
+
                     // Clear cached carts
-                    setFranchiseCarts(prev => {
+                    setFranchiseCarts((prev) => {
                       const updated = { ...prev };
                       if (updated[franchiseId]) {
                         delete updated[franchiseId].carts;
@@ -1793,43 +2147,62 @@ const Franchises = () => {
                       return updated;
                     });
                   }
-                  
+
                   // Refresh franchises and cart stats
                   await fetchFranchises();
                 } catch (error) {
-                  console.error('Error creating/updating cart:', error);
-                  console.error('Error response:', error.response);
-                  console.error('Error data:', error.response?.data);
-                  
-                  const errorMessage = error.response?.data?.message || error.message || (editingCart ? 'Failed to update cart' : 'Failed to create cart');
-                  
+                  console.error("Error creating/updating cart:", error);
+                  console.error("Error response:", error.response);
+                  console.error("Error data:", error.response?.data);
+
+                  const errorMessage =
+                    error.response?.data?.message ||
+                    error.message ||
+                    (editingCart
+                      ? "Failed to update cart"
+                      : "Failed to create cart");
+
                   // Map backend errors to form fields
                   const lowerErrorMessage = errorMessage.toLowerCase();
                   const backendErrors = {};
-                  
-                  if (lowerErrorMessage.includes('email already registered') || lowerErrorMessage.includes('already registered')) {
+
+                  if (
+                    lowerErrorMessage.includes("email already registered") ||
+                    lowerErrorMessage.includes("already registered")
+                  ) {
                     backendErrors.email = `This email address is already registered. Please use a different email address.`;
-                  } else if (lowerErrorMessage.includes('email')) {
+                  } else if (lowerErrorMessage.includes("email")) {
                     backendErrors.email = errorMessage;
-                  } else if (lowerErrorMessage.includes('password')) {
+                  } else if (lowerErrorMessage.includes("password")) {
                     backendErrors.password = errorMessage;
-                  } else if (lowerErrorMessage.includes('cart name') || lowerErrorMessage.includes('cartname')) {
+                  } else if (
+                    lowerErrorMessage.includes("cart name") ||
+                    lowerErrorMessage.includes("cartname")
+                  ) {
                     backendErrors.cartName = errorMessage;
-                  } else if (lowerErrorMessage.includes('location')) {
+                  } else if (lowerErrorMessage.includes("location")) {
                     backendErrors.location = errorMessage;
                   } else {
                     setCartFormError(errorMessage);
                   }
-                  
+
                   if (Object.keys(backendErrors).length > 0) {
-                    setCartFormErrors(prev => ({ ...prev, ...backendErrors }));
+                    setCartFormErrors((prev) => ({
+                      ...prev,
+                      ...backendErrors,
+                    }));
                   }
-                  
+
                   // Scroll to error
                   setTimeout(() => {
-                    const errorElement = document.querySelector('.bg-red-50') || document.querySelector('[class*="border-red"]');
+                    const errorElement =
+                      document.querySelector(".bg-red-50") ||
+                      document.querySelector('[class*="border-red"]');
                     if (errorElement) {
-                      errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      errorElement.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
                     }
                   }, 100);
                 } finally {
@@ -1846,52 +2219,68 @@ const Franchises = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Manager Name *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Name *
+                    </label>
                     <input
                       type="text"
                       name="name"
                       required
                       value={cartFormData.name}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, name: e.target.value });
-                        if (cartFormErrors.name) setCartFormErrors({ ...cartFormErrors, name: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          name: e.target.value,
+                        });
+                        if (cartFormErrors.name)
+                          setCartFormErrors({ ...cartFormErrors, name: "" });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.name 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.name
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="John Doe"
                     />
                     {cartFormErrors.name && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.name}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.name}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Email *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Email *
+                    </label>
                     <input
                       type="email"
                       name="email"
                       required
                       value={cartFormData.email}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, email: e.target.value });
-                        if (cartFormErrors.email) setCartFormErrors({ ...cartFormErrors, email: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          email: e.target.value,
+                        });
+                        if (cartFormErrors.email)
+                          setCartFormErrors({ ...cartFormErrors, email: "" });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.email 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.email
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="manager@cart.com"
                     />
                     {cartFormErrors.email && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.email}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.email}
+                      </p>
                     )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Password {editingCart ? '' : '*'}
+                      Password {editingCart ? "" : "*"}
                     </label>
                     <input
                       type="password"
@@ -1899,29 +2288,46 @@ const Franchises = () => {
                       required={!editingCart}
                       value={cartFormData.password}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, password: e.target.value });
-                        if (cartFormErrors.password) setCartFormErrors({ ...cartFormErrors, password: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          password: e.target.value,
+                        });
+                        if (cartFormErrors.password)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            password: "",
+                          });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.password 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.password
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
-                      placeholder={editingCart ? "Leave blank to keep current password" : "Minimum 6 characters"}
+                      placeholder={
+                        editingCart
+                          ? "Leave blank to keep current password"
+                          : "Minimum 6 characters"
+                      }
                     />
                     {cartFormErrors.password && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.password}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.password}
+                      </p>
                     )}
                     {!cartFormErrors.password && !editingCart && (
-                      <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Password must be at least 6 characters
+                      </p>
                     )}
                     {!cartFormErrors.password && editingCart && (
-                      <p className="text-xs text-gray-500 mt-1">Leave blank to keep current password</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Leave blank to keep current password
+                      </p>
                     )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Confirm Password {editingCart ? '' : '*'}
+                      Confirm Password {editingCart ? "" : "*"}
                     </label>
                     <input
                       type="password"
@@ -1929,90 +2335,133 @@ const Franchises = () => {
                       required={!editingCart}
                       value={cartFormData.confirmPassword}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, confirmPassword: e.target.value });
-                        if (cartFormErrors.confirmPassword) setCartFormErrors({ ...cartFormErrors, confirmPassword: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          confirmPassword: e.target.value,
+                        });
+                        if (cartFormErrors.confirmPassword)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            confirmPassword: "",
+                          });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.confirmPassword 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.confirmPassword
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="Confirm password"
                     />
                     {cartFormErrors.confirmPassword && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.confirmPassword}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.confirmPassword}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Cart Name *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Cart Name *
+                    </label>
                     <input
                       type="text"
                       name="cartName"
                       required
                       value={cartFormData.cartName}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, cartName: e.target.value });
-                        if (cartFormErrors.cartName) setCartFormErrors({ ...cartFormErrors, cartName: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          cartName: e.target.value,
+                        });
+                        if (cartFormErrors.cartName)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            cartName: "",
+                          });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.cartName 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.cartName
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="Terra Cart Downtown"
                     />
                     {cartFormErrors.cartName && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.cartName}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.cartName}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Location *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Location *
+                    </label>
                     <input
                       type="text"
                       name="location"
                       required
                       value={cartFormData.location}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, location: e.target.value });
-                        if (cartFormErrors.location) setCartFormErrors({ ...cartFormErrors, location: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          location: e.target.value,
+                        });
+                        if (cartFormErrors.location)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            location: "",
+                          });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.location 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.location
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="Downtown, City"
                     />
                     {cartFormErrors.location && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.location}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.location}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Phone</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Phone
+                    </label>
                     <input
                       type="tel"
                       name="phone"
                       value={cartFormData.phone}
                       onChange={(e) => {
-                        setCartFormData({ ...cartFormData, phone: e.target.value });
-                        if (cartFormErrors.phone) setCartFormErrors({ ...cartFormErrors, phone: '' });
+                        setCartFormData({
+                          ...cartFormData,
+                          phone: e.target.value,
+                        });
+                        if (cartFormErrors.phone)
+                          setCartFormErrors({ ...cartFormErrors, phone: "" });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.phone 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.phone
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="9876543210 or +91 9876543210"
                     />
                     {cartFormErrors.phone && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.phone}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.phone}
+                      </p>
                     )}
                     {!cartFormErrors.phone && (
-                      <p className="text-xs text-gray-500 mt-1">Optional: 10-digit Indian mobile number</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: 10-digit Indian mobile number
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">GST Number</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      GST Number
+                    </label>
                     <input
                       type="text"
                       name="gstNumber"
@@ -2020,28 +2469,43 @@ const Franchises = () => {
                       onChange={(e) => {
                         const value = e.target.value.toUpperCase();
                         setCartFormData({ ...cartFormData, gstNumber: value });
-                        if (cartFormErrors.gstNumber) setCartFormErrors({ ...cartFormErrors, gstNumber: '' });
+                        if (cartFormErrors.gstNumber)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            gstNumber: "",
+                          });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.gstNumber 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
+                        cartFormErrors.gstNumber
+                          ? "border-red-500 focus:ring-red-500"
+                          : "border-gray-300 focus:ring-blue-500"
                       }`}
                       placeholder="e.g., 29ABCDE1234F1Z5"
                       maxLength={15}
                     />
                     {cartFormErrors.gstNumber && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.gstNumber}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.gstNumber}
+                      </p>
                     )}
                     {!cartFormErrors.gstNumber && (
-                      <p className="text-xs text-gray-500 mt-1">Optional: 15-character GST number</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: 15-character GST number
+                      </p>
                     )}
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Address</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Address
+                    </label>
                     <textarea
                       value={cartFormData.address}
-                      onChange={(e) => setCartFormData({ ...cartFormData, address: e.target.value })}
+                      onChange={(e) =>
+                        setCartFormData({
+                          ...cartFormData,
+                          address: e.target.value,
+                        })
+                      }
                       rows="3"
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Full address of the cart"
@@ -2053,18 +2517,40 @@ const Franchises = () => {
               {/* Documents Section */}
               <div className="border-b pb-4">
                 <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">
-                  Owner Documents {editingCart ? '' : <span className="text-red-500">*</span>}
+                  Owner Documents{" "}
+                  {editingCart ? "" : <span className="text-red-500">*</span>}
                 </h3>
                 <p className="text-sm text-[#6b4423] mb-4">
-                  📄 {editingCart ? 'Upload new files to update existing documents. Leave blank to keep current documents.' : 'All documents are required for cart registration.'}
+                  📄{" "}
+                  {editingCart
+                    ? "Upload new files to update existing documents. Leave blank to keep current documents."
+                    : "All documents are required for cart registration."}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
-                      Aadhar Card of Owner {editingCart ? '' : <span className="text-red-500">*</span>}
+                      Aadhar Card of Owner{" "}
+                      {editingCart ? (
+                        ""
+                      ) : (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     {editingCart && cartExistingDocs.aadharCard && (
-                      <p className="text-xs text-gray-600 mb-1">Current: <a href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${cartExistingDocs.aadharCard}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Document</a></p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${cartExistingDocs.aadharCard}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
                     )}
                     <input
                       type="file"
@@ -2076,31 +2562,62 @@ const Franchises = () => {
                           // Check file size (max 10MB)
                           const maxSize = 10 * 1024 * 1024;
                           if (file.size > maxSize) {
-                            setCartFormErrors({ ...cartFormErrors, aadharCard: 'File size must be less than 10MB' });
-                            e.target.value = '';
+                            setCartFormErrors({
+                              ...cartFormErrors,
+                              aadharCard: "File size must be less than 10MB",
+                            });
+                            e.target.value = "";
                             return;
                           }
                         }
                         setCartFiles({ ...cartFiles, aadharCard: file });
-                        if (cartFormErrors.aadharCard) setCartFormErrors({ ...cartFormErrors, aadharCard: '' });
+                        if (cartFormErrors.aadharCard)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            aadharCard: "",
+                          });
                       }}
                       className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                        cartFormErrors.aadharCard ? 'border border-red-500 rounded-lg' : ''
+                        cartFormErrors.aadharCard
+                          ? "border border-red-500 rounded-lg"
+                          : ""
                       }`}
                     />
                     {cartFiles.aadharCard && (
-                      <p className="mt-1 text-xs text-green-600">✓ Selected: {cartFiles.aadharCard.name}</p>
+                      <p className="mt-1 text-xs text-green-600">
+                        ✓ Selected: {cartFiles.aadharCard.name}
+                      </p>
                     )}
                     {cartFormErrors.aadharCard && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.aadharCard}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.aadharCard}
+                      </p>
                     )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
-                      PAN Card {editingCart ? '' : <span className="text-red-500">*</span>}
+                      PAN Card{" "}
+                      {editingCart ? (
+                        ""
+                      ) : (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     {editingCart && cartExistingDocs.panCard && (
-                      <p className="text-xs text-gray-600 mb-1">Current: <a href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${cartExistingDocs.panCard}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Document</a></p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${cartExistingDocs.panCard}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
                     )}
                     <input
                       type="file"
@@ -2112,31 +2629,59 @@ const Franchises = () => {
                           // Check file size (max 10MB)
                           const maxSize = 10 * 1024 * 1024;
                           if (file.size > maxSize) {
-                            setCartFormErrors({ ...cartFormErrors, panCard: 'File size must be less than 10MB' });
-                            e.target.value = '';
+                            setCartFormErrors({
+                              ...cartFormErrors,
+                              panCard: "File size must be less than 10MB",
+                            });
+                            e.target.value = "";
                             return;
                           }
                         }
                         setCartFiles({ ...cartFiles, panCard: file });
-                        if (cartFormErrors.panCard) setCartFormErrors({ ...cartFormErrors, panCard: '' });
+                        if (cartFormErrors.panCard)
+                          setCartFormErrors({ ...cartFormErrors, panCard: "" });
                       }}
                       className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                        cartFormErrors.panCard ? 'border border-red-500 rounded-lg' : ''
+                        cartFormErrors.panCard
+                          ? "border border-red-500 rounded-lg"
+                          : ""
                       }`}
                     />
                     {cartFiles.panCard && (
-                      <p className="mt-1 text-xs text-green-600">✓ Selected: {cartFiles.panCard.name}</p>
+                      <p className="mt-1 text-xs text-green-600">
+                        ✓ Selected: {cartFiles.panCard.name}
+                      </p>
                     )}
                     {cartFormErrors.panCard && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.panCard}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.panCard}
+                      </p>
                     )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
-                      Shop Act License {editingCart ? '' : <span className="text-red-500">*</span>}
+                      Shop Act License{" "}
+                      {editingCart ? (
+                        ""
+                      ) : (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     {editingCart && cartExistingDocs.shopActLicense && (
-                      <p className="text-xs text-gray-600 mb-1">Current: <a href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${cartExistingDocs.shopActLicense}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Document</a></p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${cartExistingDocs.shopActLicense}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
                     )}
                     <input
                       type="file"
@@ -2148,38 +2693,77 @@ const Franchises = () => {
                           // Check file size (max 10MB)
                           const maxSize = 10 * 1024 * 1024;
                           if (file.size > maxSize) {
-                            setCartFormErrors({ ...cartFormErrors, shopActLicense: 'File size must be less than 10MB' });
-                            e.target.value = '';
+                            setCartFormErrors({
+                              ...cartFormErrors,
+                              shopActLicense:
+                                "File size must be less than 10MB",
+                            });
+                            e.target.value = "";
                             return;
                           }
                         }
                         setCartFiles({ ...cartFiles, shopActLicense: file });
-                        if (cartFormErrors.shopActLicense) setCartFormErrors({ ...cartFormErrors, shopActLicense: '' });
+                        if (cartFormErrors.shopActLicense)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            shopActLicense: "",
+                          });
                       }}
                       className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                        cartFormErrors.shopActLicense ? 'border border-red-500 rounded-lg' : ''
+                        cartFormErrors.shopActLicense
+                          ? "border border-red-500 rounded-lg"
+                          : ""
                       }`}
                     />
                     {cartFiles.shopActLicense && (
-                      <p className="mt-1 text-xs text-green-600">✓ Selected: {cartFiles.shopActLicense.name}</p>
+                      <p className="mt-1 text-xs text-green-600">
+                        ✓ Selected: {cartFiles.shopActLicense.name}
+                      </p>
                     )}
                     {cartFormErrors.shopActLicense && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.shopActLicense}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.shopActLicense}
+                      </p>
                     )}
                     <input
                       type="date"
                       value={cartFormData.shopActLicenseExpiry}
-                      onChange={(e) => setCartFormData({ ...cartFormData, shopActLicenseExpiry: e.target.value })}
+                      onChange={(e) =>
+                        setCartFormData({
+                          ...cartFormData,
+                          shopActLicenseExpiry: e.target.value,
+                        })
+                      }
                       className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                     />
-                    <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                    <p className="mt-1 text-xs text-[#6b4423]">
+                      Expiry Date (Optional)
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
-                      FSSAI License {editingCart ? '' : <span className="text-red-500">*</span>}
+                      FSSAI License{" "}
+                      {editingCart ? (
+                        ""
+                      ) : (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     {editingCart && cartExistingDocs.fssaiLicense && (
-                      <p className="text-xs text-gray-600 mb-1">Current: <a href={`${import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001'}${cartExistingDocs.fssaiLicense}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Document</a></p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        Current:{" "}
+                        <a
+                          href={`${
+                            import.meta.env.VITE_NODE_API_URL ||
+                            "http://localhost:5001"
+                          }${cartExistingDocs.fssaiLicense}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Document
+                        </a>
+                      </p>
                     )}
                     <input
                       type="file"
@@ -2191,35 +2775,58 @@ const Franchises = () => {
                           // Check file size (max 10MB)
                           const maxSize = 10 * 1024 * 1024;
                           if (file.size > maxSize) {
-                            setCartFormErrors({ ...cartFormErrors, fssaiLicense: 'File size must be less than 10MB' });
-                            e.target.value = '';
+                            setCartFormErrors({
+                              ...cartFormErrors,
+                              fssaiLicense: "File size must be less than 10MB",
+                            });
+                            e.target.value = "";
                             return;
                           }
                         }
                         setCartFiles({ ...cartFiles, fssaiLicense: file });
-                        if (cartFormErrors.fssaiLicense) setCartFormErrors({ ...cartFormErrors, fssaiLicense: '' });
+                        if (cartFormErrors.fssaiLicense)
+                          setCartFormErrors({
+                            ...cartFormErrors,
+                            fssaiLicense: "",
+                          });
                       }}
                       className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                        cartFormErrors.fssaiLicense ? 'border border-red-500 rounded-lg' : ''
+                        cartFormErrors.fssaiLicense
+                          ? "border border-red-500 rounded-lg"
+                          : ""
                       }`}
                     />
                     {cartFiles.fssaiLicense && (
-                      <p className="mt-1 text-xs text-green-600">✓ Selected: {cartFiles.fssaiLicense.name}</p>
+                      <p className="mt-1 text-xs text-green-600">
+                        ✓ Selected: {cartFiles.fssaiLicense.name}
+                      </p>
                     )}
                     {cartFormErrors.fssaiLicense && (
-                      <p className="mt-1 text-xs text-red-600">{cartFormErrors.fssaiLicense}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {cartFormErrors.fssaiLicense}
+                      </p>
                     )}
                     <input
                       type="date"
                       value={cartFormData.fssaiLicenseExpiry}
-                      onChange={(e) => setCartFormData({ ...cartFormData, fssaiLicenseExpiry: e.target.value })}
+                      onChange={(e) =>
+                        setCartFormData({
+                          ...cartFormData,
+                          fssaiLicenseExpiry: e.target.value,
+                        })
+                      }
                       className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                     />
-                    <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                    <p className="mt-1 text-xs text-[#6b4423]">
+                      Expiry Date (Optional)
+                    </p>
                   </div>
                 </div>
                 <p className="mt-4 text-xs text-[#6b4423]">
-                  {editingCart ? 'Upload new files to update existing documents. ' : 'All documents are required. '}Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
+                  {editingCart
+                    ? "Upload new files to update existing documents. "
+                    : "All documents are required. "}
+                  Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
                 </p>
               </div>
             </form>
@@ -2251,8 +2858,10 @@ const Franchises = () => {
                     <FaSpinner className="animate-spin" size={14} />
                     <span>Processing...</span>
                   </>
+                ) : editingCart ? (
+                  "Update Cart"
                 ) : (
-                  editingCart ? 'Update Cart' : 'Create Cart'
+                  "Create Cart"
                 )}
               </button>
             </div>

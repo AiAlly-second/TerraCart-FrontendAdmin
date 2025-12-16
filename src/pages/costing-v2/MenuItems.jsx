@@ -142,7 +142,9 @@ const MenuItems = () => {
   };
 
   const handleSyncFromDefault = async () => {
-    if (!window.confirm("This will update all costing menu items with the latest prices from the default menu. Continue?")) {
+    // CRITICAL: window.confirm is now async, must await it
+    const confirmed = await window.confirm("This will update all costing menu items with the latest prices from the default menu. Continue?");
+    if (!confirmed) {
       return;
     }
 

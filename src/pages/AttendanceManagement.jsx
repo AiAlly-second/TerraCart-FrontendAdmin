@@ -114,7 +114,9 @@ const AttendanceManagement = () => {
   };
 
   const handleCheckIn = async (employeeId) => {
-    if (!window.confirm('Mark this employee as checked in?')) return;
+    // CRITICAL: window.confirm is now async, must await it
+    const confirmed = await window.confirm('Mark this employee as checked in?');
+    if (!confirmed) return;
     try {
       await api.post('/attendance/checkin', { employeeId });
       alert('Check-in successful!');
@@ -127,7 +129,9 @@ const AttendanceManagement = () => {
   };
 
   const handleCheckOut = async (employeeId) => {
-    if (!window.confirm('Mark this employee as checked out?')) return;
+    // CRITICAL: window.confirm is now async, must await it
+    const confirmed = await window.confirm('Mark this employee as checked out?');
+    if (!confirmed) return;
     try {
       await api.post('/attendance/checkout', { employeeId });
       alert('Check-out successful!');

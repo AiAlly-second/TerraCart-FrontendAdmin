@@ -2439,11 +2439,11 @@ const Orders = () => {
                                                   <button
                                                     type="button"
                                                     onClick={async () => {
-                                                      if (
-                                                        window.confirm(
-                                                          `Cancel ${itemData.quantity}x ${itemData.name}?`
-                                                        )
-                                                      ) {
+                                                      // CRITICAL: window.confirm is now async, must await it
+                                                      const confirmed = await window.confirm(
+                                                        `Cancel ${itemData.quantity}x ${itemData.name}?`
+                                                      );
+                                                      if (confirmed) {
                                                         try {
                                                           await api.patch(
                                                             `/orders/${currentOrder._id}/return-items`,
@@ -2551,11 +2551,11 @@ const Orders = () => {
                                                   <button
                                                     type="button"
                                                     onClick={async () => {
-                                                      if (
-                                                        window.confirm(
-                                                          `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
-                                                        )
-                                                      ) {
+                                                      // CRITICAL: window.confirm is now async, must await it
+                                                      const confirmed = await window.confirm(
+                                                        `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                      );
+                                                      if (confirmed) {
                                                         try {
                                                           await api.patch(
                                                             `/orders/${currentOrder._id}/convert-to-takeaway`,
@@ -2665,11 +2665,11 @@ const Orders = () => {
                                                 <button
                                                   type="button"
                                                   onClick={async () => {
-                                                    if (
-                                                      window.confirm(
-                                                        `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
-                                                      )
-                                                    ) {
+                                                    // CRITICAL: window.confirm is now async, must await it
+                                                    const confirmed = await window.confirm(
+                                                      `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                    );
+                                                    if (confirmed) {
                                                       try {
                                                         await api.patch(
                                                           `/orders/${currentOrder._id}/convert-to-takeaway`,

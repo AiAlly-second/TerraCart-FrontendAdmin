@@ -71,7 +71,9 @@ const Payments = () => {
   }, [payments, filterStatus, filterDate]);
 
   const handleMarkPaid = async (payment) => {
-    if (!window.confirm(`Mark payment ${payment.id} as paid?`)) return;
+    // CRITICAL: window.confirm is now async, must await it
+    const confirmed = await window.confirm(`Mark payment ${payment.id} as paid?`);
+    if (!confirmed) return;
     setBusyId(payment.id);
     try {
       await api.post(`/payments/${payment.id}/mark-paid`);

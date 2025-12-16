@@ -75,6 +75,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/franchises", icon: "🏢", label: "Franchises" },
+        { path: "/carts", icon: "🛒", label: "Cart Management" },
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
         { path: "/users", icon: "👥", label: "Administrative Users" },
         { path: "/employees", icon: "👤", label: "Employee Management" },
@@ -161,7 +162,9 @@ const Sidebar = ({ isOpen, onClose }) => {
               src={Logo}
               alt="Logo"
               className={`${
-                franchiseName ? "h-8 sm:h-10 md:h-12 w-auto object-contain mb-1 sm:mb-2" : "h-8 sm:h-10 md:h-12"
+                franchiseName
+                  ? "h-8 sm:h-10 md:h-12 w-auto object-contain mb-1 sm:mb-2"
+                  : "h-8 sm:h-10 md:h-12"
               } bg-white rounded-full p-0.5 sm:p-1 flex-shrink-0`}
             />
             {franchiseName ? (
@@ -221,8 +224,12 @@ const Sidebar = ({ isOpen, onClose }) => {
                 }}
               >
                 <div className="flex items-center min-w-0 flex-1">
-                  <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
-                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">{item.label}</span>
+                  <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+                    {item.icon}
+                  </span>
+                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">
+                    {item.label}
+                  </span>
                 </div>
                 {item.showStats && !menuLoading && menuStats.categories > 0 && (
                   <span className="ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs bg-[#d86d2a] text-white px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 rounded-full flex-shrink-0 whitespace-nowrap font-semibold shadow-sm">
@@ -242,7 +249,9 @@ const Sidebar = ({ isOpen, onClose }) => {
             onClick={handleLogout}
             className="w-full flex items-center px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-left hover:bg-[#d86d2a] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base font-medium group"
           >
-            <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">🚪</span>
+            <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+              🚪
+            </span>
             <span className="ml-1.5 sm:ml-2 md:ml-3">Logout</span>
           </button>
         </div>

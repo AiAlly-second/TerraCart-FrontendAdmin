@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/api";
 import Logo from "../assets/images/logo_new.jpeg";
+import { useAuth } from "../context/AuthContext";
 
 const RegisterCart = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -14,9 +17,13 @@ const RegisterCart = () => {
     location: "",
     phone: "",
     address: "",
+    gstNumber: "",
     shopActLicenseExpiry: "",
     fssaiLicenseExpiry: "",
   });
+  const [franchises, setFranchises] = useState([]);
+  const [franchiseLoading, setFranchiseLoading] = useState(false);
+  const [franchiseId, setFranchiseId] = useState("");
   const [files, setFiles] = useState({
     aadharCard: null,
     panCard: null,
@@ -28,38 +35,82 @@ const RegisterCart = () => {
   const [success, setSuccess] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
+  // Load franchises for super admin so they can assign cart to a franchise
+  // Also, for franchise admins, pre-fill GST number from their own profile (editable)
+  useEffect(() => {
+    const initData = async () => {
+      try {
+        if (isSuperAdmin) {
+          setFranchiseLoading(true);
+          const res = await api.get("/users");
+          const allUsers = res.data || [];
+          const franchiseAdmins = allUsers.filter(
+            (u) => u.role === "franchise_admin"
+          );
+          setFranchises(franchiseAdmins);
+        } else {
+          // Franchise admin: get own GST number so we can show it by default
+          const meRes = await api.get("/users/me");
+          const meUser = meRes.data?.user;
+          if (meUser?.gstNumber) {
+            setFormData((prev) => ({
+              ...prev,
+              gstNumber: prev.gstNumber || meUser.gstNumber,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Error initializing cart registration data:", err);
+      } finally {
+        if (isSuperAdmin) {
+          setFranchiseLoading(false);
+        }
+      }
+    };
+
+    initData();
+  }, [isSuperAdmin]);
+
   // Validation functions
   const validateEmail = (email) => {
-    if (!email || !email.trim()) return 'Email is required';
+    if (!email || !email.trim()) return "Email is required";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      return 'Please enter a valid email address';
+      return "Please enter a valid email address";
     }
-    return '';
+    return "";
   };
 
   const validatePhoneNumber = (phone) => {
-    if (!phone || !phone.trim()) return ''; // Phone is optional
+    if (!phone || !phone.trim()) return ""; // Phone is optional
     // Remove spaces, dashes, and country code for validation
-    const cleaned = phone.replace(/[\s\-+]/g, '').replace(/^91/, '');
+    const cleaned = phone.replace(/[\s\-+]/g, "").replace(/^91/, "");
     const phoneRegex = /^[6-9]\d{9}$/;
     if (!phoneRegex.test(cleaned)) {
-      return 'Please enter a valid 10-digit Indian mobile number';
+      return "Please enter a valid 10-digit Indian mobile number";
     }
-    return '';
+    return "";
   };
 
   const validateName = (name) => {
-    if (!name || !name.trim()) return 'Manager name is required';
-    if (name.trim().length < 2) return 'Name must be at least 2 characters';
-    if (name.trim().length > 50) return 'Name must be less than 50 characters';
-    return '';
+    if (!name || !name.trim()) return "Name is required";
+    if (name.trim().length < 2) return "Name must be at least 2 characters";
+    if (name.trim().length > 50) return "Name must be less than 50 characters";
+    return "";
   };
 
   const validatePassword = (password) => {
-    if (!password || !password.trim()) return 'Password is required';
-    if (password.length < 6) return 'Password must be at least 6 characters';
-    return '';
+    if (!password || !password.trim()) return "Password is required";
+    if (password.length < 6) return "Password must be at least 6 characters";
+    return "";
+  };
+
+  const validateGSTNumber = (gst) => {
+    if (!gst) return true; // Optional field
+    // GST format: 15 characters, alphanumeric (e.g., 29ABCDE1234F1Z5)
+    const gstRegex =
+      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    return gstRegex.test(gst.toUpperCase());
   };
 
   const handleChange = (e) => {
@@ -70,7 +121,7 @@ const RegisterCart = () => {
     });
     // Clear error for this field when user starts typing
     if (formErrors[name]) {
-      setFormErrors({ ...formErrors, [name]: '' });
+      setFormErrors({ ...formErrors, [name]: "" });
     }
     setError("");
   };
@@ -81,19 +132,22 @@ const RegisterCart = () => {
       // Check file size (max 10MB)
       const maxSize = 10 * 1024 * 1024; // 10MB in bytes
       if (fileList[0].size > maxSize) {
-        setFormErrors({ ...formErrors, [name]: 'File size must be less than 10MB' });
+        setFormErrors({
+          ...formErrors,
+          [name]: "File size must be less than 10MB",
+        });
         // Clear the file input
-        e.target.value = '';
+        e.target.value = "";
         return;
       }
-      
+
       setFiles({
         ...files,
         [name]: fileList[0],
       });
       // Clear error for this field
       if (formErrors[name]) {
-        setFormErrors({ ...formErrors, [name]: '' });
+        setFormErrors({ ...formErrors, [name]: "" });
       }
     } else {
       // File was removed, clear it from state
@@ -102,9 +156,25 @@ const RegisterCart = () => {
         [name]: null,
       });
       // Set error if this is a required field
-      const requiredFields = ['aadharCard', 'panCard', 'shopActLicense', 'fssaiLicense'];
+      const requiredFields = [
+        "aadharCard",
+        "panCard",
+        "shopActLicense",
+        "fssaiLicense",
+      ];
       if (requiredFields.includes(name)) {
-        setFormErrors({ ...formErrors, [name]: `${name === 'aadharCard' ? 'Aadhar Card' : name === 'panCard' ? 'PAN Card' : name === 'shopActLicense' ? 'Shop Act License' : 'FSSAI License'} is required` });
+        setFormErrors({
+          ...formErrors,
+          [name]: `${
+            name === "aadharCard"
+              ? "Aadhar Card"
+              : name === "panCard"
+              ? "PAN Card"
+              : name === "shopActLicense"
+              ? "Shop Act License"
+              : "FSSAI License"
+          } is required`,
+        });
       }
     }
     setError("");
@@ -126,11 +196,17 @@ const RegisterCart = () => {
       location: formData.location.trim(),
       phone: formData.phone.trim(),
       address: formData.address.trim(),
+      gstNumber: formData.gstNumber.trim().toUpperCase(),
       shopActLicenseExpiry: formData.shopActLicenseExpiry,
       fssaiLicenseExpiry: formData.fssaiLicenseExpiry,
     };
 
     const errors = {};
+
+    // Super admin must select a franchise for the new cart
+    if (isSuperAdmin && !franchiseId) {
+      errors.franchiseId = "Franchise is required";
+    }
 
     // Validate name
     const nameError = validateName(trimmedData.name);
@@ -146,23 +222,23 @@ const RegisterCart = () => {
 
     // Validate confirm password
     if (!trimmedData.confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password';
+      errors.confirmPassword = "Please confirm your password";
     } else if (trimmedData.password !== trimmedData.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
+      errors.confirmPassword = "Passwords do not match";
     }
 
     // Validate cart name
     if (!trimmedData.cartName) {
-      errors.cartName = 'Cart name is required';
+      errors.cartName = "Cart name is required";
     } else if (trimmedData.cartName.length < 2) {
-      errors.cartName = 'Cart name must be at least 2 characters';
+      errors.cartName = "Cart name must be at least 2 characters";
     }
 
     // Validate location
     if (!trimmedData.location) {
-      errors.location = 'Location is required';
+      errors.location = "Location is required";
     } else if (trimmedData.location.length < 2) {
-      errors.location = 'Location must be at least 2 characters';
+      errors.location = "Location must be at least 2 characters";
     }
 
     // Validate phone (optional but if provided, must be valid)
@@ -171,18 +247,26 @@ const RegisterCart = () => {
       if (phoneError) errors.phone = phoneError;
     }
 
+    // Validate GST number (optional but if provided, must be valid)
+    if (trimmedData.gstNumber) {
+      if (!validateGSTNumber(trimmedData.gstNumber)) {
+        errors.gstNumber =
+          "Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)";
+      }
+    }
+
     // Validate required documents
     if (!files.aadharCard) {
-      errors.aadharCard = 'Aadhar Card is required';
+      errors.aadharCard = "Aadhar Card is required";
     }
     if (!files.panCard) {
-      errors.panCard = 'PAN Card is required';
+      errors.panCard = "PAN Card is required";
     }
     if (!files.shopActLicense) {
-      errors.shopActLicense = 'Shop Act License is required';
+      errors.shopActLicense = "Shop Act License is required";
     }
     if (!files.fssaiLicense) {
-      errors.fssaiLicense = 'FSSAI License is required';
+      errors.fssaiLicense = "FSSAI License is required";
     }
 
     // If there are errors, display them and stop submission
@@ -190,9 +274,11 @@ const RegisterCart = () => {
       setFormErrors(errors);
       // Scroll to first error
       const firstErrorField = Object.keys(errors)[0];
-      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      const errorElement = document.querySelector(
+        `[name="${firstErrorField}"]`
+      );
       if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
         errorElement.focus();
       }
       return;
@@ -209,25 +295,47 @@ const RegisterCart = () => {
       formDataToSend.append("password", formData.password);
       formDataToSend.append("cartName", formData.cartName.trim());
       formDataToSend.append("location", formData.location.trim());
+      // For super admin, explicitly attach franchiseId so backend can link cart
+      if (isSuperAdmin && franchiseId) {
+        formDataToSend.append("franchiseId", franchiseId);
+      }
       if (formData.phone) formDataToSend.append("phone", formData.phone.trim());
-      if (formData.address) formDataToSend.append("address", formData.address.trim());
-      
+      if (formData.address)
+        formDataToSend.append("address", formData.address.trim());
+      if (trimmedData.gstNumber)
+        formDataToSend.append("gstNumber", trimmedData.gstNumber);
+
       // Append expiry dates if provided (only for documents that can expire)
-      if (formData.shopActLicenseExpiry) formDataToSend.append("shopActLicenseExpiry", formData.shopActLicenseExpiry);
-      if (formData.fssaiLicenseExpiry) formDataToSend.append("fssaiLicenseExpiry", formData.fssaiLicenseExpiry);
+      if (formData.shopActLicenseExpiry)
+        formDataToSend.append(
+          "shopActLicenseExpiry",
+          formData.shopActLicenseExpiry
+        );
+      if (formData.fssaiLicenseExpiry)
+        formDataToSend.append(
+          "fssaiLicenseExpiry",
+          formData.fssaiLicenseExpiry
+        );
 
       // Append files if selected
-      if (files.aadharCard) formDataToSend.append("aadharCard", files.aadharCard);
+      if (files.aadharCard)
+        formDataToSend.append("aadharCard", files.aadharCard);
       if (files.panCard) formDataToSend.append("panCard", files.panCard);
-      if (files.shopActLicense) formDataToSend.append("shopActLicense", files.shopActLicense);
-      if (files.fssaiLicense) formDataToSend.append("fssaiLicense", files.fssaiLicense);
+      if (files.shopActLicense)
+        formDataToSend.append("shopActLicense", files.shopActLicense);
+      if (files.fssaiLicense)
+        formDataToSend.append("fssaiLicense", files.fssaiLicense);
 
-      const response = await api.post("/users/register-cafe-admin", formDataToSend, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        skipErrorAlert: true, // Skip API interceptor alert, we'll handle it in component
-      });
+      const response = await api.post(
+        "/users/register-cafe-admin",
+        formDataToSend,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          skipErrorAlert: true, // Skip API interceptor alert, we'll handle it in component
+        }
+      );
 
       setSuccess(true);
       setFormData({
@@ -239,6 +347,7 @@ const RegisterCart = () => {
         location: "",
         phone: "",
         address: "",
+        gstNumber: "",
         shopActLicenseExpiry: "",
         fssaiLicenseExpiry: "",
       });
@@ -257,10 +366,10 @@ const RegisterCart = () => {
       console.error("Registration error:", err);
       console.error("Error response:", err.response);
       console.error("Error data:", err.response?.data);
-      
+
       // Extract error message from various possible locations
       let errorMessage = "Registration failed. Please try again.";
-      
+
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       } else if (err.response?.data?.error) {
@@ -268,40 +377,46 @@ const RegisterCart = () => {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       console.log("Extracted error message:", errorMessage);
-      
+
       // Map backend errors to form fields
       const lowerErrorMessage = errorMessage.toLowerCase();
       const backendErrors = {};
-      
-      if (lowerErrorMessage.includes("email already registered") || lowerErrorMessage.includes("already registered")) {
+
+      if (
+        lowerErrorMessage.includes("email already registered") ||
+        lowerErrorMessage.includes("already registered")
+      ) {
         backendErrors.email = `This email address is already registered. Please use a different email address.`;
       } else if (lowerErrorMessage.includes("email")) {
         backendErrors.email = errorMessage;
       } else if (lowerErrorMessage.includes("password")) {
         backendErrors.password = errorMessage;
-      } else if (lowerErrorMessage.includes("cart name") || lowerErrorMessage.includes("cartname")) {
+      } else if (
+        lowerErrorMessage.includes("cart name") ||
+        lowerErrorMessage.includes("cartname")
+      ) {
         backendErrors.cartName = errorMessage;
       } else if (lowerErrorMessage.includes("location")) {
         backendErrors.location = errorMessage;
       } else {
         setError(errorMessage);
       }
-      
+
       if (Object.keys(backendErrors).length > 0) {
-        setFormErrors(prev => ({ ...prev, ...backendErrors }));
+        setFormErrors((prev) => ({ ...prev, ...backendErrors }));
       }
-      
+
       // Force re-render and scroll to error message
       setTimeout(() => {
-        const errorElement = document.querySelector('.bg-red-50');
+        const errorElement = document.querySelector(".bg-red-50");
         if (errorElement) {
-          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
           // Add a visual highlight
-          errorElement.style.animation = 'none';
+          errorElement.style.animation = "none";
           setTimeout(() => {
-            errorElement.style.animation = 'pulse 2s ease-in-out';
+            errorElement.style.animation = "pulse 2s ease-in-out";
           }, 10);
         } else {
           console.warn("Error element not found in DOM");
@@ -313,19 +428,32 @@ const RegisterCart = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#f5e3d5]" style={{
-      backgroundImage: 'linear-gradient(135deg, #f5e3d5 0%, #fef4ec 50%, #f3ddcb 100%)'
-    }}>
+    <div
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#f5e3d5]"
+      style={{
+        backgroundImage:
+          "linear-gradient(135deg, #f5e3d5 0%, #fef4ec 50%, #f3ddcb 100%)",
+      }}
+    >
       <div className="w-full max-w-4xl space-y-8 bg-white p-8 rounded-xl shadow-lg border border-[#e2c1ac]">
         <div className="flex justify-center">
-          <img src={Logo} alt="Terra Cart Logo" className="h-20" onError={(e) => { e.target.style.display = 'none'; }} />
+          <img
+            src={Logo}
+            alt="Terra Cart Logo"
+            className="h-20"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
+          />
         </div>
         <div>
           <h2 className="text-3xl font-bold text-center text-[#4a2e1f]">
-            Register New Cart Admin
+            Register Cart
           </h2>
           <p className="mt-2 text-center text-sm text-[#6b4423]">
-            Fill in the details below to register a new cart under your franchise.
+            {isSuperAdmin
+              ? "Fill in the details below to register a new cart under a selected franchise."
+              : "Fill in the details below to register a new cart under your franchise."}
           </p>
         </div>
 
@@ -333,8 +461,8 @@ const RegisterCart = () => {
           <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
             <p className="font-semibold">Registration Successful!</p>
             <p className="text-sm mt-1">
-              Cart admin account has been created successfully.
-              You will be redirected to carts page...
+              Cart admin account has been created successfully. You will be
+              redirected to carts page...
             </p>
           </div>
         )}
@@ -342,8 +470,16 @@ const RegisterCart = () => {
         {error && (
           <div className="bg-red-50 border-2 border-red-300 text-red-800 px-4 py-3 rounded-lg shadow-md">
             <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <svg
+                className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
               <div className="flex-1">
                 <p className="font-bold text-base">Registration Error</p>
@@ -355,8 +491,16 @@ const RegisterCart = () => {
                 aria-label="Dismiss error"
                 type="button"
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                <svg
+                  className="w-5 h-5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </button>
             </div>
@@ -365,9 +509,59 @@ const RegisterCart = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {isSuperAdmin && (
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="franchiseId"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
+                  Franchise <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="franchiseId"
+                  name="franchiseId"
+                  value={franchiseId}
+                  onChange={(e) => {
+                    setFranchiseId(e.target.value);
+                    if (formErrors.franchiseId) {
+                      setFormErrors((prev) => ({
+                        ...prev,
+                        franchiseId: "",
+                      }));
+                    }
+                  }}
+                  disabled={franchiseLoading}
+                  className={`mt-1 block w-full px-3 py-2 border rounded-lg bg-[#fef4ec] text-[#4a2e1f] focus:outline-none focus:ring-2 ${
+                    formErrors.franchiseId
+                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                      : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                  }`}
+                >
+                  <option value="">
+                    {franchiseLoading
+                      ? "Loading franchises..."
+                      : "Select a franchise"}
+                  </option>
+                  {franchises.map((f) => (
+                    <option key={f._id} value={f._id}>
+                      {f.name}
+                      {f.franchiseCode ? ` (${f.franchiseCode})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.franchiseId && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {formErrors.franchiseId}
+                  </p>
+                )}
+              </div>
+            )}
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-[#4a2e1f]">
-                Manager Name <span className="text-red-500">*</span>
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
+                Name <span className="text-red-500">*</span>
               </label>
               <input
                 id="name"
@@ -377,9 +571,9 @@ const RegisterCart = () => {
                 value={formData.name}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.name 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.name
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="John Doe"
               />
@@ -389,7 +583,10 @@ const RegisterCart = () => {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Email <span className="text-red-500">*</span>
               </label>
               <input
@@ -400,9 +597,9 @@ const RegisterCart = () => {
                 value={formData.email}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.email 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.email
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="manager@cart.com"
               />
@@ -412,7 +609,10 @@ const RegisterCart = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Password <span className="text-red-500">*</span>
               </label>
               <input
@@ -423,22 +623,29 @@ const RegisterCart = () => {
                 value={formData.password}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.password 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.password
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="Minimum 6 characters"
               />
               {formErrors.password && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {formErrors.password}
+                </p>
               )}
               {!formErrors.password && (
-                <p className="mt-1 text-xs text-[#6b4423]">Password must be at least 6 characters</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Password must be at least 6 characters
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Confirm Password <span className="text-red-500">*</span>
               </label>
               <input
@@ -449,19 +656,24 @@ const RegisterCart = () => {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.confirmPassword 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.confirmPassword
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="Confirm password"
               />
               {formErrors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.confirmPassword}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {formErrors.confirmPassword}
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="cartName" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="cartName"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Cart Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -472,19 +684,24 @@ const RegisterCart = () => {
                 value={formData.cartName}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.cartName 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.cartName
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="Terra Cart Downtown"
               />
               {formErrors.cartName && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.cartName}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {formErrors.cartName}
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="location"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Location <span className="text-red-500">*</span>
               </label>
               <input
@@ -495,19 +712,24 @@ const RegisterCart = () => {
                 value={formData.location}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.location 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.location
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="Downtown, City"
               />
               {formErrors.location && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {formErrors.location}
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Phone
               </label>
               <input
@@ -517,9 +739,9 @@ const RegisterCart = () => {
                 value={formData.phone}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.phone 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]'
+                  formErrors.phone
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
                 placeholder="+91 1234567890"
               />
@@ -527,12 +749,57 @@ const RegisterCart = () => {
                 <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
               )}
               {!formErrors.phone && (
-                <p className="mt-1 text-xs text-[#6b4423]">Optional: 10-digit Indian mobile number</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Optional: 10-digit Indian mobile number
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="gstNumber"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
+                GST Number
+              </label>
+              <input
+                id="gstNumber"
+                name="gstNumber"
+                type="text"
+                value={formData.gstNumber}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
+                  setFormData((prev) => ({ ...prev, gstNumber: value }));
+                  if (formErrors.gstNumber) {
+                    setFormErrors((prev) => ({ ...prev, gstNumber: "" }));
+                  }
+                  setError("");
+                }}
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
+                  formErrors.gstNumber
+                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                    : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
+                }`}
+                placeholder="e.g., 29ABCDE1234F1Z5"
+                maxLength={15}
+              />
+              {formErrors.gstNumber && (
+                <p className="mt-1 text-sm text-red-600">
+                  {formErrors.gstNumber}
+                </p>
+              )}
+              {!formErrors.gstNumber && (
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Optional: 15-character GST number
+                </p>
               )}
             </div>
 
             <div className="md:col-span-2">
-              <label htmlFor="address" className="block text-sm font-medium text-[#4a2e1f]">
+              <label
+                htmlFor="address"
+                className="block text-sm font-medium text-[#4a2e1f]"
+              >
                 Address
               </label>
               <textarea
@@ -549,13 +816,18 @@ const RegisterCart = () => {
 
           {/* Document Upload Section - Required */}
           <div className="mt-8 border-t border-[#e2c1ac] pt-6">
-            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">Owner Documents <span className="text-red-500">*</span></h3>
+            <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">
+              Owner Documents <span className="text-red-500">*</span>
+            </h3>
             <p className="text-sm text-[#6b4423] mb-4">
               📄 All documents are required for cart registration.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="aadharCard" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="aadharCard"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   Aadhar Card of Owner <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -565,19 +837,28 @@ const RegisterCart = () => {
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
                   className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                    formErrors.aadharCard ? 'border border-red-500 rounded-lg' : ''
+                    formErrors.aadharCard
+                      ? "border border-red-500 rounded-lg"
+                      : ""
                   }`}
                 />
                 {files.aadharCard && (
-                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.aadharCard.name}</p>
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Selected: {files.aadharCard.name}
+                  </p>
                 )}
                 {formErrors.aadharCard && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.aadharCard}</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    {formErrors.aadharCard}
+                  </p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="panCard" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="panCard"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   PAN Card <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -587,19 +868,26 @@ const RegisterCart = () => {
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
                   className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                    formErrors.panCard ? 'border border-red-500 rounded-lg' : ''
+                    formErrors.panCard ? "border border-red-500 rounded-lg" : ""
                   }`}
                 />
                 {files.panCard && (
-                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.panCard.name}</p>
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Selected: {files.panCard.name}
+                  </p>
                 )}
                 {formErrors.panCard && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.panCard}</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    {formErrors.panCard}
+                  </p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="shopActLicense" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="shopActLicense"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   Shop Act License <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -609,14 +897,20 @@ const RegisterCart = () => {
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
                   className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                    formErrors.shopActLicense ? 'border border-red-500 rounded-lg' : ''
+                    formErrors.shopActLicense
+                      ? "border border-red-500 rounded-lg"
+                      : ""
                   }`}
                 />
                 {files.shopActLicense && (
-                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.shopActLicense.name}</p>
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Selected: {files.shopActLicense.name}
+                  </p>
                 )}
                 {formErrors.shopActLicense && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.shopActLicense}</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    {formErrors.shopActLicense}
+                  </p>
                 )}
                 <input
                   type="date"
@@ -626,11 +920,16 @@ const RegisterCart = () => {
                   onChange={handleChange}
                   className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 />
-                <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Expiry Date (Optional)
+                </p>
               </div>
 
               <div>
-                <label htmlFor="fssaiLicense" className="block text-sm font-medium text-[#4a2e1f]">
+                <label
+                  htmlFor="fssaiLicense"
+                  className="block text-sm font-medium text-[#4a2e1f]"
+                >
                   FSSAI License <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -640,14 +939,20 @@ const RegisterCart = () => {
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handleFileChange}
                   className={`mt-1 block w-full text-sm text-[#6b4423] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#fef4ec] file:text-[#d86d2a] hover:file:bg-[#f5e3d5] ${
-                    formErrors.fssaiLicense ? 'border border-red-500 rounded-lg' : ''
+                    formErrors.fssaiLicense
+                      ? "border border-red-500 rounded-lg"
+                      : ""
                   }`}
                 />
                 {files.fssaiLicense && (
-                  <p className="mt-1 text-xs text-green-600">✓ Selected: {files.fssaiLicense.name}</p>
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Selected: {files.fssaiLicense.name}
+                  </p>
                 )}
                 {formErrors.fssaiLicense && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.fssaiLicense}</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    {formErrors.fssaiLicense}
+                  </p>
                 )}
                 <input
                   type="date"
@@ -657,12 +962,14 @@ const RegisterCart = () => {
                   onChange={handleChange}
                   className="mt-2 block w-full border border-[#e2c1ac] rounded-lg px-3 py-2 text-sm text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 />
-                <p className="mt-1 text-xs text-[#6b4423]">Expiry Date (Optional)</p>
+                <p className="mt-1 text-xs text-[#6b4423]">
+                  Expiry Date (Optional)
+                </p>
               </div>
-
             </div>
             <p className="mt-4 text-xs text-[#6b4423]">
-              All documents are required. Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
+              All documents are required. Accepted formats: PDF, JPG, PNG, WEBP
+              (Max 10MB per file)
             </p>
           </div>
 
@@ -677,10 +984,12 @@ const RegisterCart = () => {
               type="submit"
               disabled={loading}
               className={`px-6 py-2 font-bold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-opacity-50 transition-colors shadow-md ${
-                loading ? 'bg-[#c75b1a] cursor-not-allowed opacity-70' : 'bg-[#d86d2a] hover:bg-[#c75b1a]'
+                loading
+                  ? "bg-[#c75b1a] cursor-not-allowed opacity-70"
+                  : "bg-[#d86d2a] hover:bg-[#c75b1a]"
               }`}
             >
-              {loading ? "Registering..." : "Register Cart Admin"}
+              {loading ? "Registering..." : "Register Cart"}
             </button>
           </div>
         </form>

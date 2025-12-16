@@ -687,8 +687,8 @@ const EmployeeManagement = () => {
       
       if (!confirm) {
         console.error('Confirm utility not available');
-        // Fallback to native confirm
-        const proceed = window.confirm(
+        // Fallback to native confirm (also async now)
+        const proceed = await window.confirm(
           `Are you sure you want to PERMANENTLY DELETE "${employeeName}"?\n\nThis action cannot be undone.`
         );
         if (!proceed) return;
@@ -767,18 +767,82 @@ const EmployeeManagement = () => {
     setShowModal(true);
   };
 
-  const filteredHierarchy = hierarchy.filter(franchise => {
-    const franchiseMatch = franchise.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const cafeMatch = franchise.cafes?.some(cafe => 
-      cafe.cafeName?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Helper function to check if employee matches search term
+  const employeeMatchesSearch = (employee) => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      employee.name?.toLowerCase().includes(search) ||
+      employee.mobile?.toLowerCase().includes(search) ||
+      employee.email?.toLowerCase().includes(search) ||
+      (employee.employeeRole || employee.role)?.toLowerCase().includes(search)
     );
-    const employeeMatch = [
-      ...(franchise.employees || []),
-      ...(franchise.cafes?.flatMap(cafe => cafe.employees || []) || [])
-    ].some(emp => emp.name?.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    return franchiseMatch || cafeMatch || employeeMatch;
-  });
+  };
+
+  // Helper function to check if cafe matches search term
+  const cafeMatchesSearch = (cafe) => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      cafe.cafeName?.toLowerCase().includes(search) ||
+      cafe.name?.toLowerCase().includes(search) ||
+      cafe.email?.toLowerCase().includes(search) ||
+      (cafe.employees || []).some(emp => employeeMatchesSearch(emp))
+    );
+  };
+
+  // Filter hierarchy with nested filtering
+  const filteredHierarchy = hierarchy
+    .map(franchise => {
+      if (!searchTerm) return franchise;
+      
+      const search = searchTerm.toLowerCase();
+      const franchiseMatch = franchise.name?.toLowerCase().includes(search) ||
+                            franchise.email?.toLowerCase().includes(search);
+      
+      // Filter franchise-level employees
+      const filteredFranchiseEmployees = (franchise.employees || []).filter(emp => 
+        employeeMatchesSearch(emp)
+      );
+      
+      // Filter cafes and their employees
+      const filteredCafes = (franchise.cafes || [])
+        .map(cafe => {
+          const filteredCafeEmployees = (cafe.employees || []).filter(emp => 
+            employeeMatchesSearch(emp)
+          );
+          
+          // Include cafe if it matches search OR has matching employees
+          if (cafeMatchesSearch(cafe) || filteredCafeEmployees.length > 0) {
+            return {
+              ...cafe,
+              employees: filteredCafeEmployees
+            };
+          }
+          return null;
+        })
+        .filter(cafe => cafe !== null);
+      
+      // Include franchise if:
+      // 1. Franchise name/email matches, OR
+      // 2. Has matching franchise employees, OR
+      // 3. Has matching cafes
+      if (franchiseMatch || filteredFranchiseEmployees.length > 0 || filteredCafes.length > 0) {
+        return {
+          ...franchise,
+          employees: filteredFranchiseEmployees,
+          cafes: filteredCafes
+        };
+      }
+      
+      return null;
+    })
+    .filter(franchise => franchise !== null);
+
+  // Filter orphan employees
+  const filteredOrphanEmployees = searchTerm
+    ? orphanEmployees.filter(emp => employeeMatchesSearch(emp))
+    : orphanEmployees;
 
   // Unified roles for employee creation (matches User model roles)
   const employeeRoles = [
@@ -827,10 +891,10 @@ const EmployeeManagement = () => {
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6 space-y-4">
-          {filteredHierarchy.length === 0 && !loading ? (
+          {filteredHierarchy.length === 0 && filteredOrphanEmployees.length === 0 && !loading ? (
             <div className="text-center py-12 text-gray-500">
               <FaUsers className="mx-auto text-4xl mb-4" />
-              <p>No employees found</p>
+              <p>{searchTerm ? 'No employees found matching your search' : 'No employees found'}</p>
             </div>
           ) : (
             filteredHierarchy.map((franchise) => (
@@ -1050,11 +1114,11 @@ const EmployeeManagement = () => {
           )}
 
           {/* Orphan Employees (no franchise/cart) */}
-          {orphanEmployees && orphanEmployees.length > 0 && (
+          {filteredOrphanEmployees && filteredOrphanEmployees.length > 0 && (
             <div className="border border-yellow-200 rounded-lg bg-yellow-50 p-4">
               <h3 className="font-semibold text-yellow-800 mb-2">Unassigned Employees</h3>
               <div className="space-y-2">
-                {orphanEmployees.map((employee) => (
+                {filteredOrphanEmployees.map((employee) => (
                   <div
                     key={employee._id}
                     className="flex items-center justify-between p-3 bg-white rounded border border-yellow-200"

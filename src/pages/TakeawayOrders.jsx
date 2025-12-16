@@ -75,16 +75,16 @@ const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
     const amount = Number(item.amount) || 0;
     return sum + amount;
   }, 0);
-  
+
   // Round subtotal to 2 decimal places
   const subtotalRounded = Number(subtotal.toFixed(2));
-  
+
   // Calculate GST (5%)
   const gst = Number((subtotalRounded * 0.05).toFixed(2));
-  
+
   // Calculate total amount
   const totalAmount = Number((subtotalRounded + gst).toFixed(2));
-  
+
   return {
     subtotal: subtotalRounded,
     gst: gst,
@@ -123,7 +123,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                 <td class="py-2 border-b">${item.name || ""}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
-                <td class="py-2 border-b text-right">₹${formatMoney(amount)}</td>
+                <td class="py-2 border-b text-right">₹${formatMoney(
+                  amount
+                )}</td>
               </tr>
             `;
           })
@@ -202,8 +204,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-            order.paidAt || order.updatedAt || order.createdAt || Date.now()
-          ).toLocaleDateString()}</div>
+          order.paidAt || order.updatedAt || order.createdAt || Date.now()
+        ).toLocaleDateString()}</div>
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
@@ -257,13 +259,13 @@ const printOrderInvoice = async (order) => {
   // For takeaway orders in cart admin panel, avoid extra user lookups that can 403
   // due to access-control on /users/:id. Use the order data only.
   const html = buildInvoiceMarkup(order, null, null);
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow?.document;
   if (!doc) return;
@@ -316,7 +318,7 @@ const printOrderInvoice = async (order) => {
   `);
   doc.close();
   iframe.onload = function () {
-  setTimeout(() => {
+    setTimeout(() => {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       document.body.removeChild(iframe);
@@ -377,14 +379,14 @@ const downloadOrderInvoice = async (order) => {
     const canvas = await html2canvas(element, {
       scale: window.devicePixelRatio || 2,
       useCORS: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: "#ffffff",
     });
 
-    const imageData = canvas.toDataURL('image/png');
+    const imageData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [80, 'auto']
+      orientation: "portrait",
+      unit: "mm",
+      format: [80, "auto"],
     });
     const pdfWidth = 80;
     const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -398,14 +400,14 @@ const downloadOrderInvoice = async (order) => {
     let heightLeft = imgHeight;
     let position = margin;
 
-    pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
-    heightLeft -= (pdfHeight - margin * 2);
+    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
+    heightLeft -= pdfHeight - margin * 2;
 
     while (heightLeft > 0) {
       pdf.addPage();
       position = margin - heightLeft;
-      pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
-      heightLeft -= (pdfHeight - margin * 2);
+      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
+      heightLeft -= pdfHeight - margin * 2;
     }
 
     pdf.save(`${buildInvoiceId(order)}.pdf`);
@@ -414,7 +416,7 @@ const downloadOrderInvoice = async (order) => {
     alert("Failed to generate PDF. Please try again.");
   } finally {
     if (document.body.contains(wrapper)) {
-    document.body.removeChild(wrapper);
+      document.body.removeChild(wrapper);
     }
   }
 };
@@ -440,22 +442,26 @@ const TakeawayOrders = () => {
   const socketRef = React.useRef(null);
   const upsertOrder = React.useCallback(
     (incoming, { prepend = false } = {}) => {
-      console.log('[TakeawayOrders] upsertOrder called with:', incoming);
+      console.log("[TakeawayOrders] upsertOrder called with:", incoming);
       if (!incoming) {
-        console.log('[TakeawayOrders] upsertOrder: incoming is null/undefined');
+        console.log("[TakeawayOrders] upsertOrder: incoming is null/undefined");
         return;
       }
       if (incoming.serviceType !== "TAKEAWAY") {
-        console.log(`[TakeawayOrders] upsertOrder: filtering out order - serviceType is ${incoming.serviceType}, expected TAKEAWAY`);
+        console.log(
+          `[TakeawayOrders] upsertOrder: filtering out order - serviceType is ${incoming.serviceType}, expected TAKEAWAY`
+        );
         return;
       }
       const incomingId = normalizeId(incoming._id);
       if (!incomingId) {
-        console.log('[TakeawayOrders] upsertOrder: no order ID found');
+        console.log("[TakeawayOrders] upsertOrder: no order ID found");
         return;
       }
 
-      console.log(`[TakeawayOrders] upsertOrder: processing takeaway order ${incomingId}`);
+      console.log(
+        `[TakeawayOrders] upsertOrder: processing takeaway order ${incomingId}`
+      );
 
       setOrders((prev) => {
         const list = Array.isArray(prev) ? [...prev] : [];
@@ -464,12 +470,16 @@ const TakeawayOrders = () => {
         );
 
         if (index >= 0) {
-          console.log(`[TakeawayOrders] upsertOrder: updating existing order at index ${index}`);
+          console.log(
+            `[TakeawayOrders] upsertOrder: updating existing order at index ${index}`
+          );
           list[index] = incoming;
           return list;
         }
 
-        console.log(`[TakeawayOrders] upsertOrder: adding new order (prepend: ${prepend})`);
+        console.log(
+          `[TakeawayOrders] upsertOrder: adding new order (prepend: ${prepend})`
+        );
         return prepend ? [incoming, ...list] : [...list, incoming];
       });
     },
@@ -510,35 +520,43 @@ const TakeawayOrders = () => {
       try {
         // Use authenticated API to get orders filtered by cartId for cart admins
         const res = await api.get("/orders");
-        console.log('[TakeawayOrders] API Response:', res);
-        console.log('[TakeawayOrders] Response data:', res.data);
-        
+        console.log("[TakeawayOrders] API Response:", res);
+        console.log("[TakeawayOrders] Response data:", res.data);
+
         // Handle both response formats: direct array or { success: true, data: [...] }
         let data = [];
         if (Array.isArray(res.data)) {
           data = res.data;
-        } else if (res.data && res.data.success && Array.isArray(res.data.data)) {
+        } else if (
+          res.data &&
+          res.data.success &&
+          Array.isArray(res.data.data)
+        ) {
           data = res.data.data;
         } else if (res.data && Array.isArray(res.data.data)) {
           data = res.data.data;
         }
-        
-        console.log(`[TakeawayOrders] Parsed ${data.length} total orders from response`);
-        
-        if (!active) return;
-        
-        // Filter for takeaway orders only
-        const takeawayOrders = data.filter(
-          (order) => {
-            const isTakeaway = order.serviceType === "TAKEAWAY";
-            if (!isTakeaway) {
-              console.log(`[TakeawayOrders] Order ${order._id} filtered out - serviceType: ${order.serviceType}`);
-            }
-            return isTakeaway;
-          }
+
+        console.log(
+          `[TakeawayOrders] Parsed ${data.length} total orders from response`
         );
-        
-        console.log(`[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`);
+
+        if (!active) return;
+
+        // Filter for takeaway orders only
+        const takeawayOrders = data.filter((order) => {
+          const isTakeaway = order.serviceType === "TAKEAWAY";
+          if (!isTakeaway) {
+            console.log(
+              `[TakeawayOrders] Order ${order._id} filtered out - serviceType: ${order.serviceType}`
+            );
+          }
+          return isTakeaway;
+        });
+
+        console.log(
+          `[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`
+        );
         console.log(`[TakeawayOrders] Takeaway orders:`, takeawayOrders);
         setOrders(takeawayOrders);
       } catch (err) {
@@ -560,33 +578,44 @@ const TakeawayOrders = () => {
     socketRef.current = socket;
 
     const handleNewOrder = (order) => {
-      console.log('[TakeawayOrders] Socket: newOrder event received:', order);
+      console.log("[TakeawayOrders] Socket: newOrder event received:", order);
       upsertOrder(order, { prepend: true });
     };
 
     const handleOrderUpdated = (order) => {
-      console.log('[TakeawayOrders] Socket: orderUpdated event received:', order);
+      console.log(
+        "[TakeawayOrders] Socket: orderUpdated event received:",
+        order
+      );
       upsertOrder(order);
     };
 
     const handleOrderDeleted = ({ id }) => {
-      console.log('[TakeawayOrders] Socket: orderDeleted event received:', id);
+      console.log("[TakeawayOrders] Socket: orderDeleted event received:", id);
       // Remove the order from the list if it exists
-      setOrders((prev) => prev.filter((order) => {
-        const orderId = normalizeId(order._id);
-        const deletedId = normalizeId(id);
-        return orderId !== deletedId;
-      }));
+      setOrders((prev) =>
+        prev.filter((order) => {
+          const orderId = normalizeId(order._id);
+          const deletedId = normalizeId(id);
+          return orderId !== deletedId;
+        })
+      );
     };
 
     // Listen for new Socket.IO events (room-based)
     const handleOrderCreated = (order) => {
-      console.log('[TakeawayOrders] Socket: order:created event received:', order);
+      console.log(
+        "[TakeawayOrders] Socket: order:created event received:",
+        order
+      );
       upsertOrder(order, { prepend: true });
     };
 
     const handleOrderStatusUpdated = (order) => {
-      console.log('[TakeawayOrders] Socket: order:status:updated event received:', order);
+      console.log(
+        "[TakeawayOrders] Socket: order:status:updated event received:",
+        order
+      );
       upsertOrder(order);
     };
 
@@ -597,18 +626,24 @@ const TakeawayOrders = () => {
     socket.on("order:status:updated", handleOrderStatusUpdated);
 
     // Join cafe room for real-time updates (if user is logged in)
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('franchiseAdminToken') || localStorage.getItem('superAdminToken');
+    const token =
+      localStorage.getItem("adminToken") ||
+      localStorage.getItem("franchiseAdminToken") ||
+      localStorage.getItem("superAdminToken");
     if (token) {
       try {
         // Decode token to get user info (basic decode, not verification)
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const payload = JSON.parse(atob(token.split(".")[1]));
         const userId = payload.id;
         if (userId) {
-          socket.emit('join:cafe', userId);
-          console.log('[TakeawayOrders] Socket: Joined cafe room:', userId);
+          socket.emit("join:cafe", userId);
+          console.log("[TakeawayOrders] Socket: Joined cafe room:", userId);
         }
       } catch (e) {
-        console.warn('[TakeawayOrders] Could not decode token for socket room:', e);
+        console.warn(
+          "[TakeawayOrders] Could not decode token for socket room:",
+          e
+        );
       }
     }
 
@@ -688,11 +723,14 @@ const TakeawayOrders = () => {
 
   const changeStatus = async (orderId, newStatus) => {
     try {
-      const response = await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+      const response = await api.patch(`/orders/${orderId}/status`, {
+        status: newStatus,
+      });
       upsertOrder(response.data);
     } catch (e) {
       console.error("Status change failed:", e);
-      const errorMessage = e.response?.data?.message || e.message || "Status update failed";
+      const errorMessage =
+        e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);
     }
   };
@@ -725,7 +763,9 @@ const TakeawayOrders = () => {
       // Update status if changed
       const newStatus = form.status.value;
       if (newStatus !== currentOrder.status) {
-        await api.patch(`/orders/${currentOrder._id}/status`, { status: newStatus });
+        await api.patch(`/orders/${currentOrder._id}/status`, {
+          status: newStatus,
+        });
       }
 
       // Only allow adding items for unpaid orders (same rule as dine-in Orders panel)
@@ -760,7 +800,9 @@ const TakeawayOrders = () => {
       alert("Order updated successfully!");
     } catch (err) {
       console.error("Save failed:", err);
-      const errorMessage = err.response?.data?.message || "Failed to update order. Please try again.";
+      const errorMessage =
+        err.response?.data?.message ||
+        "Failed to update order. Please try again.";
       alert(errorMessage);
     }
   };
@@ -785,18 +827,18 @@ const TakeawayOrders = () => {
         items: itemsPayload,
       };
 
-      console.log('[TakeawayOrders] Creating order with payload:', payload);
-      console.log('[TakeawayOrders] Items count:', itemsPayload.length);
+      console.log("[TakeawayOrders] Creating order with payload:", payload);
+      console.log("[TakeawayOrders] Items count:", itemsPayload.length);
 
       const res = await api.post("/orders", payload);
       const created = res.data;
 
-      console.log('[TakeawayOrders] Order created successfully:', created);
+      console.log("[TakeawayOrders] Order created successfully:", created);
 
       // Refresh takeaway orders list
       const ordersRes = await api.get("/orders");
-      console.log('[TakeawayOrders] Refreshed orders list:', ordersRes.data);
-      
+      console.log("[TakeawayOrders] Refreshed orders list:", ordersRes.data);
+
       // Handle both response formats
       let allOrders = [];
       if (Array.isArray(ordersRes.data)) {
@@ -804,12 +846,15 @@ const TakeawayOrders = () => {
       } else if (ordersRes.data && Array.isArray(ordersRes.data.data)) {
         allOrders = ordersRes.data.data;
       }
-      
+
       const takeawayOrders = allOrders.filter(
         (o) => o.serviceType === "TAKEAWAY"
       );
 
-      console.log('[TakeawayOrders] Filtered takeaway orders:', takeawayOrders.length);
+      console.log(
+        "[TakeawayOrders] Filtered takeaway orders:",
+        takeawayOrders.length
+      );
       setOrders(takeawayOrders);
 
       setIsModalOpen(false);
@@ -832,27 +877,88 @@ const TakeawayOrders = () => {
   const handleDelete = async (e, orderId) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    const { confirm } = await import('../utils/confirm');
+
+    const { confirm } = await import("../utils/confirm");
     const confirmed = await confirm(
       "Are you sure you want to PERMANENTLY DELETE this takeaway order?\n\nThis action cannot be undone.",
       {
-        title: 'Delete Takeaway Order',
-        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        title: "Delete Takeaway Order",
+        warningMessage: "WARNING: PERMANENTLY DELETE",
         danger: true,
-        confirmText: 'Delete',
-        cancelText: 'Cancel'
+        confirmText: "Delete",
+        cancelText: "Cancel",
       }
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((order) => order._id !== orderId));
     } catch (err) {
       console.error("Delete failed:", err);
-      const errorMessage = err.response?.data?.message || err.message || "Failed to delete order";
+      const errorMessage =
+        err.response?.data?.message || err.message || "Failed to delete order";
+      alert(errorMessage);
+    }
+  };
+
+  // Cancel/return individual items from an order
+  const handleCancelItem = async (orderId, kotIndex, itemIndex) => {
+    const order = orders.find((o) => o._id === orderId);
+    if (!order) return;
+
+    const kot = order.kotLines?.[kotIndex];
+    const item = kot?.items?.[itemIndex];
+    if (!item) return;
+
+    // Check if item is already returned
+    if (item.returned) {
+      alert("This item has already been cancelled/returned.");
+      return;
+    }
+
+    // Check if order can be modified
+    if (["Cancelled", "Returned"].includes(order.status)) {
+      alert(
+        `Cannot cancel items from an order that is ${order.status.toLowerCase()}.`
+      );
+      return;
+    }
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to cancel "${item.name}" (${item.quantity}x) from this order?\n\nThis will remove this item from the order total.`,
+      {
+        title: "Cancel Item",
+        warningMessage: "Cancel Item",
+        danger: false,
+        confirmText: "Cancel Item",
+        cancelText: "Keep Item",
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await api.patch(`/orders/${orderId}/return-items`, {
+        itemIds: [{ kotIndex, itemIndex }],
+      });
+
+      // Update the order in the list with the response
+      const updatedOrder = response.data.order;
+      upsertOrder(updatedOrder);
+
+      // If the modal is open for this order, update currentOrder state
+      if (currentOrder && currentOrder._id === orderId) {
+        setCurrentOrder(updatedOrder);
+      }
+
+      alert(`Item "${item.name}" has been cancelled successfully.`);
+    } catch (err) {
+      console.error("Cancel item failed:", err);
+      const errorMessage =
+        err.response?.data?.message || err.message || "Failed to cancel item";
       alert(errorMessage);
     }
   };
@@ -923,32 +1029,41 @@ const TakeawayOrders = () => {
 
     const matches = orders.filter((order) => {
       const orderIdMatch =
-        !normalizedOrder || (order._id || "").toLowerCase().includes(normalizedOrder);
+        !normalizedOrder ||
+        (order._id || "").toLowerCase().includes(normalizedOrder);
       const tableMatch =
         !normalizedTable ||
         (order.tableNumber !== undefined &&
           order.tableNumber !== null &&
           String(order.tableNumber).toLowerCase().includes(normalizedTable));
       const invoiceId = buildInvoiceId(order).toLowerCase();
-      const invoiceMatch = !normalizedInvoice || invoiceId.includes(normalizedInvoice);
-      
+      const invoiceMatch =
+        !normalizedInvoice || invoiceId.includes(normalizedInvoice);
+
       // Date filter: compare order date with filter date
       let dateMatch = true;
       if (filterDate) {
         const orderDate = new Date(order.createdAt);
         const filterDateObj = new Date(filterDate);
         // Compare dates (ignore time)
-        const orderDateStr = orderDate.toISOString().split('T')[0];
-        const filterDateStr = filterDateObj.toISOString().split('T')[0];
+        const orderDateStr = orderDate.toISOString().split("T")[0];
+        const filterDateStr = filterDateObj.toISOString().split("T")[0];
         dateMatch = orderDateStr === filterDateStr;
       }
-      
+
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
     });
 
     if (filterStatus === "all") return matches;
     return matches.filter((order) => order.status === filterStatus);
-  }, [orders, searchOrderId, searchTable, searchInvoice, filterStatus, filterDate]);
+  }, [
+    orders,
+    searchOrderId,
+    searchTable,
+    searchInvoice,
+    filterStatus,
+    filterDate,
+  ]);
 
   const tryAccept = (order) => {
     if (canAccept(order.status)) {
@@ -1065,254 +1180,325 @@ const TakeawayOrders = () => {
         ))}
       </div>
 
-  <div className="overflow-x-auto bg-white rounded-lg shadow-md">
-    <table className="min-w-full">
-      <thead className="bg-gray-50">
-        <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-            Order Details
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-            Date & Time
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-            Table
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-            Status
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-            Actions
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-200">
-        {filteredOrders.length === 0 && (
-          <tr>
-            <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-              No takeaway orders match the current filters.
-            </td>
-          </tr>
-        )}
-        {filteredOrders.map((order) => {
-          const orderDate = new Date(order.createdAt);
-          const formattedDate = orderDate.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-          });
-          const formattedTime = orderDate.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          });
-          
-          return (
-          <React.Fragment key={order._id}>
-            <tr
-              className={`hover:bg-gray-50 ${
-                order.status === "Pending" ? "bg-orange-50" : ""
-              }`}
-            >
-              <td className="px-6 py-4 text-sm">
-                <button
-                  onClick={() => toggleExpand(order._id)}
-                  className="flex items-center gap-2"
-                >
-                  <span className="font-mono text-xs text-gray-500">
-                    {buildInvoiceId(order)}
-                  </span>
-                  <span className="text-gray-900 font-medium">
-                    {formattedTime}
-                  </span>
-                </button>
-                {expanded[order._id] && (
-                  <div className="mt-2 text-xs text-gray-600 space-y-1">
-                    <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
-                    <div>
-                      Invoice:{" "}
-                      <span className="font-mono">{buildInvoiceId(order)}</span>
-                    </div>
-                    <div>Service Type: Takeaway</div>
-                  </div>
-                )}
-              </td>
-              <td className="px-6 py-4 text-sm text-gray-600">
-                <div className="flex flex-col">
-                  <span className="font-medium text-gray-900">{formattedDate}</span>
-                  <span className="text-xs text-gray-500">{formattedTime}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🥡</span>
-                  <span className="text-lg font-semibold text-gray-700">
-                    {order.tableNumber || "TAKEAWAY"}
-                  </span>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex flex-col gap-2">
-                  <span
-                    className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${statusBadgeClass(order.status)}`}
-                  >
-                    {order.status}
-                  </span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(() => {
-                      const nextStatus = getNextStatus(order.status);
-                      const buttons = [];
-
-                      if (canAccept(order.status)) {
-                        buttons.push(
-                          <button
-                            key="accept"
-                            onClick={() => tryAccept(order)}
-                            className="px-3 py-1 text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
-                          >
-                            ✅ Accept (Preparing)
-                          </button>
-                        );
-                      }
-
-                      // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
-                      if (nextStatus && !canAccept(order.status)) {
-                        buttons.push(
-                          <button
-                            key="next"
-                            onClick={() => changeStatus(order._id, nextStatus)}
-                            className="px-3 py-1 text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
-                          >
-                            {nextStatus}
-                          </button>
-                        );
-                      }
-
-                      if (canReturn(order.status)) {
-                        buttons.push(
-                          <button
-                            key="return"
-                            onClick={() => changeStatus(order._id, "Returned")}
-                            className="px-3 py-1 text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
-                          >
-                            ↩️ Return Order
-                          </button>
-                        );
-                      } else if (canCancel(order.status)) {
-                        buttons.push(
-                          <button
-                            key="cancel"
-                            onClick={() => changeStatus(order._id, "Cancelled")}
-                            className="px-3 py-1 text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
-                          >
-                            ❌ Cancel
-                          </button>
-                        );
-                      }
-
-                      return buttons;
-                    })()}
-                  </div>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-sm">
-                <div className="flex flex-wrap gap-2">
-                  {/* Modify Order button - only show for unpaid orders */}
-                  {order.status !== "Paid" &&
-                    order.status !== "Cancelled" &&
-                    order.status !== "Returned" && (
-                      <button
-                        onClick={() => handleEdit(order)}
-                        className="px-3 py-1 text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium"
-                        title="Add more items to this takeaway order"
-                      >
-                        ➕ Modify Order
-                      </button>
-                    )}
-                  <button 
-                    onClick={() => handleEdit(order)}
-                    className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={(e) => handleDelete(e, order._id)}
-                    className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
-                  >
-                    🗑️ Delete
-                  </button>
-                  <button
-                    onClick={() => printOrderInvoice(order)}
-                    className="px-3 py-1 rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100"
-                    title="Print invoice"
-                  >
-                    🖨️ Print
-                  </button>
-                </div>
-              </td>
+      <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+        <table className="min-w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Order Details
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Date & Time
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Table
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Actions
+              </th>
             </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredOrders.length === 0 && (
+              <tr>
+                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                  No takeaway orders match the current filters.
+                </td>
+              </tr>
+            )}
+            {filteredOrders.map((order) => {
+              const orderDate = new Date(order.createdAt);
+              const formattedDate = orderDate.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+              const formattedTime = orderDate.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
-            {expanded[order._id] && (
-              <tr className="bg-gray-50">
-                <td colSpan="5" className="px-6 py-4">
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(order.kotLines || []).map((kot, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-white p-4 rounded-lg border shadow-sm"
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="text-lg font-semibold text-gray-800">
-                              KOT #{idx + 1}
-                            </div>
-                            <div className="text-lg font-bold text-green-600">
-                              ₹{(kot.totalAmount || kot.total || 0).toString()}
-                            </div>
+              return (
+                <React.Fragment key={order._id}>
+                  <tr
+                    className={`hover:bg-gray-50 ${
+                      order.status === "Pending" ? "bg-orange-50" : ""
+                    }`}
+                  >
+                    <td className="px-6 py-4 text-sm">
+                      <button
+                        onClick={() => toggleExpand(order._id)}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="font-mono text-xs text-gray-500">
+                          {buildInvoiceId(order)}
+                        </span>
+                        <span className="text-gray-900 font-medium">
+                          {formattedTime}
+                        </span>
+                      </button>
+                      {expanded[order._id] && (
+                        <div className="mt-2 text-xs text-gray-600 space-y-1">
+                          <div>
+                            Created:{" "}
+                            {new Date(order.createdAt).toLocaleString()}
                           </div>
-                          <div className="space-y-2">
-                            {(kot.items || []).map((item, i) => (
+                          <div>
+                            Invoice:{" "}
+                            <span className="font-mono">
+                              {buildInvoiceId(order)}
+                            </span>
+                          </div>
+                          <div>Service Type: Takeaway</div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">
+                          {formattedDate}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {formattedTime}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">🥡</span>
+                        <span className="text-lg font-semibold text-gray-700">
+                          {order.tableNumber || "TAKEAWAY"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-2">
+                        <span
+                          className={`px-3 py-1 inline-flex items-center gap-2 text-sm font-medium rounded-full border ${statusBadgeClass(
+                            order.status
+                          )}`}
+                        >
+                          {order.status}
+                        </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(() => {
+                            const nextStatus = getNextStatus(order.status);
+                            const buttons = [];
+
+                            if (canAccept(order.status)) {
+                              buttons.push(
+                                <button
+                                  key="accept"
+                                  onClick={() => tryAccept(order)}
+                                  className="px-3 py-1 text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
+                                >
+                                  ✅ Accept (Preparing)
+                                </button>
+                              );
+                            }
+
+                            // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
+                            if (nextStatus && !canAccept(order.status)) {
+                              buttons.push(
+                                <button
+                                  key="next"
+                                  onClick={() =>
+                                    changeStatus(order._id, nextStatus)
+                                  }
+                                  className="px-3 py-1 text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
+                                >
+                                  {nextStatus}
+                                </button>
+                              );
+                            }
+
+                            if (canReturn(order.status)) {
+                              buttons.push(
+                                <button
+                                  key="return"
+                                  onClick={() =>
+                                    changeStatus(order._id, "Returned")
+                                  }
+                                  className="px-3 py-1 text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
+                                >
+                                  ↩️ Return Order
+                                </button>
+                              );
+                            } else if (canCancel(order.status)) {
+                              buttons.push(
+                                <button
+                                  key="cancel"
+                                  onClick={() =>
+                                    changeStatus(order._id, "Cancelled")
+                                  }
+                                  className="px-3 py-1 text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
+                                >
+                                  ❌ Cancel
+                                </button>
+                              );
+                            }
+
+                            return buttons;
+                          })()}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex flex-wrap gap-2">
+                        {/* Modify Order button - only show for unpaid orders */}
+                        {order.status !== "Paid" &&
+                          order.status !== "Cancelled" &&
+                          order.status !== "Returned" && (
+                            <button
+                              onClick={() => handleEdit(order)}
+                              className="px-3 py-1 text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium"
+                              title="Add more items to this takeaway order"
+                            >
+                              ➕ Modify Order
+                            </button>
+                          )}
+                        <button
+                          onClick={() => handleEdit(order)}
+                          className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(e, order._id)}
+                          className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+                        >
+                          🗑️ Delete
+                        </button>
+                        <button
+                          onClick={() => printOrderInvoice(order)}
+                          className="px-3 py-1 rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100"
+                          title="Print invoice"
+                        >
+                          🖨️ Print
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {expanded[order._id] && (
+                    <tr className="bg-gray-50">
+                      <td colSpan="5" className="px-6 py-4">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {(order.kotLines || []).map((kot, idx) => (
                               <div
-                                key={i}
-                                className="flex justify-between items-center py-1 border-b"
+                                key={idx}
+                                className="bg-white p-4 rounded-lg border shadow-sm"
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg text-xs font-bold">
-                                    {item.quantity}x
-                                  </span>
-                                  <span className="text-gray-800">{item.name}</span>
+                                <div className="flex justify-between items-center mb-2">
+                                  <div className="text-lg font-semibold text-gray-800">
+                                    KOT #{idx + 1}
+                                  </div>
+                                  <div className="text-lg font-bold text-green-600">
+                                    ₹
+                                    {(
+                                      kot.totalAmount ||
+                                      kot.total ||
+                                      0
+                                    ).toString()}
+                                  </div>
                                 </div>
-                                <span className="text-gray-600">
-                                  ₹{(
-                                    ((item.price || 0) / 100) *
-                                    (item.quantity || 1)
-                                  ).toFixed(2)}
-                                </span>
+                                <div className="space-y-2">
+                                  {(kot.items || []).map((item, i) => (
+                                    <div
+                                      key={i}
+                                      className={`flex justify-between items-center py-2 border-b ${
+                                        item.returned
+                                          ? "opacity-50 bg-gray-100"
+                                          : ""
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span
+                                          className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                                            item.returned
+                                              ? "bg-red-100 text-red-700"
+                                              : "bg-amber-100 text-amber-700"
+                                          }`}
+                                        >
+                                          {item.quantity}x
+                                        </span>
+                                        <span
+                                          className={`text-gray-800 ${
+                                            item.returned ? "line-through" : ""
+                                          }`}
+                                        >
+                                          {item.name}
+                                        </span>
+                                        {item.returned && (
+                                          <span className="text-xs text-red-600 font-semibold">
+                                            (Cancelled)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className={`text-gray-600 ${
+                                            item.returned ? "line-through" : ""
+                                          }`}
+                                        >
+                                          ₹
+                                          {(
+                                            ((item.price || 0) / 100) *
+                                            (item.quantity || 1)
+                                          ).toFixed(2)}
+                                        </span>
+                                        {!item.returned &&
+                                          order.status !== "Paid" &&
+                                          order.status !== "Cancelled" &&
+                                          order.status !== "Returned" && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleCancelItem(
+                                                  order._id,
+                                                  idx,
+                                                  i
+                                                )
+                                              }
+                                              className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                              title="Cancel this item"
+                                            >
+                                              ❌ Cancel
+                                            </button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </React.Fragment>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl m-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-800">
-                {currentOrder?.isNew ? "Create Takeaway Order" : "Edit Takeaway Order"}
+                {currentOrder?.isNew
+                  ? "Create Takeaway Order"
+                  : "Edit Takeaway Order"}
               </h2>
-              <button 
+              <button
                 onClick={() => {
                   setIsModalOpen(false);
                   setCurrentOrder(null);
@@ -1331,8 +1517,8 @@ const TakeawayOrders = () => {
                   {/* New takeaway order - only menu selection & summary */}
                   <div className="border-t border-gray-200 pt-1 space-y-4">
                     <p className="text-xs text-gray-500">
-                      Build a new takeaway order by selecting items from the menu
-                      below. This will create a new TAKEAWAY order.
+                      Build a new takeaway order by selecting items from the
+                      menu below. This will create a new TAKEAWAY order.
                     </p>
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                       <div className="xl:col-span-2 space-y-4">
@@ -1460,10 +1646,7 @@ const TakeawayOrders = () => {
                                     {entry.name} × {entry.quantity}
                                   </span>
                                   <span>
-                                    ₹
-                                    {formatMoney(
-                                      entry.price * entry.quantity
-                                    )}
+                                    ₹{formatMoney(entry.price * entry.quantity)}
                                   </span>
                                 </div>
                               ))}
@@ -1476,9 +1659,7 @@ const TakeawayOrders = () => {
                             </div>
                             <div className="flex justify-between">
                               <span>Subtotal</span>
-                              <span>
-                                ₹{formatMoney(draftTotals.subtotal)}
-                              </span>
+                              <span>₹{formatMoney(draftTotals.subtotal)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>GST (5%)</span>
@@ -1515,6 +1696,106 @@ const TakeawayOrders = () => {
                       <option value="Cancelled">❌ Cancelled</option>
                       <option value="Returned">↩️ Returned</option>
                     </select>
+                  </div>
+
+                  {/* Current Order Items section - with cancel option */}
+                  <div className="border-t border-gray-200 pt-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Current Order Items
+                    </h3>
+                    {!currentOrder?.kotLines ||
+                    currentOrder.kotLines.length === 0 ? (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        No items in this order yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(currentOrder.kotLines || []).map((kot, kotIdx) => (
+                          <div
+                            key={kotIdx}
+                            className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                          >
+                            <div className="flex justify-between items-center mb-3">
+                              <div className="text-sm font-semibold text-gray-700">
+                                KOT #{kotIdx + 1}
+                              </div>
+                              <div className="text-sm font-bold text-green-600">
+                                ₹
+                                {(kot.totalAmount || kot.total || 0).toString()}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {(kot.items || []).map((item, itemIdx) => (
+                                <div
+                                  key={itemIdx}
+                                  className={`flex justify-between items-center py-2 px-3 rounded border ${
+                                    item.returned
+                                      ? "bg-red-50 border-red-200 opacity-60"
+                                      : "bg-white border-gray-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-bold ${
+                                        item.returned
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-amber-100 text-amber-700"
+                                      }`}
+                                    >
+                                      {item.quantity}x
+                                    </span>
+                                    <span
+                                      className={`text-sm text-gray-800 ${
+                                        item.returned ? "line-through" : ""
+                                      }`}
+                                    >
+                                      {item.name}
+                                    </span>
+                                    {item.returned && (
+                                      <span className="text-xs text-red-600 font-semibold">
+                                        (Cancelled)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span
+                                      className={`text-sm text-gray-600 ${
+                                        item.returned ? "line-through" : ""
+                                      }`}
+                                    >
+                                      ₹
+                                      {(
+                                        ((item.price || 0) / 100) *
+                                        (item.quantity || 1)
+                                      ).toFixed(2)}
+                                    </span>
+                                    {!item.returned &&
+                                      currentOrder.status !== "Paid" &&
+                                      currentOrder.status !== "Cancelled" &&
+                                      currentOrder.status !== "Returned" && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCancelItem(
+                                              currentOrder._id,
+                                              kotIdx,
+                                              itemIdx
+                                            )
+                                          }
+                                          className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                          title="Cancel this item"
+                                        >
+                                          ❌ Cancel
+                                        </button>
+                                      )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Add items section (Modify Order logic) */}
@@ -1725,17 +2006,8 @@ const TakeawayOrders = () => {
           </div>
         </div>
       )}
-</div>
+    </div>
   );
 };
 
 export default TakeawayOrders;
-
-
-
-
-
-
-
-
-
