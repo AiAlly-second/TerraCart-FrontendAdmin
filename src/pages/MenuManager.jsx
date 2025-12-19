@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 // Helper: get API base URL with protocol ensured
 const getApiBaseUrl = () => {
@@ -73,6 +75,9 @@ const emptyItemForm = {
 };
 
 const MenuManager = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRole = user?.role;
   const [menu, setMenu] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -110,23 +115,25 @@ const MenuManager = () => {
       ]);
       const menuData = menuRes.data || [];
 
-      // Debug: Log image data
-      console.log(
-        "[FRANCHISE ADMIN] Menu loaded:",
-        menuData.length,
-        "categories"
-      );
-      menuData.forEach((cat, catIdx) => {
-        if (cat.items && cat.items.length > 0) {
-          cat.items.forEach((item, itemIdx) => {
-            console.log(
-              `[FRANCHISE ADMIN] Category ${catIdx + 1}, Item ${
-                itemIdx + 1
-              }: "${item.name}" - Image: ${item.image || "NO IMAGE"}`
-            );
-          });
-        }
-      });
+      // Log menu data (development only)
+      if (import.meta.env.DEV) {
+        console.log(
+          "[FRANCHISE ADMIN] Menu loaded:",
+          menuData.length,
+          "categories"
+        );
+        menuData.forEach((cat, catIdx) => {
+          if (cat.items && cat.items.length > 0) {
+            cat.items.forEach((item, itemIdx) => {
+              console.log(
+                `[FRANCHISE ADMIN] Category ${catIdx + 1}, Item ${
+                  itemIdx + 1
+                }: "${item.name}" - Image: ${item.image || "NO IMAGE"}`
+              );
+            });
+          }
+        });
+      }
 
       setMenu(menuData);
       if (spiceRes?.data?.spiceLevels) {
@@ -136,7 +143,9 @@ const MenuManager = () => {
         setSelectedCategoryId(menuRes.data[0]._id);
       }
     } catch (err) {
-      console.error(err);
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setError(err.response?.data?.message || "Failed to load menu");
     } finally {
       setLoading(false);
@@ -771,6 +780,24 @@ const MenuManager = () => {
                               <FaTrash size={11} />
                             </button>
                           </div>
+
+                          {/* Define BOM / Recipe shortcut into Finances for Franchise Admin */}
+                          {userRole === "franchise_admin" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  `/costing-v2/recipes?name=${encodeURIComponent(
+                                    item?.name || ""
+                                  )}`
+                                )
+                              }
+                              className="mt-0.5 text-[9px] px-1 py-0.5 rounded border border-green-200 text-green-700 hover:bg-green-50"
+                              title="Define BOM / Recipe for this item in Finances"
+                            >
+                              Define Recipe in Finances
+                            </button>
+                          )}
 
                           {/* Move item to another category */}
                           {menu?.length > 1 && (

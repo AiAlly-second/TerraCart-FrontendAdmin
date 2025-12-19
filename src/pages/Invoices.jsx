@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import api from "../utils/api";
@@ -45,21 +51,24 @@ const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
     const amount = Number(item.amount) || 0;
     return sum + amount;
   }, 0);
-  
+
   // Round subtotal to 2 decimal places
   const subtotalRounded = Number(subtotal.toFixed(2));
-  
+
   // Calculate GST (5%)
   const gst = Number((subtotalRounded * 0.05).toFixed(2));
-  
+
   // Calculate total amount
   const totalAmount = Number((subtotalRounded + gst).toFixed(2));
-  
+
   return {
     subtotal: subtotalRounded,
     gst: gst,
     totalAmount: totalAmount,
-    totalItems: aggregatedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+    totalItems: aggregatedItems.reduce(
+      (sum, item) => sum + (Number(item.quantity) || 0),
+      0
+    ),
   };
 };
 
@@ -69,10 +78,20 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
-const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData, paymentMethod) => {
+const buildInvoiceMarkup = (
+  order,
+  invoiceItems,
+  totals,
+  franchiseData,
+  cartData,
+  paymentMethod
+) => {
   if (!order) return "";
   const invoiceNumber = (() => {
-    const date = new Date(order.createdAt || Date.now()).toISOString().slice(0, 10).replace(/-/g, "");
+    const date = new Date(order.createdAt || Date.now())
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
     const tail = (order._id || "").toString().slice(-6).toUpperCase();
     return `INV-${date}-${tail}`;
   })();
@@ -97,7 +116,9 @@ const buildInvoiceMarkup = (order, invoiceItems, totals, franchiseData, cartData
                 <td class="py-2 border-b">${item.name || ""}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
-                <td class="py-2 border-b text-right">₹${formatMoney(amount)}</td>
+                <td class="py-2 border-b text-right">₹${formatMoney(
+                  amount
+                )}</td>
               </tr>
             `;
           })
@@ -248,20 +269,22 @@ const Invoices = () => {
     [selected, selectedInvoiceItems]
   );
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const { data } = await api.get("/orders");
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to load orders");
+      setError(
+        err.response?.data?.message || err.message || "Failed to load orders"
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadFranchiseAndCartData = async (order) => {
+  const loadFranchiseAndCartData = useCallback(async (order) => {
     // To avoid 403 errors from protected /users/:id endpoint for other cafes,
     // we no longer fetch user profiles here. Invoices will use generic
     // address/GST placeholders or any data already attached to the order.
@@ -272,9 +295,9 @@ const Invoices = () => {
     }
     setFranchiseData(null);
     setCartData(null);
-  };
+  }, []);
 
-  const loadPayments = async () => {
+  const loadPayments = useCallback(async () => {
     setPaymentsLoading(true);
     try {
       const { data } = await api.get("/payments");
@@ -291,7 +314,7 @@ const Invoices = () => {
     } finally {
       setPaymentsLoading(false);
     }
-  };
+  }, []);
 
   const handleSyncPayments = async () => {
     setSyncingPayments(true);
@@ -318,11 +341,13 @@ const Invoices = () => {
       setFranchiseData(null);
       setCartData(null);
     }
-  }, [selected]);
+  }, [selected, loadFranchiseAndCartData]);
 
   const paidOrders = useMemo(() => {
-    let filtered = orders.filter(o => (o.status || '').toString().toLowerCase() === 'paid');
-    
+    let filtered = orders.filter(
+      (o) => (o.status || "").toString().toLowerCase() === "paid"
+    );
+
     // Filter by date if provided
     if (filterDate) {
       filtered = filtered.filter((o) => {
@@ -331,7 +356,7 @@ const Invoices = () => {
         return orderDate.toDateString() === filterDateObj.toDateString();
       });
     }
-    
+
     return filtered;
   }, [orders, filterDate]);
   const selectedPayments = useMemo(
@@ -348,20 +373,23 @@ const Invoices = () => {
   }, [selectedPayments]);
 
   const getInvoiceNumber = (order) => {
-    const date = new Date(order.createdAt || Date.now()).toISOString().slice(0,10).replace(/-/g,'');
-    const tail = (order._id || '').toString().slice(-6).toUpperCase();
+    const date = new Date(order.createdAt || Date.now())
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
+    const tail = (order._id || "").toString().slice(-6).toUpperCase();
     return `INV-${date}-${tail}`;
   };
 
   const handlePrint = () => {
     if (!printRef.current) return;
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
     document.body.appendChild(iframe);
     const doc = iframe.contentWindow?.document;
     if (!doc) return;
@@ -371,7 +399,7 @@ const Invoices = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${selected ? getInvoiceNumber(selected) : 'Invoice'}</title>
+          <title>${selected ? getInvoiceNumber(selected) : "Invoice"}</title>
           <style>
             * { box-sizing: border-box; }
             @media print {
@@ -428,14 +456,14 @@ const Invoices = () => {
     const canvas = await html2canvas(element, {
       scale: window.devicePixelRatio || 2,
       useCORS: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: "#ffffff",
     });
 
-    const imageData = canvas.toDataURL('image/png');
+    const imageData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [80, 'auto']
+      orientation: "portrait",
+      unit: "mm",
+      format: [80, "auto"],
     });
     const pdfWidth = 80;
     const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -449,14 +477,14 @@ const Invoices = () => {
     let heightLeft = imgHeight;
     let position = margin;
 
-    pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
-    heightLeft -= (pdfHeight - margin * 2);
+    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
+    heightLeft -= pdfHeight - margin * 2;
 
     while (heightLeft > 0) {
       pdf.addPage();
       position = margin - heightLeft;
-      pdf.addImage(imageData, 'PNG', margin, position, usableWidth, imgHeight);
-      heightLeft -= (pdfHeight - margin * 2);
+      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
+      heightLeft -= pdfHeight - margin * 2;
     }
 
     pdf.save(`${getInvoiceNumber(selected)}.pdf`);
@@ -466,9 +494,12 @@ const Invoices = () => {
     <div className="p-3 sm:p-4">
       <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Invoices</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
+            Invoices
+          </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Generate printable invoices for Paid orders and keep payment records in sync.
+            Generate printable invoices for Paid orders and keep payment records
+            in sync.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -496,7 +527,9 @@ const Invoices = () => {
         </div>
       </div>
 
-      {loading && <div className="text-sm text-gray-500">Loading paid orders…</div>}
+      {loading && (
+        <div className="text-sm text-gray-500">Loading paid orders…</div>
+      )}
       {error && <div className="text-sm text-red-600">{error}</div>}
 
       {!loading && !error && (
@@ -505,39 +538,56 @@ const Invoices = () => {
             {paidOrders.length === 0 && (
               <div className="text-sm text-gray-500">No paid orders yet.</div>
             )}
-            {paidOrders.map(order => (
+            {paidOrders.map((order) => (
               <button
                 key={order._id}
                 onClick={() => setSelected(order)}
-                className={`w-full text-left p-3 sm:p-4 rounded-lg border shadow-sm hover:shadow transition ${selected?._id === order._id ? 'ring-2 ring-blue-400' : ''}`}
+                className={`w-full text-left p-3 sm:p-4 rounded-lg border shadow-sm hover:shadow transition ${
+                  selected?._id === order._id ? "ring-2 ring-blue-400" : ""
+                }`}
               >
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-sm sm:text-base text-gray-800 truncate">Order #{order._id}</div>
-                    <div className="text-xs sm:text-sm text-gray-500">Table {order.tableNumber || '—'}</div>
+                    <div className="font-semibold text-sm sm:text-base text-gray-800 truncate">
+                      Order #{order._id}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-500">
+                      Table {order.tableNumber || "—"}
+                    </div>
                     <div className="text-[10px] sm:text-xs text-gray-400 mt-1">
-                      {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                      {new Date(order.createdAt).toLocaleDateString()}{" "}
+                      {new Date(order.createdAt).toLocaleTimeString()}
                     </div>
                   </div>
                   <div className="text-xs sm:text-sm font-mono text-gray-700 flex-shrink-0">
-                    {new Date(order.paidAt || order.updatedAt || order.createdAt).toLocaleDateString()}
+                    {new Date(
+                      order.paidAt || order.updatedAt || order.createdAt
+                    ).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Click to preview invoice</div>
+                <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
+                  Click to preview invoice
+                </div>
               </button>
             ))}
           </div>
 
           <div className="lg:col-span-2">
             {!selected && (
-              <div className="text-sm text-gray-500">Select a paid order to preview the invoice.</div>
+              <div className="text-sm text-gray-500">
+                Select a paid order to preview the invoice.
+              </div>
             )}
             {selected && (
               <div>
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
                   <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                    <h2 className="text-lg sm:text-xl font-bold text-gray-800">Invoice Preview</h2>
-                    <p className="text-xs sm:text-sm text-gray-500">Invoice #{getInvoiceNumber(selected)}</p>
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-800">
+                      Invoice Preview
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Invoice #{getInvoiceNumber(selected)}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -557,7 +607,9 @@ const Invoices = () => {
 
                 <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-slate-800">Payment records</h3>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      Payment records
+                    </h3>
                     <button
                       onClick={loadPayments}
                       className="text-xs text-blue-600 hover:text-blue-800"
@@ -566,10 +618,13 @@ const Invoices = () => {
                     </button>
                   </div>
                   {paymentsLoading ? (
-                    <p className="text-xs text-slate-500">Loading payment data…</p>
+                    <p className="text-xs text-slate-500">
+                      Loading payment data…
+                    </p>
                   ) : selectedPayments.length === 0 ? (
                     <p className="text-xs text-slate-500">
-                      No payment records found for this order. Use “Sync paid orders” to create payment entries.
+                      No payment records found for this order. Use “Sync paid
+                      orders” to create payment entries.
                     </p>
                   ) : (
                     <div className="space-y-2 text-xs text-slate-700">
@@ -579,7 +634,9 @@ const Invoices = () => {
                           className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 border border-slate-200 rounded-md px-3 py-2 bg-white"
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-slate-600">{payment.id}</span>
+                            <span className="font-mono text-slate-600">
+                              {payment.id}
+                            </span>
                             <span className="px-2 py-0.5 rounded-full border border-slate-300 text-slate-600">
                               {payment.method.toLowerCase()}
                             </span>
@@ -598,7 +655,9 @@ const Invoices = () => {
                               ₹{payment.amount?.toFixed(2)}
                             </span>
                             <span className="text-slate-500">
-                              {new Date(payment.updatedAt || payment.createdAt).toLocaleString()}
+                              {new Date(
+                                payment.updatedAt || payment.createdAt
+                              ).toLocaleString()}
                             </span>
                           </div>
                         </div>
@@ -607,8 +666,8 @@ const Invoices = () => {
                   )}
                 </div>
 
-                <div 
-                  ref={printRef} 
+                <div
+                  ref={printRef}
                   className="bg-white rounded-lg shadow border"
                   dangerouslySetInnerHTML={{
                     __html: buildInvoiceMarkup(
@@ -618,7 +677,7 @@ const Invoices = () => {
                       franchiseData,
                       cartData,
                       selectedPaymentMethod
-                    )
+                    ),
                   }}
                 />
               </div>
@@ -631,12 +690,4 @@ const Invoices = () => {
 };
 
 export default Invoices;
-
-
-
-
-
-
-
-
 

@@ -20,12 +20,16 @@ const CartDetails = () => {
 
   const fetchCartStats = useCallback(async () => {
     try {
-      console.log(`[CartDetails] Fetching stats for cart ID: ${id}`);
+      if (import.meta.env.DEV) {
+        console.log(`[CartDetails] Fetching stats for cart ID: ${id}`);
+      }
 
       // Fetch orders - backend filters by franchiseId, but we need to filter by cartId
       const ordersResponse = await api.get("/orders");
       const allOrders = ordersResponse.data || [];
-      console.log(`[CartDetails] Total orders from API: ${allOrders.length}`);
+      if (import.meta.env.DEV) {
+        console.log(`[CartDetails] Total orders from API: ${allOrders.length}`);
+      }
 
       // Filter orders by cartId (the cart we're viewing)
       const cartOrders = allOrders.filter((order) => {
@@ -51,12 +55,16 @@ const CartDetails = () => {
         return matches;
       });
 
-      console.log(
-        `[CartDetails] Filtered orders for this cart: ${cartOrders.length}`
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          `[CartDetails] Filtered orders for this cart: ${cartOrders.length}`
+        );
+      }
 
       const paidOrders = cartOrders.filter((order) => order.status === "Paid");
-      console.log(`[CartDetails] Paid orders: ${paidOrders.length}`);
+      if (import.meta.env.DEV) {
+        console.log(`[CartDetails] Paid orders: ${paidOrders.length}`);
+      }
 
       const totalRevenue = paidOrders.reduce((sum, order) => {
         if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
@@ -74,7 +82,11 @@ const CartDetails = () => {
       try {
         const tablesResponse = await api.get("/tables");
         const allTables = tablesResponse.data || [];
-        console.log(`[CartDetails] Total tables from API: ${allTables.length}`);
+        if (import.meta.env.DEV) {
+          console.log(
+            `[CartDetails] Total tables from API: ${allTables.length}`
+          );
+        }
 
         const cartTables = allTables.filter((table) => {
           // Handle both populated objects and ObjectId strings
@@ -90,27 +102,33 @@ const CartDetails = () => {
           return tableCartIdStr === targetIdStr;
         });
 
-        console.log(
-          `[CartDetails] Filtered tables for this cart: ${cartTables.length}`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[CartDetails] Filtered tables for this cart: ${cartTables.length}`
+          );
+        }
 
         activeTables = cartTables.filter(
           (table) => table.status !== "AVAILABLE"
         ).length;
       } catch (tableError) {
-        console.warn(
-          `[CartDetails] Could not fetch tables (may require cart admin access):`,
-          tableError
-        );
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[CartDetails] Could not fetch tables (may require cart admin access):`,
+            tableError
+          );
+        }
         // Set activeTables to 0 if we can't fetch tables
         activeTables = 0;
       }
 
-      console.log(`[CartDetails] Final stats:`, {
-        totalOrders: cartOrders.length,
-        totalRevenue,
-        activeTables,
-      });
+      if (import.meta.env.DEV) {
+        console.log(`[CartDetails] Final stats:`, {
+          totalOrders: cartOrders.length,
+          totalRevenue,
+          activeTables,
+        });
+      }
 
       setStats({
         totalOrders: cartOrders.length,
@@ -118,7 +136,9 @@ const CartDetails = () => {
         activeTables,
       });
     } catch (error) {
-      console.error("Error fetching cart stats:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching cart stats:", error);
+      }
       // Set default stats on error
       setStats({
         totalOrders: 0,

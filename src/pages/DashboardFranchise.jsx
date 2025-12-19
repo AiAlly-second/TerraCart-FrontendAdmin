@@ -7,7 +7,15 @@ import { getSocket } from "../utils/socket";
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
 
-const StatCard = ({ title, value, icon, onClick, clickable = false, subtitle, color = "default" }) => {
+const StatCard = ({
+  title,
+  value,
+  icon,
+  onClick,
+  clickable = false,
+  subtitle,
+  color = "default",
+}) => {
   const colorClasses = {
     default: "border-[#e2c1ac]",
     green: "border-green-300 bg-green-50",
@@ -15,12 +23,16 @@ const StatCard = ({ title, value, icon, onClick, clickable = false, subtitle, co
     yellow: "border-yellow-300 bg-yellow-50",
     blue: "border-blue-300 bg-blue-50",
   };
-  
+
   return (
     <div
       onClick={onClick}
-      className={`p-5 bg-white rounded-xl shadow-md border ${colorClasses[color]} flex flex-col justify-between h-full ${
-        clickable ? "cursor-pointer hover:shadow-xl hover:border-[#d86d2a] transition-all" : ""
+      className={`p-5 bg-white rounded-xl shadow-md border ${
+        colorClasses[color]
+      } flex flex-col justify-between h-full ${
+        clickable
+          ? "cursor-pointer hover:shadow-xl hover:border-[#d86d2a] transition-all"
+          : ""
       }`}
     >
       <div className="flex items-center space-x-4">
@@ -28,7 +40,9 @@ const StatCard = ({ title, value, icon, onClick, clickable = false, subtitle, co
         <div>
           <p className="text-sm font-medium text-[#6b4423]">{title}</p>
           <p className="text-2xl font-bold text-[#4a2e1f]">{value}</p>
-          {subtitle && <p className="text-xs text-[#6b4423] mt-1">{subtitle}</p>}
+          {subtitle && (
+            <p className="text-xs text-[#6b4423] mt-1">{subtitle}</p>
+          )}
         </div>
       </div>
     </div>
@@ -52,63 +66,100 @@ const Dashboard = () => {
   const [recentCarts, setRecentCarts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [cartOrderStats, setCartOrderStats] = useState([]);
-  
+
   const franchiseName = user?.name || "Franchise Dashboard";
 
   const calculateRevenue = (ordersData) => {
-    console.log("[Dashboard] Calculating revenue from", ordersData.length, "orders");
-    
-    const paidOrders = ordersData.filter((order) => order.status === "Paid");
-    console.log("[Dashboard] Paid orders:", paidOrders.length);
-    
+    if (!Array.isArray(ordersData)) {
+      return {
+        totalRevenue: 0,
+        todayRevenue: 0,
+        todayOrders: 0,
+        totalOrders: 0,
+      };
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(
+        "[Dashboard] Calculating revenue from",
+        ordersData.length,
+        "orders"
+      );
+    }
+
+    const paidOrders = (ordersData || []).filter(
+      (order) => order && order.status === "Paid"
+    );
+    if (import.meta.env.DEV) {
+      console.log("[Dashboard] Paid orders:", paidOrders.length);
+    }
+
     const totalRevenue = paidOrders.reduce((sum, order) => {
-      if (!order.kotLines || !Array.isArray(order.kotLines) || order.kotLines.length === 0) {
+      if (
+        !order ||
+        !order.kotLines ||
+        !Array.isArray(order.kotLines) ||
+        order.kotLines.length === 0
+      ) {
         return sum;
       }
       const orderTotal = order.kotLines.reduce((kotSum, kot) => {
+        if (!kot) return kotSum;
         return kotSum + Number(kot.totalAmount || 0);
       }, 0);
       return sum + orderTotal;
     }, 0);
-    
+
     // Calculate today's orders (all statuses, not just paid)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const todayAllOrders = ordersData.filter(order => {
+
+    const todayAllOrders = (ordersData || []).filter((order) => {
+      if (!order || !order.createdAt) return false;
       const orderDate = new Date(order.createdAt);
       orderDate.setHours(0, 0, 0, 0);
       return orderDate.getTime() === today.getTime();
     });
-    console.log("[Dashboard] Today's orders (all):", todayAllOrders.length);
-    
+    if (import.meta.env.DEV) {
+      console.log("[Dashboard] Today's orders (all):", todayAllOrders.length);
+    }
+
     // Today's revenue (only from paid orders today)
-    const todayPaidOrders = todayAllOrders.filter(o => o.status === "Paid");
+    const todayPaidOrders = todayAllOrders.filter((o) => o.status === "Paid");
     const todayRevenue = todayPaidOrders.reduce((sum, order) => {
       if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
-      return sum + order.kotLines.reduce((kotSum, kot) => kotSum + Number(kot.totalAmount || 0), 0);
+      return (
+        sum +
+        order.kotLines.reduce(
+          (kotSum, kot) => kotSum + Number(kot.totalAmount || 0),
+          0
+        )
+      );
     }, 0);
-    
-    return { 
-      totalRevenue, 
-      todayRevenue, 
+
+    return {
+      totalRevenue,
+      todayRevenue,
       todayOrders: todayAllOrders.length,
-      totalPaidOrders: paidOrders.length 
+      totalPaidOrders: paidOrders.length,
     };
   };
 
   useEffect(() => {
     if (!user || !user._id) return;
-    
+
     fetchDashboardData();
 
     // Socket listeners for real-time updates
     socket.on("newOrder", (order) => {
       let orderFranchiseId = order.franchiseId;
-      if (orderFranchiseId && typeof orderFranchiseId === 'object') {
+      if (orderFranchiseId && typeof orderFranchiseId === "object") {
         orderFranchiseId = orderFranchiseId._id || orderFranchiseId;
       }
-      if (orderFranchiseId && orderFranchiseId.toString() === user._id.toString()) {
+      if (
+        orderFranchiseId &&
+        orderFranchiseId.toString() === user._id.toString()
+      ) {
         setOrders((prev) => [...prev, order]);
         fetchDashboardData(); // Refresh stats
       }
@@ -116,13 +167,18 @@ const Dashboard = () => {
 
     socket.on("orderUpdated", (updatedOrder) => {
       let orderFranchiseId = updatedOrder.franchiseId;
-      if (orderFranchiseId && typeof orderFranchiseId === 'object') {
+      if (orderFranchiseId && typeof orderFranchiseId === "object") {
         orderFranchiseId = orderFranchiseId._id || orderFranchiseId;
       }
-      if (orderFranchiseId && orderFranchiseId.toString() === user._id.toString()) {
-        setOrders((prev) => prev.map((order) => 
-          order._id === updatedOrder._id ? updatedOrder : order
-        ));
+      if (
+        orderFranchiseId &&
+        orderFranchiseId.toString() === user._id.toString()
+      ) {
+        setOrders((prev) =>
+          prev.map((order) =>
+            order._id === updatedOrder._id ? updatedOrder : order
+          )
+        );
         fetchDashboardData(); // Refresh stats
       }
     });
@@ -141,7 +197,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch cart statistics
       let cartStats = {
         totalCarts: 0,
@@ -149,7 +205,7 @@ const Dashboard = () => {
         inactiveCarts: 0,
         pendingApproval: 0,
       };
-      
+
       try {
         const cartStatsResponse = await api.get("/users/stats/carts");
         cartStats = cartStatsResponse.data || cartStats;
@@ -157,12 +213,12 @@ const Dashboard = () => {
       } catch (err) {
         console.error("Error fetching cart statistics:", err);
       }
-      
+
       // Fetch carts for recent list
       let allCarts = [];
       try {
         const usersResponse = await api.get("/users");
-        allCarts = (usersResponse.data || []).filter(u => u.role === "admin");
+        allCarts = (usersResponse.data || []).filter((u) => u.role === "admin");
         console.log("[Dashboard] Carts fetched:", allCarts.length);
       } catch (err) {
         console.error("Error fetching users:", err);
@@ -176,7 +232,12 @@ const Dashboard = () => {
         fetchedOrders = ordersResponse.data || [];
         setOrders(fetchedOrders);
         revenueData = calculateRevenue(fetchedOrders);
-        console.log("[Dashboard] Orders:", fetchedOrders.length, "Revenue:", revenueData);
+        console.log(
+          "[Dashboard] Orders:",
+          fetchedOrders.length,
+          "Revenue:",
+          revenueData
+        );
       } catch (err) {
         console.error("Failed to fetch orders:", err);
       }
@@ -188,7 +249,7 @@ const Dashboard = () => {
         .map((cart) => {
           let status = "Active";
           let statusColor = "green";
-          
+
           if (!cart.isApproved) {
             status = "Pending";
             statusColor = "yellow";
@@ -196,7 +257,7 @@ const Dashboard = () => {
             status = "Inactive";
             statusColor = "red";
           }
-          
+
           return {
             id: cart._id,
             name: cart.cartName || cart.cafeName || cart.name || "Unnamed Cart",
@@ -223,10 +284,10 @@ const Dashboard = () => {
       console.log("[Dashboard] Setting stats:", newStats);
       setStats(newStats);
       setRecentCarts(recent);
-      
+
       // Calculate orders per cart
       const cartOrderMap = {};
-      allCarts.forEach(cart => {
+      allCarts.forEach((cart) => {
         cartOrderMap[cart._id] = {
           cartId: cart._id,
           cartName: cart.cartName || cart.cafeName || cart.name,
@@ -236,31 +297,36 @@ const Dashboard = () => {
           todayOrders: 0,
         };
       });
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      fetchedOrders.forEach(order => {
+
+      fetchedOrders.forEach((order) => {
         const cartId = order.cartId?.toString() || order.cartId;
         if (cartId && cartOrderMap[cartId]) {
           cartOrderMap[cartId].orders++;
-          
+
           // Check if today's order
           const orderDate = new Date(order.createdAt);
           orderDate.setHours(0, 0, 0, 0);
           if (orderDate.getTime() === today.getTime()) {
             cartOrderMap[cartId].todayOrders++;
           }
-          
+
           // Add revenue if paid
           if (order.status === "Paid" && order.kotLines) {
-            const orderTotal = order.kotLines.reduce((sum, kot) => sum + Number(kot.totalAmount || 0), 0);
+            const orderTotal = order.kotLines.reduce(
+              (sum, kot) => sum + Number(kot.totalAmount || 0),
+              0
+            );
             cartOrderMap[cartId].revenue += orderTotal;
           }
         }
       });
-      
-      const cartStats2 = Object.values(cartOrderMap).sort((a, b) => b.orders - a.orders);
+
+      const cartStats2 = Object.values(cartOrderMap).sort(
+        (a, b) => b.orders - a.orders
+      );
       setCartOrderStats(cartStats2);
       console.log("[Dashboard] Cart order stats:", cartStats2);
     } catch (error) {
@@ -272,12 +338,12 @@ const Dashboard = () => {
 
   const [copied, setCopied] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
-  
+
   // Franchise identification - prefer franchiseCode, fallback to shortened ID
   const franchiseCode = user?.franchiseCode || null;
   const franchiseShortcut = user?.franchiseShortcut || null;
   const franchiseId = user?._id || "";
-  
+
   // Generate display ID: Use franchiseCode if available, otherwise create a readable format
   const getDisplayId = () => {
     if (franchiseCode) {
@@ -303,20 +369,24 @@ const Dashboard = () => {
   // Generate franchise code if not exists
   const generateFranchiseCode = async () => {
     if (franchiseCode || !franchiseId) return;
-    
+
     try {
       setGeneratingCode(true);
-      const response = await api.post('/users/generate-franchise-code');
+      const response = await api.post("/users/generate-franchise-code");
       if (response.data?.franchiseCode) {
         // Update local storage with new code
-        const updatedUser = { ...user, franchiseCode: response.data.franchiseCode, franchiseShortcut: response.data.franchiseShortcut };
-        localStorage.setItem('franchiseAdminUser', JSON.stringify(updatedUser));
+        const updatedUser = {
+          ...user,
+          franchiseCode: response.data.franchiseCode,
+          franchiseShortcut: response.data.franchiseShortcut,
+        };
+        localStorage.setItem("franchiseAdminUser", JSON.stringify(updatedUser));
         // Reload page to reflect changes
         window.location.reload();
       }
     } catch (error) {
-      console.error('Error generating franchise code:', error);
-      alert('Failed to generate franchise code. Please contact support.');
+      console.error("Error generating franchise code:", error);
+      alert("Failed to generate franchise code. Please contact support.");
     } finally {
       setGeneratingCode(false);
     }
@@ -335,7 +405,7 @@ const Dashboard = () => {
         <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#4a2e1f] truncate">
           {franchiseName} Dashboard
         </h1>
-        
+
         {/* Franchise ID Quick Access */}
         <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 shadow-lg">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -344,13 +414,21 @@ const Dashboard = () => {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70 font-medium">
-                {franchiseCode ? 'Franchise Code' : 'Franchise ID'}
+                {franchiseCode ? "Franchise Code" : "Franchise ID"}
               </p>
-              <span className={`font-mono font-bold text-white tracking-wider block truncate ${franchiseCode ? 'text-xs sm:text-sm md:text-xl' : 'text-[10px] sm:text-xs md:text-base'}`}>
+              <span
+                className={`font-mono font-bold text-white tracking-wider block truncate ${
+                  franchiseCode
+                    ? "text-xs sm:text-sm md:text-xl"
+                    : "text-[10px] sm:text-xs md:text-base"
+                }`}
+              >
                 {getDisplayId()}
               </span>
               {!franchiseCode && franchiseId && (
-                <p className="text-[10px] text-yellow-300/80 mt-0.5">Legacy ID format</p>
+                <p className="text-[10px] text-yellow-300/80 mt-0.5">
+                  Legacy ID format
+                </p>
               )}
             </div>
           </div>
@@ -362,7 +440,14 @@ const Dashboard = () => {
                 className="px-2 md:px-3 py-1 md:py-2 bg-yellow-500/80 hover:bg-yellow-500 text-white rounded-lg transition-colors text-[10px] md:text-xs font-semibold whitespace-nowrap"
                 title="Generate a proper franchise code"
               >
-                {generatingCode ? "..." : <><span className="hidden sm:inline">⚡ Generate Code</span><span className="sm:hidden">⚡</span></>}
+                {generatingCode ? (
+                  "..."
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">⚡ Generate Code</span>
+                    <span className="sm:hidden">⚡</span>
+                  </>
+                )}
               </button>
             )}
             <button
@@ -451,8 +536,8 @@ const Dashboard = () => {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {cartOrderStats.map((cart) => (
-              <div 
-                key={cart.cartId} 
+              <div
+                key={cart.cartId}
                 className="bg-[#fef4ec] rounded-lg p-4 border border-[#e2c1ac] hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -462,17 +547,23 @@ const Dashboard = () => {
                         {cart.cartCode}
                       </span>
                     )}
-                    <span className="font-medium text-[#4a2e1f]">{cart.cartName}</span>
+                    <span className="font-medium text-[#4a2e1f]">
+                      {cart.cartName}
+                    </span>
                   </div>
                 </div>
-        <div className="grid grid-cols-3 gap-2 text-center mt-3">
+                <div className="grid grid-cols-3 gap-2 text-center mt-3">
                   <div className="bg-white rounded p-2">
                     <p className="text-xs text-[#6b4423]">Today</p>
-                    <p className="text-lg font-bold text-[#4a2e1f]">{cart.todayOrders}</p>
+                    <p className="text-lg font-bold text-[#4a2e1f]">
+                      {cart.todayOrders}
+                    </p>
                   </div>
                   <div className="bg-white rounded p-2">
                     <p className="text-xs text-[#6b4423]">Total</p>
-                    <p className="text-lg font-bold text-[#4a2e1f]">{cart.orders}</p>
+                    <p className="text-lg font-bold text-[#4a2e1f]">
+                      {cart.orders}
+                    </p>
                   </div>
                   <div className="bg-white rounded p-2">
                     <p className="text-xs text-[#6b4423]">Revenue</p>
@@ -485,7 +576,9 @@ const Dashboard = () => {
             ))}
           </div>
           {cartOrderStats.length === 0 && (
-            <p className="text-center text-[#6b4423] py-4">No carts with orders yet</p>
+            <p className="text-center text-[#6b4423] py-4">
+              No carts with orders yet
+            </p>
           )}
         </div>
       )}
@@ -509,7 +602,9 @@ const Dashboard = () => {
           <div className="text-center py-8 text-[#6b4423]">Loading...</div>
         ) : recentCarts.length === 0 ? (
           <div className="text-center py-8 text-[#6b4423]">
-            <p className="mb-4">No carts found. Add your first cart to get started.</p>
+            <p className="mb-4">
+              No carts found. Add your first cart to get started.
+            </p>
             <button
               onClick={() => navigate("/carts/new")}
               className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors"
@@ -546,53 +641,60 @@ const Dashboard = () => {
                     </th>
                   </tr>
                 </thead>
-              <tbody className="divide-y divide-[#e2c1ac]">
-                {recentCarts.map((cart) => (
-                  <tr key={cart.id} className="hover:bg-[#fef4ec] transition-colors">
-                    <td className="px-2 md:px-4 py-2 md:py-3">
-                      {cart.cartCode ? (
-                        <span className="px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded">
-                          {cart.cartCode}
+                <tbody className="divide-y divide-[#e2c1ac]">
+                  {recentCarts.map((cart) => (
+                    <tr
+                      key={cart.id}
+                      className="hover:bg-[#fef4ec] transition-colors"
+                    >
+                      <td className="px-2 md:px-4 py-2 md:py-3">
+                        {cart.cartCode ? (
+                          <span className="px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded">
+                            {cart.cartCode}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] md:text-xs text-gray-400">
+                            N/A
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium text-[#4a2e1f]">
+                        {cart.name}
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden sm:table-cell">
+                        {cart.managerName}
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden md:table-cell">
+                        {cart.location}
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3">
+                        <span
+                          className={`px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-semibold rounded-full ${
+                            cart.statusColor === "green"
+                              ? "bg-green-100 text-green-800"
+                              : cart.statusColor === "yellow"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {cart.status}
                         </span>
-                      ) : (
-                        <span className="text-[10px] md:text-xs text-gray-400">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium text-[#4a2e1f]">
-                      {cart.name}
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden sm:table-cell">
-                      {cart.managerName}
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden md:table-cell">
-                      {cart.location}
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3">
-                      <span className={`px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-semibold rounded-full ${
-                        cart.statusColor === 'green' 
-                          ? 'bg-green-100 text-green-800'
-                          : cart.statusColor === 'yellow'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {cart.status}
-                      </span>
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden lg:table-cell">
-                      {new Date(cart.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3">
-                      <button
-                        onClick={() => navigate(`/carts/${cart.id}`)}
-                        className="text-[#d86d2a] hover:text-[#c75b1a] text-xs md:text-sm font-medium transition-colors"
-                      >
-                        <span className="hidden sm:inline">View Details</span>
-                        <span className="sm:hidden">View</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden lg:table-cell">
+                        {new Date(cart.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-2 md:px-4 py-2 md:py-3">
+                        <button
+                          onClick={() => navigate(`/carts/${cart.id}`)}
+                          className="text-[#d86d2a] hover:text-[#c75b1a] text-xs md:text-sm font-medium transition-colors"
+                        >
+                          <span className="hidden sm:inline">View Details</span>
+                          <span className="sm:hidden">View</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>

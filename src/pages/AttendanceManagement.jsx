@@ -114,9 +114,11 @@ const AttendanceManagement = () => {
         attendanceData = response.data.data;
       }
 
-      // Debug: Log attendance data
-      console.log("[ATTENDANCE] Fetched today attendance:", attendanceData);
-      console.log("[ATTENDANCE] Number of records:", attendanceData.length);
+      // Log attendance data (development only)
+      if (import.meta.env.DEV) {
+        console.log("[ATTENDANCE] Fetched today attendance:", attendanceData);
+        console.log("[ATTENDANCE] Number of records:", attendanceData.length);
+      }
 
       setTodayAttendance(attendanceData);
     } catch (error) {
@@ -571,8 +573,8 @@ const AttendanceManagement = () => {
                               const match =
                                 recordEmployeeId?.toString() === employeeIdStr;
 
-                              // Debug logging
-                              if (match) {
+                              // Logging (development only)
+                              if (match && import.meta.env.DEV) {
                                 console.log(
                                   "[ATTENDANCE] Found record for employee:",
                                   {

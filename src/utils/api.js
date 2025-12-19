@@ -1,9 +1,9 @@
-import axios from 'axios';
-import { alert } from './alert';
+import axios from "axios";
+import { alert } from "./alert";
 
 // Ensure URL has protocol (http:// or https://)
 const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_NODE_API_URL || 'http://localhost:5001';
+  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
   // If URL doesn't start with http:// or https://, add http://
   if (envUrl && !envUrl.match(/^https?:\/\//)) {
     return `http://${envUrl}`;
@@ -14,41 +14,52 @@ const getApiUrl = () => {
 const nodeApiBase = getApiUrl();
 
 const api = axios.create({
-  baseURL: `${nodeApiBase.replace(/\/$/, '')}/api`
+  baseURL: `${nodeApiBase.replace(/\/$/, "")}/api`,
 });
 
 // Get the appropriate token based on user role
 const getToken = () => {
-  const superAdminToken = localStorage.getItem('superAdminToken');
-  const franchiseAdminToken = localStorage.getItem('franchiseAdminToken');
-  const adminToken = localStorage.getItem('adminToken');
-  
+  let superAdminToken = null;
+  let franchiseAdminToken = null;
+  let adminToken = null;
+
+  try {
+    superAdminToken = localStorage.getItem("superAdminToken");
+    franchiseAdminToken = localStorage.getItem("franchiseAdminToken");
+    adminToken = localStorage.getItem("adminToken");
+  } catch (storageError) {
+    if (import.meta.env.DEV) {
+      console.warn("[API] Error reading from localStorage:", storageError);
+    }
+    // Return null if storage is unavailable
+    return null;
+  }
+
   // Priority: super_admin > franchise_admin > admin
   const token = superAdminToken || franchiseAdminToken || adminToken;
-  
+
   // Debug logging in development
   if (import.meta.env.DEV && !token) {
-    console.warn('[API] No token found in localStorage', {
+    console.warn("[API] No token found in localStorage", {
       superAdminToken: !!superAdminToken,
       franchiseAdminToken: !!franchiseAdminToken,
       adminToken: !!adminToken,
-      allKeys: Object.keys(localStorage).filter(k => k.includes('Token'))
     });
   }
-  
+
   return token;
 };
 
 // Get the appropriate storage keys based on user role
 const getStorageKeys = (role) => {
-  switch(role) {
-    case 'super_admin':
-      return { token: 'superAdminToken', user: 'superAdminUser' };
-    case 'franchise_admin':
-      return { token: 'franchiseAdminToken', user: 'franchiseAdminUser' };
-    case 'admin':
+  switch (role) {
+    case "super_admin":
+      return { token: "superAdminToken", user: "superAdminUser" };
+    case "franchise_admin":
+      return { token: "franchiseAdminToken", user: "franchiseAdminUser" };
+    case "admin":
     default:
-      return { token: 'adminToken', user: 'adminUser' };
+      return { token: "adminToken", user: "adminUser" };
   }
 };
 
@@ -59,37 +70,47 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     } else {
       // If no token, check if we just logged in - might be a timing issue
-      const loginTimestamp = sessionStorage.getItem('lastLoginTime');
+      const loginTimestamp = sessionStorage.getItem("lastLoginTime");
       const now = Date.now();
-      const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 5000;
-      
+      const justLoggedIn =
+        loginTimestamp && now - parseInt(loginTimestamp) < 5000;
+
       if (justLoggedIn) {
         // Try to get token again - it might have been stored by now
         const retryToken = getToken();
         if (retryToken) {
           config.headers.Authorization = `Bearer ${retryToken}`;
-          console.log('[API] Token found on retry after login');
+          console.log("[API] Token found on retry after login");
         } else {
-          console.warn('[API] No token found even after login - request will fail');
+          console.warn(
+            "[API] No token found even after login - request will fail"
+          );
         }
       } else {
-        console.warn('[API] No token found for request:', config.url);
+        if (import.meta.env.DEV) {
+          console.warn("[API] No token found for request:", config.url);
+        }
       }
     }
-    
-    // Log request for debugging (can be removed in production)
+
+    // Log request for debugging (only in development)
     if (import.meta.env.DEV) {
-      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
-        baseURL: config.baseURL,
-        hasToken: !!config.headers.Authorization,
-        tokenLength: token?.length || 0
-      });
+      console.log(
+        `[API Request] ${config.method?.toUpperCase()} ${config.url}`,
+        {
+          baseURL: config.baseURL,
+          hasToken: !!config.headers.Authorization,
+          tokenLength: token?.length || 0,
+        }
+      );
     }
-    
+
     return config;
   },
   (error) => {
-    console.error('[API Request Error]', error);
+    if (import.meta.env.DEV) {
+      console.error("[API Request Error]", error);
+    }
     return Promise.reject(error);
   }
 );
@@ -106,133 +127,187 @@ api.interceptors.response.use(
       message: error.response?.data?.message,
       data: error.response?.data,
     };
-    
+
     // Enhanced error logging
     if (error.response) {
-      console.error('[API Error]', errorDetails);
-      
+      console.error("[API Error]", errorDetails);
+
       // Log full response for debugging
       try {
         const fullResponse = JSON.stringify(error.response.data, null, 2);
-        console.error('[API Error - Full Response]:', fullResponse);
+        console.error("[API Error - Full Response]:", fullResponse);
       } catch (e) {
-        console.error('[API Error - Response Data]:', error.response.data);
+        console.error("[API Error - Response Data]:", error.response.data);
       }
     } else {
-      console.error('[API Error - No Response]:', error.message);
+      console.error("[API Error - No Response]:", error.message);
     }
-    
+
     if (error.response?.status === 400) {
       // Bad Request - log detailed error
       const responseData = error.response?.data || {};
       let requestData = error.config?.data;
-      
+
       // Try to parse request data if it's a string
-      if (typeof requestData === 'string') {
+      if (typeof requestData === "string") {
         try {
           requestData = JSON.parse(requestData);
         } catch (e) {
           // Keep as string if parsing fails
         }
       }
-      
-      console.error('═══════════════════════════════════════════');
-      console.error('[400 Bad Request - FULL DETAILS]');
-      console.error('═══════════════════════════════════════════');
-      console.error('Endpoint:', `${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-      console.error('Request Data:', requestData);
-      console.error('Response Status:', error.response?.status);
-      console.error('Response Data:', responseData);
-      console.error('Error Message:', responseData.message || responseData.error || 'Bad Request');
-      console.error('Full Response:', JSON.stringify(responseData, null, 2));
-      console.error('═══════════════════════════════════════════');
-      
+
+      // Detailed error logging (only in development)
+      if (import.meta.env.DEV) {
+        console.error("═══════════════════════════════════════════");
+        console.error("[400 Bad Request - FULL DETAILS]");
+        console.error("═══════════════════════════════════════════");
+        console.error(
+          "Endpoint:",
+          `${error.config?.method?.toUpperCase()} ${error.config?.url}`
+        );
+        console.error("Request Data:", requestData);
+        console.error("Response Status:", error.response?.status);
+        console.error("Response Data:", responseData);
+        console.error(
+          "Error Message:",
+          responseData.message || responseData.error || "Bad Request"
+        );
+        console.error("Full Response:", JSON.stringify(responseData, null, 2));
+        console.error("═══════════════════════════════════════════");
+      }
+
       // Show user-friendly error message
-      const errorMessage = responseData.message || responseData.error || 'Invalid request. Please check your input and try again.';
-      
+      const errorMessage =
+        responseData.message ||
+        responseData.error ||
+        "Invalid request. Please check your input and try again.";
+
       if (!error.config?.skipErrorAlert) {
-        alert(`Error: ${errorMessage}\n\nCheck console for full details.`, 'error');
+        alert(
+          `Error: ${errorMessage}\n\nCheck console for full details.`,
+          "error"
+        );
       }
     } else if (error.response?.status === 401) {
       // Unauthorized - token invalid or expired
       const errorData = error.response?.data || {};
       const errorCode = errorData.code;
 
-      console.warn('[401 Unauthorized]', {
+      console.warn("[401 Unauthorized]", {
         code: errorCode,
         message: errorData.message,
       });
 
       // Check if we just logged in - don't logout if we just logged in
-      const loginTimestamp = sessionStorage.getItem('lastLoginTime');
+      let loginTimestamp = null;
+      try {
+        loginTimestamp = sessionStorage.getItem("lastLoginTime");
+      } catch (e) {
+        // Ignore storage errors
+      }
       const now = Date.now();
-      const justLoggedIn = loginTimestamp && (now - parseInt(loginTimestamp)) < 30000; // 30 second window
+      const justLoggedIn =
+        loginTimestamp && now - parseInt(loginTimestamp) < 30000; // 30 second window
 
       if (justLoggedIn) {
-        console.warn('[401 Unauthorized] Just logged in - not clearing tokens. This might be a timing issue.');
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[401 Unauthorized] Just logged in - not clearing tokens. This might be a timing issue."
+          );
+        }
         // Don't logout, just return the error
         return Promise.reject(error);
       }
 
       // Only force logout for clear auth token issues
       if (
-        errorCode === 'TOKEN_EXPIRED' ||
-        errorCode === 'TOKEN_INVALID' ||
-        errorCode === 'AUTH_ERROR' ||
-        errorCode === 'NO_TOKEN' ||
-        errorCode === 'USER_NOT_FOUND'
+        errorCode === "TOKEN_EXPIRED" ||
+        errorCode === "TOKEN_INVALID" ||
+        errorCode === "AUTH_ERROR" ||
+        errorCode === "NO_TOKEN" ||
+        errorCode === "USER_NOT_FOUND"
       ) {
-        console.warn('[401 Unauthorized] Clearing tokens and redirecting to login');
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[401 Unauthorized] Clearing tokens and redirecting to login"
+          );
+        }
         // Clear all tokens
-        localStorage.removeItem('superAdminToken');
-        localStorage.removeItem('superAdminUser');
-        localStorage.removeItem('franchiseAdminToken');
-        localStorage.removeItem('franchiseAdminUser');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
-        sessionStorage.removeItem('lastLoginTime');
-        window.location.href = '/login';
+        try {
+          localStorage.removeItem("superAdminToken");
+          localStorage.removeItem("superAdminUser");
+          localStorage.removeItem("franchiseAdminToken");
+          localStorage.removeItem("franchiseAdminUser");
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("adminUser");
+          sessionStorage.removeItem("lastLoginTime");
+        } catch (storageError) {
+          if (import.meta.env.DEV) {
+            console.warn("[API] Error clearing storage:", storageError);
+          }
+        }
+        window.location.href = "/login";
       } else {
         // For other 401s, just show an alert and keep the user on the same page
         const message =
           errorData.message ||
-          'You are not authorized to perform this action. Please check your permissions or login again.';
-        alert(message, 'warning');
+          "You are not authorized to perform this action. Please check your permissions or login again.";
+        alert(message, "warning");
       }
     } else if (error.response?.status === 403) {
       // Forbidden - check if it's account deactivation
       const errorData = error.response?.data || {};
       const errorCode = errorData.code;
-      
-      if (errorCode === 'ACCOUNT_DEACTIVATED' || 
-          errorCode === 'CAFE_DEACTIVATED' || 
-          errorCode === 'FRANCHISE_DEACTIVATED' ||
-          errorCode === 'ACCOUNT_PENDING_APPROVAL' ||
-          errorData.deactivated) {
+
+      if (
+        errorCode === "ACCOUNT_DEACTIVATED" ||
+        errorCode === "CAFE_DEACTIVATED" ||
+        errorCode === "FRANCHISE_DEACTIVATED" ||
+        errorCode === "ACCOUNT_PENDING_APPROVAL" ||
+        errorData.deactivated
+      ) {
         // Clear all tokens
-        localStorage.removeItem('superAdminToken');
-        localStorage.removeItem('superAdminUser');
-        localStorage.removeItem('franchiseAdminToken');
-        localStorage.removeItem('franchiseAdminUser');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
-        
-        alert(errorData.message || 'Your account has been deactivated. Please contact admin.', 'error');
-        window.location.href = '/login';
+        try {
+          localStorage.removeItem("superAdminToken");
+          localStorage.removeItem("superAdminUser");
+          localStorage.removeItem("franchiseAdminToken");
+          localStorage.removeItem("franchiseAdminUser");
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("adminUser");
+        } catch (storageError) {
+          if (import.meta.env.DEV) {
+            console.warn("[API] Error clearing storage:", storageError);
+          }
+        }
+
+        alert(
+          errorData.message ||
+            "Your account has been deactivated. Please contact admin.",
+          "error"
+        );
+        window.location.href = "/login";
       }
     } else if (error.response?.status === 500) {
-      console.error('[500 Server Error]', errorDetails);
-      alert('Server error. Please try again later.', 'error');
+      if (import.meta.env.DEV) {
+        console.error("[500 Server Error]", errorDetails);
+      }
+      alert("Server error. Please try again later.", "error");
     } else if (!error.response) {
       // Network error
-      console.error('[Network Error]', {
-        message: error.message,
-        url: error.config?.url,
-        baseURL: error.config?.baseURL
-      });
-      alert('Network error. Please check if the backend server is running.', 'error');
+      if (import.meta.env.DEV) {
+        console.error("[Network Error]", {
+          message: error.message,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+        });
+      }
+      alert(
+        "Network error. Please check if the backend server is running.",
+        "error"
+      );
     }
-    
+
     return Promise.reject(error);
   }
 );
