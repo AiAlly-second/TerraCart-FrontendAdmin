@@ -316,7 +316,7 @@ function App() {
                   }
                 />
 
-                {/* Costing v2 routes (Super Admin, Franchise Admin, Admin) */}
+                {/* Finances / Costing v2 routes (Super Admin, Franchise Admin, Cart Admin) */}
                 <Route
                   path="/costing-v2/*"
                   element={

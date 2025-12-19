@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaUtensils,
   FaPlus,
@@ -15,6 +16,7 @@ import {
   FaTimes,
 } from "react-icons/fa";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 // Helper function to normalize image URLs
 // Converts absolute URLs from the same API server to relative URLs
@@ -56,6 +58,9 @@ const getImageUrl = (imagePath) => {
 };
 
 const DefaultMenu = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRole = user?.role;
   const [defaultMenu, setDefaultMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -814,6 +819,25 @@ const DefaultMenu = () => {
                                   </button>
                                 </div>
 
+                                {/* Define BOM / Recipe shortcut into Finances for Super/Franchise Admin */}
+                                {(userRole === "super_admin" ||
+                                  userRole === "franchise_admin") && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/costing-v2/recipes?name=${encodeURIComponent(
+                                          item.name || ""
+                                        )}`
+                                      )
+                                    }
+                                    className="mt-0.5 text-[9px] sm:text-[10px] px-1 py-0.5 rounded border border-green-200 text-green-700 hover:bg-green-50"
+                                    title="Define BOM / Recipe for this item in Finances"
+                                  >
+                                    Define Recipe in Finances
+                                  </button>
+                                )}
+
                                 {/* Move item to another category (within default menu) */}
                                 {defaultMenu?.categories?.length > 1 && (
                                   <div className="flex items-center gap-1">
@@ -870,12 +894,25 @@ const DefaultMenu = () => {
 
       {/* Push to Franchises Modal */}
       {showPushModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4 flex items-center gap-2">
-              <FaBuilding className="text-purple-600 flex-shrink-0" />
-              <span className="truncate">Push Menu to Franchises</span>
-            </h2>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl my-auto">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
+                <FaBuilding className="text-purple-600 flex-shrink-0" />
+                <span className="truncate">Push Menu to Franchises</span>
+              </h2>
+              <button
+                onClick={() => {
+                  setShowPushModal(false);
+                  setPushResults(null);
+                  setSelectedFranchises(new Set());
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
 
             {pushResults ? (
               // Show results
@@ -994,7 +1031,7 @@ const DefaultMenu = () => {
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4 border-t">
+                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-gray-200 mt-4 sm:mt-6">
                   <button
                     onClick={() => setShowPushModal(false)}
                     className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm sm:text-base w-full sm:w-auto"

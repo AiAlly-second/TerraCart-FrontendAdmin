@@ -204,12 +204,38 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
           order.paidAt || order.updatedAt || order.createdAt || Date.now()
         ).toLocaleDateString()}</div>
+        ${
+          order.serviceType === "TAKEAWAY" && order.takeawayToken
+            ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
+            : ""
+        }
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
-        <div style="font-size: 9px;">
-          ${order.tableNumber || "TAKEAWAY"}
-        </div>
+        ${
+          order.serviceType === "TAKEAWAY"
+            ? `
+              <div style="font-size: 9px;">
+                Takeaway Order${
+                  order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
+                }
+              </div>
+              ${
+                order.customerName
+                  ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${
+                      order.customerName
+                    }${
+                      order.customerMobile ? ` (${order.customerMobile})` : ""
+                    }</div>`
+                  : ""
+              }
+            `
+            : `
+              <div style="font-size: 9px;">
+                ${order.tableNumber || ""}
+              </div>
+            `
+        }
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
         <thead>
@@ -555,6 +581,17 @@ const TakeawayOrders = () => {
         console.log(
           `[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`
         );
+        // Debug: Log first order to check customer fields
+        if (takeawayOrders.length > 0) {
+          console.log(`[TakeawayOrders] Sample order data:`, {
+            id: takeawayOrders[0]._id,
+            customerName: takeawayOrders[0].customerName,
+            customerMobile: takeawayOrders[0].customerMobile,
+            customerEmail: takeawayOrders[0].customerEmail,
+            sessionToken: takeawayOrders[0].sessionToken,
+            serviceType: takeawayOrders[0].serviceType,
+          });
+        }
         console.log(`[TakeawayOrders] Takeaway orders:`, takeawayOrders);
         setOrders(takeawayOrders);
       } catch (err) {
@@ -1189,7 +1226,7 @@ const TakeawayOrders = () => {
                 Date & Time
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Table
+                Table / Customer
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Status
@@ -1208,6 +1245,19 @@ const TakeawayOrders = () => {
               </tr>
             )}
             {filteredOrders.map((order) => {
+              // Debug: Log customer data for each order
+              if (!order.customerName && !order.customerMobile) {
+                console.log(
+                  `[TakeawayOrders] Order ${order._id} missing customer data:`,
+                  {
+                    hasCustomerName: !!order.customerName,
+                    hasCustomerMobile: !!order.customerMobile,
+                    hasCustomerEmail: !!order.customerEmail,
+                    serviceType: order.serviceType,
+                  }
+                );
+              }
+
               const orderDate = new Date(order.createdAt);
               const formattedDate = orderDate.toLocaleDateString("en-US", {
                 year: "numeric",
@@ -1251,6 +1301,41 @@ const TakeawayOrders = () => {
                             </span>
                           </div>
                           <div>Service Type: Takeaway</div>
+                          {order.takeawayToken && (
+                            <div className="font-semibold text-blue-600">
+                              Token: {order.takeawayToken}
+                            </div>
+                          )}
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="font-semibold text-gray-800">
+                              Customer Info:
+                            </div>
+                            {order.customerName ? (
+                              <>
+                                <div>👤 Name: {order.customerName}</div>
+                                {order.customerMobile && (
+                                  <div>📱 Mobile: {order.customerMobile}</div>
+                                )}
+                                {order.customerEmail && (
+                                  <div>📧 Email: {order.customerEmail}</div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-gray-400 italic">
+                                Customer information not available
+                              </div>
+                            )}
+                          </div>
+                          {order.sessionToken && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <div className="font-semibold text-gray-800">
+                                Session Code:
+                              </div>
+                              <div className="font-mono text-xs break-all">
+                                {order.sessionToken}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1265,11 +1350,42 @@ const TakeawayOrders = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">🥡</span>
-                        <span className="text-lg font-semibold text-gray-700">
-                          {order.tableNumber || "TAKEAWAY"}
-                        </span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">🥡</span>
+                          <span className="text-lg font-semibold text-gray-700">
+                            {order.tableNumber || "TAKEAWAY"}
+                          </span>
+                        </div>
+                        {/* Always show customer info section for takeaway orders */}
+                        {order.customerName || order.customerMobile ? (
+                          <div className="text-sm mt-1 space-y-1">
+                            {order.customerName && (
+                              <div className="font-medium text-gray-800">
+                                👤 {order.customerName}
+                              </div>
+                            )}
+                            {order.customerMobile && (
+                              <div className="text-gray-600">
+                                📱 {order.customerMobile}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 italic mt-1">
+                            Customer info not available
+                          </div>
+                        )}
+                        {order.takeawayToken && (
+                          <div className="text-sm mt-2 font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                            Token: {order.takeawayToken}
+                          </div>
+                        )}
+                        {order.sessionToken && (
+                          <div className="text-xs text-gray-500 mt-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                            Session: {order.sessionToken.substring(0, 20)}...
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -1283,7 +1399,10 @@ const TakeawayOrders = () => {
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(() => {
-                            const nextStatus = getNextStatus(order.status);
+                            const nextStatus = getNextStatus(
+                              order.status,
+                              order.serviceType
+                            );
                             const buttons = [];
 
                             if (canAccept(order.status)) {

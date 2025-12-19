@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 // Helper: get API base URL with protocol ensured
 const getApiBaseUrl = () => {
@@ -73,6 +75,9 @@ const emptyItemForm = {
 };
 
 const MenuManager = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRole = user?.role;
   const [menu, setMenu] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -771,6 +776,24 @@ const MenuManager = () => {
                               <FaTrash size={11} />
                             </button>
                           </div>
+
+                          {/* Define BOM / Recipe shortcut into Finances for Franchise Admin */}
+                          {userRole === "franchise_admin" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  `/costing-v2/recipes?name=${encodeURIComponent(
+                                    item?.name || ""
+                                  )}`
+                                )
+                              }
+                              className="mt-0.5 text-[9px] px-1 py-0.5 rounded border border-green-200 text-green-700 hover:bg-green-50"
+                              title="Define BOM / Recipe for this item in Finances"
+                            >
+                              Define Recipe in Finances
+                            </button>
+                          )}
 
                           {/* Move item to another category */}
                           {menu?.length > 1 && (

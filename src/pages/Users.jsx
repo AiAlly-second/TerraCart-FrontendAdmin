@@ -36,6 +36,8 @@ const Users = () => {
     address: "",
   });
 
+  const isSuperAdmin = currentUser?.role === "super_admin";
+
   // Get allowed roles based on current user's hierarchy
   // Note: manager, cook, waiter, and captain roles cannot be created through this form
   // They should be created through the Employee Management system
@@ -153,13 +155,18 @@ const Users = () => {
         if (!updateData.password) {
           delete updateData.password;
         }
-        // Remove role from update data - role should not be changed when editing
-        delete updateData.role;
-        delete updateData.franchiseId;
-        delete updateData.cartName;
-        delete updateData.location;
-        delete updateData.phone;
-        delete updateData.address;
+
+        // Only super admin is allowed to change role or ownership fields,
+        // and even super admin cannot change the role of a super_admin user
+        if (!isSuperAdmin || editingUser.role === "super_admin") {
+          delete updateData.role;
+          delete updateData.franchiseId;
+          delete updateData.cartName;
+          delete updateData.location;
+          delete updateData.phone;
+          delete updateData.address;
+        }
+
         await api.put(`/users/${editingUser._id}`, updateData);
         alert("User updated successfully");
       } else {
@@ -693,11 +700,34 @@ const Users = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              {editingUser ? "Edit User" : "Create New User"}
-            </h2>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl my-auto">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                {editingUser ? "Edit User" : "Create New User"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingUser(null);
+                  setFormData({
+                    name: "",
+                    email: "",
+                    password: "",
+                    role: "",
+                    franchiseId: "",
+                    cartName: "",
+                    location: "",
+                    phone: "",
+                    address: "",
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -741,7 +771,13 @@ const Users = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {!editingUser && (
+              {/* Role selector:
+                  - Always visible when creating a user
+                  - When editing, visible only for super admins
+                    EXCEPT for super_admin users themselves, whose role is locked
+               */}
+              {(!editingUser ||
+                (isSuperAdmin && editingUser?.role !== "super_admin")) && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Role
@@ -750,9 +786,9 @@ const Users = () => {
                     value={formData.role}
                     onChange={(e) => {
                       const newRole = e.target.value;
-                      // If creating a cart admin, redirect to the dedicated Register Cart screen
-                      // which has the full cart registration UI (documents, GST, etc.)
-                      if (newRole === "cart_admin") {
+
+                      // If creating a new cart admin, redirect to dedicated Register Cart screen
+                      if (!editingUser && newRole === "cart_admin") {
                         setShowModal(false);
                         setEditingUser(null);
                         setFormData({
@@ -770,15 +806,17 @@ const Users = () => {
                         return;
                       }
 
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         role: newRole,
-                        franchiseId: "",
-                        cartName: "",
-                        location: "",
-                        phone: "",
-                        address: "",
-                      });
+                        // When changing role in create mode we reset ownership fields;
+                        // in edit mode super admin can keep or update them manually.
+                        franchiseId: editingUser ? prev.franchiseId : "",
+                        cartName: editingUser ? prev.cartName : "",
+                        location: editingUser ? prev.location : "",
+                        phone: editingUser ? prev.phone : "",
+                        address: editingUser ? prev.address : "",
+                      }));
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
@@ -793,7 +831,7 @@ const Users = () => {
                 </div>
               )}
 
-              {/* Cart Admin specific fields */}
+              {/* Cart Admin specific fields (only when creating a new cart admin) */}
               {!editingUser &&
                 (formData.role === "admin" ||
                   formData.role === "cart_admin") && (
@@ -884,10 +922,10 @@ const Users = () => {
                     </div>
                   </>
                 )}
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-gray-200 mt-4 sm:mt-6">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="w-full sm:flex-1 px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium"
                 >
                   {editingUser ? "Update" : "Create"}
                 </button>
@@ -908,7 +946,7 @@ const Users = () => {
                       address: "",
                     });
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                  className="w-full sm:flex-1 px-4 py-2.5 sm:py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors text-sm sm:text-base font-medium"
                 >
                   Cancel
                 </button>

@@ -81,7 +81,10 @@ const TableCard = ({
           )}
           {table.currentOrder && (
             <p className="text-xs text-orange-600 mt-1">
-              Active order: {table.currentOrder}
+              Active order:{" "}
+              {typeof table.currentOrder === "object"
+                ? table.currentOrder._id || table.currentOrder.id || "Active"
+                : table.currentOrder}
             </p>
           )}
           {typeof table.waitlistLength === "number" && (
@@ -170,8 +173,8 @@ const TableCard = ({
             e.stopPropagation();
             onDelete(e, table);
           }}
-          className="text-xs text-red-600 hover:text-red-700"
-          disabled={busy || Boolean(table.currentOrder)}
+          className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={busy}
         >
           Delete
         </button>
@@ -290,6 +293,37 @@ const Tables = () => {
     };
   }, []);
 
+  // Separate effect for waitlist updates to avoid dependency issues
+  useEffect(() => {
+    if (!socketRef.current) return;
+
+    const handleWaitlistUpdated = (payload) => {
+      // Refresh waitlist if modal is open for the affected table
+      if (
+        waitlistModal.open &&
+        waitlistModal.table?._id &&
+        payload?.tableId &&
+        (waitlistModal.table._id.toString() === payload.tableId.toString() ||
+          waitlistModal.table.id?.toString() === payload.tableId.toString())
+      ) {
+        // Reload waitlist to get updated positions
+        loadWaitlistForTable(waitlistModal.table);
+      }
+      // Also update waitlist count for the table
+      if (payload?.tableId) {
+        // Trigger a refresh of tables to update waitlist counts
+        fetchTables();
+      }
+    };
+
+    const socket = socketRef.current;
+    socket.on("waitlistUpdated", handleWaitlistUpdated);
+
+    return () => {
+      socket.off("waitlistUpdated", handleWaitlistUpdated);
+    };
+  }, [waitlistModal.open, waitlistModal.table?._id]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.number || !form.capacity) {
@@ -331,18 +365,11 @@ const Tables = () => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (table.currentOrder) {
-      alert("Cannot delete table with an active order.");
-      return;
-    }
-
     const { confirm } = await import("../utils/confirm");
     const confirmed = await confirm(
-      `Are you sure you want to PERMANENTLY DELETE table "${table.number}"?\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete table "${table.number}"?`,
       {
         title: "Delete Table",
-        warningMessage: "WARNING: PERMANENTLY DELETE",
-        danger: true,
         confirmText: "Delete",
         cancelText: "Cancel",
       }
@@ -432,12 +459,18 @@ const Tables = () => {
     try {
       const { data } = await api.get(`/waitlist/table/${table._id}`);
       const entries = Array.isArray(data) ? data : [];
+      // Sort entries by position to ensure correct order
+      const sortedEntries = entries.sort((a, b) => {
+        const posA = a.position || 999;
+        const posB = b.position || 999;
+        return posA - posB;
+      });
       setWaitlistModal((prev) => ({
         ...prev,
-        entries,
+        entries: sortedEntries,
         loading: false,
       }));
-      updateTableWaitlistCount(table._id, entries.length);
+      updateTableWaitlistCount(table._id, sortedEntries.length);
     } catch (err) {
       setWaitlistModal((prev) => ({
         ...prev,
@@ -758,11 +791,11 @@ const Tables = () => {
         </div>
       )}
       {waitlistModal.open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm px-4">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base sm:text-lg font-semibold text-slate-800">
                   Waitlist · Table {waitlistModal.table?.number}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
@@ -771,33 +804,34 @@ const Tables = () => {
               </div>
               <button
                 onClick={closeWaitlistModal}
-                className="text-sm text-slate-500 hover:text-slate-700"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                aria-label="Close"
               >
-                Close
+                ×
               </button>
             </div>
-            <div className="px-6 py-5 max-h-[60vh] overflow-y-auto">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
-                <div>
+            <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-700">
                     Total waiting: {waitlistModal.entries.length}
                   </p>
                   {waitlistModal.message && (
-                    <p className="text-xs text-emerald-600 mt-1">
+                    <p className="text-xs text-emerald-600 mt-1 break-words">
                       {waitlistModal.message}
                     </p>
                   )}
                   {waitlistModal.error && !waitlistModal.loading && (
-                    <p className="text-xs text-red-600 mt-1">
+                    <p className="text-xs text-red-600 mt-1 break-words">
                       {waitlistModal.error}
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => loadWaitlistForTable(waitlistModal.table)}
                     disabled={waitlistModal.busy || waitlistModal.loading}
-                    className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                    className="w-full sm:w-auto text-xs sm:text-sm px-3 py-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                   >
                     Refresh
                   </button>
@@ -808,7 +842,7 @@ const Tables = () => {
                       waitlistModal.loading ||
                       waitlistModal.entries.length === 0
                     }
-                    className="text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="w-full sm:w-auto text-xs sm:text-sm px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     Notify next guest
                   </button>
@@ -844,7 +878,8 @@ const Tables = () => {
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">
-                              #{index + 1} · Token {entry.token}
+                              Position #{entry.position || index + 1} · Token{" "}
+                              {entry.token}
                             </p>
                             {entry.name && (
                               <p className="text-xs text-slate-500 mt-1">

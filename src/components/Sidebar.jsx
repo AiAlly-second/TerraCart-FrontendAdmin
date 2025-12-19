@@ -83,12 +83,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/reports", icon: "📈", label: "Reports" },
       ];
 
-      // Add Costing dashboard only (no submenu) for super admin
+      // Add Finances (Costing v2) dashboard only (no submenu) for super admin
       if (isCostingEnabled) {
         items.push({
           path: "/costing-v2/dashboard",
           icon: "💰",
-          label: "Costing",
+          label: "Finances",
         });
       }
 
@@ -105,11 +105,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
       ];
       if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "💰", label: "Costing" });
+        items.push({ path: "/costing-v2", icon: "💰", label: "Finances" });
       }
       items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
       return items;
     } else if (userRole === "admin") {
+      // Cart Admin: full finances management for their cart
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/orders", icon: "📦", label: "Orders" },
@@ -125,7 +126,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/customers", icon: "👥", label: "Customers" },
       ];
       if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "💰", label: "Costing" });
+        items.push({ path: "/costing-v2", icon: "💰", label: "Finances" });
       }
       items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
       return items;

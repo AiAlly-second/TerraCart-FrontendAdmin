@@ -15,6 +15,18 @@ import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 
+// Helper: get API base URL with protocol ensured
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+  // If URL doesn't start with http:// or https://, add http://
+  if (envUrl && !envUrl.match(/^https?:\/\//)) {
+    return `http://${envUrl}`;
+  }
+  return envUrl;
+};
+
+const nodeApi = getApiBaseUrl().replace(/\/$/, "");
+
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
 
@@ -623,7 +635,6 @@ const Orders = () => {
     }
   };
 
-
   const toggleExpand = (id) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -676,7 +687,9 @@ const Orders = () => {
               <span className="font-mono text-[10px] sm:text-xs text-gray-500 truncate max-w-[60px] sm:max-w-none">
                 {buildInvoiceId(order)}
               </span>
-              <span className="text-gray-900 font-medium text-xs sm:text-sm">{formattedTime}</span>
+              <span className="text-gray-900 font-medium text-xs sm:text-sm">
+                {formattedTime}
+              </span>
             </button>
             {expanded[order._id] && (
               <div className="mt-2 text-[10px] sm:text-xs text-gray-600 space-y-1">
@@ -720,12 +733,16 @@ const Orders = () => {
                   order.status
                 )}`}
               >
-                {getStatusIcon(order.status)} <span className="truncate">{order.status}</span>
+                {getStatusIcon(order.status)}{" "}
+                <span className="truncate">{order.status}</span>
               </span>
               {/* Sequential flow - show only next step + cancel option */}
               <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                 {(() => {
-                  const nextStatus = getNextStatus(order.status);
+                  const nextStatus = getNextStatus(
+                    order.status,
+                    order.serviceType
+                  );
                   const buttons = [];
 
                   // Show Accept button for Confirmed orders
@@ -1062,30 +1079,28 @@ const Orders = () => {
   const handleDelete = async (e, orderId) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    const { confirm } = await import('../utils/confirm');
+
+    const { confirm } = await import("../utils/confirm");
     const confirmed = await confirm(
       "Are you sure you want to PERMANENTLY DELETE this order?\n\nThis action cannot be undone.",
       {
-        title: 'Delete Order',
-        warningMessage: 'WARNING: PERMANENTLY DELETE',
+        title: "Delete Order",
+        warningMessage: "WARNING: PERMANENTLY DELETE",
         danger: true,
-        confirmText: 'Delete',
-        cancelText: 'Cancel'
+        confirmText: "Delete",
+        cancelText: "Cancel",
       }
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((order) => order._id !== orderId));
     } catch (err) {
       console.error("Delete failed:", err);
       const errorMessage =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to delete order";
+        err.response?.data?.message || err.message || "Failed to delete order";
       alert(errorMessage);
     }
   };
@@ -1288,7 +1303,6 @@ const Orders = () => {
       setCreateSubmitting(false);
     }
   };
-
 
   // Group orders by cart for franchise admin
   const ordersByCart = useMemo(() => {
@@ -1828,7 +1842,9 @@ const Orders = () => {
               </div>
               <div className="text-xs sm:text-sm truncate">All Dine-In</div>
             </div>
-            <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">📦</div>
+            <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">
+              📦
+            </div>
           </div>
         </button>
 
@@ -1852,10 +1868,14 @@ const Orders = () => {
           >
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <div className="text-lg sm:text-xl md:text-2xl font-bold">{count}</div>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold">
+                  {count}
+                </div>
                 <div className="text-xs sm:text-sm truncate">{status}</div>
               </div>
-              <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">{getStatusIcon(status)}</div>
+              <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">
+                {getStatusIcon(status)}
+              </div>
             </div>
           </button>
         ))}
@@ -1934,12 +1954,12 @@ const Orders = () => {
                               </th>
                             </tr>
                           </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {filteredCartOrders.map((order) =>
-                            renderOrderRow(order)
-                          )}
-                        </tbody>
-                      </table>
+                          <tbody className="divide-y divide-gray-200">
+                            {filteredCartOrders.map((order) =>
+                              renderOrderRow(order)
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
@@ -1993,13 +2013,10 @@ const Orders = () => {
       </div>
 
       {isModalOpen && (
-        <div
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[9999]"
-          style={{ padding: "1rem" }}
-        >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col m-4">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-              <h2 className="text-2xl font-bold text-gray-800">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[9999] p-3 sm:p-4 md:p-6">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col my-auto">
+            <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white z-10 flex-shrink-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
                 {currentOrder?.isNew ? "Add Order" : "Edit Order"}
               </h2>
               <button
@@ -2008,10 +2025,10 @@ const Orders = () => {
                   setCurrentOrder(null);
                   resetDraft();
                 }}
-                className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
                 aria-label="Close modal"
               >
-                ✕
+                ×
               </button>
             </div>
             <div className="overflow-y-auto flex-1 p-6">
@@ -2439,9 +2456,10 @@ const Orders = () => {
                                                     type="button"
                                                     onClick={async () => {
                                                       // CRITICAL: window.confirm is now async, must await it
-                                                      const confirmed = await window.confirm(
-                                                        `Cancel ${itemData.quantity}x ${itemData.name}?`
-                                                      );
+                                                      const confirmed =
+                                                        await window.confirm(
+                                                          `Cancel ${itemData.quantity}x ${itemData.name}?`
+                                                        );
                                                       if (confirmed) {
                                                         try {
                                                           await api.patch(
@@ -2551,9 +2569,10 @@ const Orders = () => {
                                                     type="button"
                                                     onClick={async () => {
                                                       // CRITICAL: window.confirm is now async, must await it
-                                                      const confirmed = await window.confirm(
-                                                        `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
-                                                      );
+                                                      const confirmed =
+                                                        await window.confirm(
+                                                          `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                        );
                                                       if (confirmed) {
                                                         try {
                                                           await api.patch(
@@ -2665,9 +2684,10 @@ const Orders = () => {
                                                   type="button"
                                                   onClick={async () => {
                                                     // CRITICAL: window.confirm is now async, must await it
-                                                    const confirmed = await window.confirm(
-                                                      `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
-                                                    );
+                                                    const confirmed =
+                                                      await window.confirm(
+                                                        `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                      );
                                                     if (confirmed) {
                                                       try {
                                                         await api.patch(

@@ -1053,16 +1053,16 @@ const RevenueHistory = () => {
 
       {/* ==================== DETAIL MODAL ==================== */}
       {selectedPeriod && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-[#e2c1ac] w-full max-w-5xl max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl border border-[#e2c1ac] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col my-auto">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-4 md:p-6 text-white">
+            <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-3 sm:p-4 md:p-6 text-white flex-shrink-0">
               <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold">
                     Revenue Details
                   </h2>
-                  <p className="text-white/80 text-sm md:text-base">
+                  <p className="text-white/80 text-xs sm:text-sm md:text-base mt-1">
                     {new Date(selectedPeriod.date).toLocaleDateString("en-IN", {
                       weekday: "long",
                       year: "numeric",
@@ -1073,14 +1073,15 @@ const RevenueHistory = () => {
                 </div>
                 <button
                   onClick={() => setSelectedPeriod(null)}
-                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                  className="text-white/80 hover:text-white text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                  aria-label="Close"
                 >
-                  <span className="text-2xl">×</span>
+                  ×
                 </button>
               </div>
             </div>
 
-            <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-6">
+            <div className="overflow-y-auto flex-1 p-4 sm:p-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
                 <div className="bg-white rounded-lg p-3 md:p-4 border border-[#e2c1ac] shadow-sm">

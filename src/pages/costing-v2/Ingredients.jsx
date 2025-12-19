@@ -6,11 +6,24 @@ import {
   deleteIngredient,
   getFIFOLayers,
 } from "../../services/costingV2Api";
-import { FaPlus, FaEdit, FaTrash, FaEye, FaBox, FaWarehouse, FaExclamationTriangle } from "react-icons/fa";
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaEye,
+  FaBox,
+  FaWarehouse,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
 import { confirm } from "../../utils/confirm";
+import { useAuth } from "../../context/AuthContext";
 
 const Ingredients = () => {
+  const { user } = useAuth();
+  const userRole = user?.role;
+  const isSuperAdmin = userRole === "super_admin";
+
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -54,6 +67,22 @@ const Ingredients = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Prevent duplicate global ingredients (by name) for super admin
+      if (
+        isSuperAdmin &&
+        !editing &&
+        formData.name &&
+        ingredients.some(
+          (ing) =>
+            ing.name.trim().toLowerCase() === formData.name.trim().toLowerCase()
+        )
+      ) {
+        alert(
+          "An ingredient with this name already exists in the global master. Please edit the existing ingredient instead of creating a duplicate."
+        );
+        return;
+      }
+
       if (editing) {
         await updateIngredient(editing._id, formData);
         alert("Ingredient updated successfully!");
@@ -76,7 +105,11 @@ const Ingredients = () => {
       });
       fetchIngredients();
     } catch (error) {
-      alert(`Failed to save ingredient: ${error.response?.data?.message || error.message}`);
+      alert(
+        `Failed to save ingredient: ${
+          error.response?.data?.message || error.message
+        }`
+      );
     }
   };
 
@@ -97,28 +130,32 @@ const Ingredients = () => {
   };
 
   const handleDelete = async (id, ingredientName) => {
-    const ingredient = ingredients.find(ing => ing._id === id);
-    const name = ingredient?.name || 'this ingredient';
-    
+    const ingredient = ingredients.find((ing) => ing._id === id);
+    const name = ingredient?.name || "this ingredient";
+
     const confirmed = await confirm(
       `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`,
       {
-        title: 'Delete Ingredient',
-        confirmText: 'Delete',
-        cancelText: 'Cancel',
+        title: "Delete Ingredient",
+        confirmText: "Delete",
+        cancelText: "Cancel",
         danger: true,
-        requireInput: false
+        requireInput: false,
       }
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       await deleteIngredient(id);
       alert(`Ingredient "${name}" deleted successfully!`);
       fetchIngredients();
     } catch (error) {
-      alert(`Failed to delete ingredient: ${error.response?.data?.message || error.message}`);
+      alert(
+        `Failed to delete ingredient: ${
+          error.response?.data?.message || error.message
+        }`
+      );
     }
   };
 
@@ -135,13 +172,17 @@ const Ingredients = () => {
     }
   };
 
-  const filteredIngredients = ingredients.filter(ing => {
-    const matchesSearch = ing.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredIngredients = ingredients.filter((ing) => {
+    const matchesSearch = ing.name
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
     const matchesCategory = !filterCategory || ing.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const categories = [...new Set(ingredients.map(ing => ing.category))].filter(Boolean);
+  const categories = [
+    ...new Set(ingredients.map((ing) => ing.category)),
+  ].filter(Boolean);
 
   if (loading) {
     return (
@@ -160,8 +201,14 @@ const Ingredients = () => {
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2">Ingredients</h1>
-            <p className="text-sm sm:text-base text-gray-600">Manage your inventory ingredients</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+              Ingredients
+            </h1>
+            <p className="text-sm sm:text-base text-gray-600">
+              {isSuperAdmin
+                ? "Define global ingredient master data for recipes. Inventory is managed by franchises."
+                : "Manage your inventory ingredients, stock and thresholds."}
+            </p>
           </div>
           <button
             onClick={() => {
@@ -202,8 +249,10 @@ const Ingredients = () => {
             className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm sm:text-base w-full sm:w-auto"
           >
             <option value="">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
             ))}
           </select>
         </div>
@@ -223,17 +272,25 @@ const Ingredients = () => {
             <p className="text-xs sm:text-sm opacity-90">Active</p>
             <FaBox className="text-lg sm:text-xl" />
           </div>
-          <p className="text-2xl sm:text-3xl font-bold">{ingredients.filter(i => i.isActive).length}</p>
-        </div>
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs sm:text-sm opacity-90">Low Stock</p>
-            <FaExclamationTriangle className="text-lg sm:text-xl" />
-          </div>
           <p className="text-2xl sm:text-3xl font-bold">
-            {ingredients.filter(i => i.qtyOnHand <= i.reorderLevel && i.isActive).length}
+            {ingredients.filter((i) => i.isActive).length}
           </p>
         </div>
+        {!isSuperAdmin && (
+          <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs sm:text-sm opacity-90">Low Stock</p>
+              <FaExclamationTriangle className="text-lg sm:text-xl" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-bold">
+              {
+                ingredients.filter(
+                  (i) => i.qtyOnHand <= i.reorderLevel && i.isActive
+                ).length
+              }
+            </p>
+          </div>
+        )}
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs sm:text-sm opacity-90">Categories</p>
@@ -257,13 +314,25 @@ const Ingredients = () => {
               className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100"
             >
               {/* Card Header */}
-              <div className={`p-4 sm:p-5 ${ing.isActive ? 'bg-gradient-to-r from-green-50 to-green-100' : 'bg-gradient-to-r from-gray-50 to-gray-100'}`}>
+              <div
+                className={`p-4 sm:p-5 ${
+                  ing.isActive
+                    ? "bg-gradient-to-r from-green-50 to-green-100"
+                    : "bg-gradient-to-r from-gray-50 to-gray-100"
+                }`}
+              >
                 <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-bold text-gray-800 text-base sm:text-lg truncate flex-1">{ing.name}</h3>
-                  <span className={`px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium ml-2 ${
-                    ing.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'
-                  }`}>
-                    {ing.isActive ? 'Active' : 'Inactive'}
+                  <h3 className="font-bold text-gray-800 text-base sm:text-lg truncate flex-1">
+                    {ing.name}
+                  </h3>
+                  <span
+                    className={`px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium ml-2 ${
+                      ing.isActive
+                        ? "bg-green-500 text-white"
+                        : "bg-gray-400 text-white"
+                    }`}
+                  >
+                    {ing.isActive ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -278,44 +347,64 @@ const Ingredients = () => {
 
               {/* Card Body */}
               <div className="p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">Quantity on Hand</span>
-                  <span className="font-bold text-sm sm:text-base text-gray-800">
-                    {formatUnit(ing.qtyOnHand, ing.uom)}
-                  </span>
-                </div>
-                {ing.qtyOnHand <= ing.reorderLevel && (
-                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-2">
-                    <FaExclamationTriangle className="text-red-600 text-xs" />
-                    <span className="text-red-700 text-xs font-medium">Low Stock Alert</span>
-                  </div>
+                {!isSuperAdmin && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        Quantity on Hand
+                      </span>
+                      <span className="font-bold text-sm sm:text-base text-gray-800">
+                        {formatUnit(ing.qtyOnHand, ing.uom)}
+                      </span>
+                    </div>
+                    {ing.qtyOnHand <= ing.reorderLevel && (
+                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-2">
+                        <FaExclamationTriangle className="text-red-600 text-xs" />
+                        <span className="text-red-700 text-xs font-medium">
+                          Low Stock Alert
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items_center justify-between">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        Reorder Level
+                      </span>
+                      <span className="text-sm sm:text-base text-gray-700">
+                        {formatUnit(ing.reorderLevel, ing.uom)}
+                      </span>
+                    </div>
+                  </>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">Reorder Level</span>
-                  <span className="text-sm sm:text-base text-gray-700">{formatUnit(ing.reorderLevel, ing.uom)}</span>
-                </div>
-                <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm text-gray-600">Unit</span>
-                  <span className="text-sm sm:text-base text-gray-700 font-medium">{ing.uom}</span>
-                </div>
-                <div className="flex items-center justify-between border-t pt-3">
-                  <span className="text-xs sm:text-sm text-gray-600">Cost/Unit</span>
-                  <span className="text-sm sm:text-base font-bold text-[#d86d2a]">
-                    ₹{ing.currentCostPerBaseUnit?.toFixed(2) || '0.00'}
+                  <span className="text-sm sm:text-base text-gray-700 font-medium">
+                    {ing.uom}
                   </span>
                 </div>
+                {!isSuperAdmin && (
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <span className="text-xs sm:text-sm text-gray-600">
+                      Cost/Unit
+                    </span>
+                    <span className="text-sm sm:text-base font-bold text-[#d86d2a]">
+                      ₹{ing.currentCostPerBaseUnit?.toFixed(2) || "0.00"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Card Footer */}
               <div className="px-4 sm:px-5 py-3 bg-gray-50 border-t flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleViewFIFO(ing)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="View FIFO Layers"
-                >
-                  <FaEye className="text-sm sm:text-base" />
-                </button>
+                {!isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleViewFIFO(ing)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="View FIFO Layers"
+                  >
+                    <FaEye className="text-sm sm:text-base" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleEdit(ing)}
@@ -347,26 +436,36 @@ const Ingredients = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white p-4 sm:p-6 rounded-t-2xl">
-              <h2 className="text-xl sm:text-2xl font-bold">{editing ? "Edit Ingredient" : "Add Ingredient"}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold">
+                {editing ? "Edit Ingredient" : "Add Ingredient"}
+              </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name *
+                </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category *
+                  </label>
                   <select
                     required
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   >
                     <optgroup label="Raw Ingredients">
@@ -374,18 +473,32 @@ const Ingredients = () => {
                       <option value="Dairy">Dairy</option>
                       <option value="Meat & Poultry">Meat & Poultry</option>
                       <option value="Grains & Staples">Grains & Staples</option>
-                      <option value="Spices & Seasoning">Spices & Seasoning</option>
-                      <option value="Cooking Oils & Ghee">Cooking Oils & Ghee</option>
-                      <option value="Bread, Buns & Rotis">Bread, Buns & Rotis</option>
-                      <option value="Snacks Ingredients">Snacks Ingredients</option>
+                      <option value="Spices & Seasoning">
+                        Spices & Seasoning
+                      </option>
+                      <option value="Cooking Oils & Ghee">
+                        Cooking Oils & Ghee
+                      </option>
+                      <option value="Bread, Buns & Rotis">
+                        Bread, Buns & Rotis
+                      </option>
+                      <option value="Snacks Ingredients">
+                        Snacks Ingredients
+                      </option>
                       <option value="Packaged Items">Packaged Items</option>
                       <option value="Beverages">Beverages</option>
                     </optgroup>
                     <optgroup label="Consumables & Non-Food">
-                      <option value="Tissue & Paper Products">Tissue & Paper Products</option>
-                      <option value="Packaging Materials">Packaging Materials</option>
+                      <option value="Tissue & Paper Products">
+                        Tissue & Paper Products
+                      </option>
+                      <option value="Packaging Materials">
+                        Packaging Materials
+                      </option>
                       <option value="Disposable Items">Disposable Items</option>
-                      <option value="Cleaning Supplies">Cleaning Supplies</option>
+                      <option value="Cleaning Supplies">
+                        Cleaning Supplies
+                      </option>
                       <option value="Safety & Hygiene">Safety & Hygiene</option>
                       <option value="Gas & Fuel">Gas & Fuel</option>
                     </optgroup>
@@ -397,30 +510,49 @@ const Ingredients = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Storage Location *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Storage Location *
+                  </label>
                   <select
                     required
                     value={formData.storageLocation}
-                    onChange={(e) => setFormData({ ...formData, storageLocation: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        storageLocation: e.target.value,
+                      })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   >
                     <option value="Dry Storage">Dry Storage</option>
                     <option value="Cold Storage">Cold Storage</option>
                     <option value="Frozen Storage">Frozen Storage</option>
-                    <option value="Vegetables Section">Vegetables Section</option>
+                    <option value="Vegetables Section">
+                      Vegetables Section
+                    </option>
                     <option value="Cleaning Supplies">Cleaning Supplies</option>
-                    <option value="Packaging Supplies">Packaging Supplies</option>
+                    <option value="Packaging Supplies">
+                      Packaging Supplies
+                    </option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">UOM *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    UOM *
+                  </label>
                   <select
                     required
                     value={formData.uom}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value, baseUnit: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        uom: e.target.value,
+                        baseUnit: e.target.value,
+                      })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   >
                     <option value="kg">kg</option>
@@ -434,25 +566,41 @@ const Ingredients = () => {
                     <option value="dozen">dozen</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Reorder Level</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.reorderLevel}
-                    onChange={(e) => setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
-                  />
-                </div>
+                {!isSuperAdmin && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reorder Level
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.reorderLevel}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          reorderLevel: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
+                    />
+                  </div>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Shelf time (Days)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Shelf time (Days)
+                </label>
                 <input
                   type="number"
                   min="0"
                   value={formData.shelfTimeDays}
-                  onChange={(e) => setFormData({ ...formData, shelfTimeDays: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      shelfTimeDays: parseInt(e.target.value),
+                    })
+                  }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                 />
               </div>
@@ -460,10 +608,14 @@ const Ingredients = () => {
                 <input
                   type="checkbox"
                   checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, isActive: e.target.checked })
+                  }
                   className="rounded border-gray-300 text-[#d86d2a] focus:ring-[#d86d2a]"
                 />
-                <label className="text-sm font-medium text-gray-700">Active</label>
+                <label className="text-sm font-medium text-gray-700">
+                  Active
+                </label>
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t">
                 <button
@@ -493,7 +645,9 @@ const Ingredients = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 sm:p-6 rounded-t-2xl flex justify-between items-center">
-              <h2 className="text-xl sm:text-2xl font-bold">FIFO Layers - {selectedIngredient?.name}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold">
+                FIFO Layers - {selectedIngredient?.name}
+              </h2>
               <button
                 onClick={() => setFifoModalOpen(false)}
                 className="text-white hover:text-gray-200 text-xl font-bold"
@@ -503,27 +657,49 @@ const Ingredients = () => {
             </div>
             <div className="p-4 sm:p-6">
               {fifoLayers.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No FIFO layers found</p>
+                <p className="text-gray-500 text-center py-8">
+                  No FIFO layers found
+                </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remaining</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Value</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Date
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Qty
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Remaining
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Unit Cost
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Total Value
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {fifoLayers.map((layer, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm">{new Date(layer.date).toLocaleDateString()}</td>
-                          <td className="px-4 py-3 text-sm">{formatUnit(layer.qty, layer.uom)}</td>
-                          <td className="px-4 py-3 text-sm">{formatUnit(layer.remainingQty, layer.uom)}</td>
-                          <td className="px-4 py-3 text-sm">₹{layer.unitCost.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm font-semibold">₹{(layer.remainingQty * layer.unitCost).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {new Date(layer.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {formatUnit(layer.qty, layer.uom)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {formatUnit(layer.remainingQty, layer.uom)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            ₹{layer.unitCost.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-semibold">
+                            ₹{(layer.remainingQty * layer.unitCost).toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -1355,12 +1355,14 @@ const Franchises = () => {
 
       {/* View Details Modal */}
       {viewDetails && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-white">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden my-auto flex flex-col">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 text-white flex-shrink-0">
               <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-lg font-bold">{viewDetails.name}</h2>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base sm:text-lg font-bold truncate">
+                    {viewDetails.name}
+                  </h2>
                   {viewDetails.franchiseCode && (
                     <span className="inline-block mt-1 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">
                       {viewDetails.franchiseCode}
@@ -1369,13 +1371,14 @@ const Franchises = () => {
                 </div>
                 <button
                   onClick={() => setViewDetails(null)}
-                  className="p-1 hover:bg-white/20 rounded"
+                  className="text-white/80 hover:text-white text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                  aria-label="Close"
                 >
-                  <FaTimes size={16} />
+                  ×
                 </button>
               </div>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-3 sm:p-4 space-y-3 overflow-y-auto flex-1">
               <div className="flex items-center gap-3 text-sm">
                 <FaEnvelope className="text-gray-400" size={14} />
                 <span className="text-gray-700">{viewDetails.email}</span>
@@ -1423,10 +1426,10 @@ const Franchises = () => {
 
       {/* Create/Edit Franchise Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="w-full max-w-xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden rounded-xl sm:rounded-2xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-hidden rounded-xl shadow-2xl bg-gradient-to-br from-[#fef4ec] via-white to-[#fde1c3] border border-[#f5d0a1] flex flex-col my-auto">
             {/* Modal header */}
-            <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-3 sm:px-5 py-3 sm:py-4 text-white flex justify-between items-center">
+            <div className="bg-gradient-to-r from-[#b45309] via-[#d97706] to-[#f97316] px-3 sm:px-5 py-3 sm:py-4 text-white flex justify-between items-center flex-shrink-0">
               <div className="min-w-0 flex-1">
                 <h2 className="text-base sm:text-lg font-bold tracking-wide truncate">
                   {editingFranchise ? "Edit Franchise" : "Create New Franchise"}
@@ -1447,9 +1450,10 @@ const Franchises = () => {
                     panCardExpiry: "",
                   });
                 }}
-                className="p-1 hover:bg-white/15 rounded-full transition-colors"
+                className="text-white/80 hover:text-white text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                aria-label="Close"
               >
-                <FaTimes size={16} />
+                ×
               </button>
             </div>
             {/* Error Message Display */}
@@ -1840,6 +1844,7 @@ const Franchises = () => {
             )}
             <form
               id="cart-form"
+              className="flex-1 overflow-y-auto"
               onSubmit={async (e) => {
                 e.preventDefault();
 

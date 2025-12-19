@@ -356,20 +356,20 @@ const Carts = () => {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         {!cart.isApproved ? (
                           <>
                             <button
                               onClick={() => handleApproveClick(cart.id)}
                               disabled={approvingId === cart.id}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md"
+                              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md text-sm sm:text-base"
                             >
                               Review & Approve
                             </button>
                             <button
                               onClick={() => handleReject(cart.id)}
                               disabled={approvingId === cart.id}
-                              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md"
+                              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md text-sm sm:text-base"
                             >
                               Reject
                             </button>
@@ -378,13 +378,13 @@ const Carts = () => {
                           <>
                             <button
                               onClick={() => navigate(`/carts/${cart.id}`)}
-                              className="flex-1 bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-md"
+                              className="flex-1 bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-md text-sm sm:text-base"
                             >
                               View Details
                             </button>
                             <button
                               onClick={() => navigate(`/carts/${cart.id}/edit`)}
-                              className="px-4 py-2 border border-[#e2c1ac] text-[#4a2e1f] hover:bg-[#fef4ec] font-semibold rounded-lg transition-colors"
+                              className="w-full sm:w-auto px-4 py-2 border border-[#e2c1ac] text-[#4a2e1f] hover:bg-[#fef4ec] font-semibold rounded-lg transition-colors text-sm sm:text-base"
                             >
                               Edit
                             </button>
@@ -497,20 +497,20 @@ const Carts = () => {
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 {!cart.isApproved ? (
                   <>
                     <button
                       onClick={() => handleApproveClick(cart.id)}
                       disabled={approvingId === cart.id}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md text-sm sm:text-base"
                     >
                       Review & Approve
                     </button>
                     <button
                       onClick={() => handleReject(cart.id)}
                       disabled={approvingId === cart.id}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md"
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-md text-sm sm:text-base"
                     >
                       Reject
                     </button>
@@ -519,13 +519,13 @@ const Carts = () => {
                   <>
                     <button
                       onClick={() => navigate(`/carts/${cart.id}`)}
-                      className="flex-1 bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-md"
+                      className="flex-1 bg-[#d86d2a] hover:bg-[#c75b1a] text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-md text-sm sm:text-base"
                     >
                       View Details
                     </button>
                     <button
                       onClick={() => navigate(`/carts/${cart.id}/edit`)}
-                      className="px-4 py-2 border border-[#e2c1ac] text-[#4a2e1f] hover:bg-[#fef4ec] font-semibold rounded-lg transition-colors"
+                      className="w-full sm:w-auto px-4 py-2 border border-[#e2c1ac] text-[#4a2e1f] hover:bg-[#fef4ec] font-semibold rounded-lg transition-colors text-sm sm:text-base"
                     >
                       Edit
                     </button>
@@ -567,10 +567,10 @@ const Carts = () => {
 
       {/* Approval Modal */}
       {approvalModal && approvalData && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-[#e2c1ac] p-6 flex justify-between items-center z-10">
-              <h2 className="text-2xl font-bold text-[#4a2e1f]">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto my-auto">
+            <div className="sticky top-0 bg-white border-b border-[#e2c1ac] p-4 sm:p-6 flex justify-between items-center z-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#4a2e1f]">
                 Review Cart Admin Details
               </h2>
               <button
@@ -578,7 +578,8 @@ const Carts = () => {
                   setApprovalModal(null);
                   setApprovalData(null);
                 }}
-                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1"
+                aria-label="Close"
               >
                 ×
               </button>
@@ -760,27 +761,27 @@ const Carts = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="sticky bottom-0 bg-white border-t border-[#e2c1ac] p-6 flex gap-4 justify-end">
+            <div className="sticky bottom-0 bg-white border-t border-[#e2c1ac] p-4 sm:p-6 flex flex-col sm:flex-row gap-2 sm:gap-4 justify-end">
               <button
                 onClick={() => {
                   setApprovalModal(null);
                   setApprovalData(null);
                 }}
-                className="px-6 py-2 border border-[#e2c1ac] text-[#4a2e1f] rounded-lg hover:bg-[#fef4ec] font-semibold transition-colors"
+                className="w-full sm:w-auto px-6 py-2.5 sm:py-2 border border-[#e2c1ac] text-[#4a2e1f] rounded-lg hover:bg-[#fef4ec] font-semibold transition-colors text-sm sm:text-base"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleReject(approvalModal)}
                 disabled={approvingId === approvalModal}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 text-sm sm:text-base"
               >
                 Reject
               </button>
               <button
                 onClick={handleApprove}
                 disabled={approvingId === approvalModal}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 text-sm sm:text-base"
               >
                 {approvingId === approvalModal
                   ? "Approving..."
