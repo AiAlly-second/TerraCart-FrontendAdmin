@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { AlertProvider } from "./context/AlertContext";
@@ -24,8 +24,10 @@ import MenuManager from "./pages/MenuManager";
 import Payments from "./pages/Payments";
 import Staff from "./pages/Staff";
 import EmployeeManagement from "./pages/EmployeeManagement";
-import AttendanceManagement from "./pages/AttendanceManagement";
 import TableDashboard from "./pages/TableDashboard";
+// Lazy load AttendanceManagement to avoid circular dependency issues
+import { lazy } from "react";
+const AttendanceManagement = lazy(() => import("./pages/AttendanceManagement"));
 import FeedbackManagement from "./pages/FeedbackManagement";
 import CustomerManagement from "./pages/CustomerManagement";
 import InventoryManagement from "./pages/InventoryManagement";
@@ -217,7 +219,15 @@ function App() {
                       <ProtectedRoute
                         allowedRoles={["admin", "franchise_admin"]}
                       >
-                        <AttendanceManagement />
+                        <Suspense
+                          fallback={
+                            <div className="flex items-center justify-center min-h-screen">
+                              <div className="text-lg">Loading...</div>
+                            </div>
+                          }
+                        >
+                          <AttendanceManagement />
+                        </Suspense>
                       </ProtectedRoute>
                     }
                   />
