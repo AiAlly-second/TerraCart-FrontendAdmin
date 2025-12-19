@@ -39,14 +39,16 @@ export default defineConfig({
               return `page-${pageName}`;
             }
           }
+          // Return undefined for other files (no chunk splitting)
+          return undefined;
         },
-        // Optimize chunk size
-        chunkSizeWarningLimit: 1000,
       },
     },
     // Optimize build performance
     target: "esnext",
     cssCodeSplit: true,
+    // Optimize chunk size warning limit
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 5174,
