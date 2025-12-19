@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import { getOutlets } from "../../services/costingV2Api";
 import { useAuth } from "../../context/AuthContext";
 
-const OutletFilter = ({ selectedOutlet, onOutletChange, label = "Filter by Kiosk" }) => {
+const OutletFilter = ({
+  selectedOutlet,
+  onOutletChange,
+  label = "Filter by Kiosk",
+}) => {
   const { user } = useAuth();
   const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -35,12 +39,14 @@ const OutletFilter = ({ selectedOutlet, onOutletChange, label = "Filter by Kiosk
 
   // Franchise admin and super admin - show outlet filter
   return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <div className="mb-3 sm:mb-4 w-full sm:w-auto min-w-[150px] sm:min-w-[200px]">
+      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
       <select
         value={selectedOutlet || ""}
         onChange={(e) => onOutletChange(e.target.value || null)}
-        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
         disabled={loading}
       >
         <option value="">All Kiosks</option>
@@ -55,7 +61,3 @@ const OutletFilter = ({ selectedOutlet, onOutletChange, label = "Filter by Kiosk
 };
 
 export default OutletFilter;
-
-
-
-

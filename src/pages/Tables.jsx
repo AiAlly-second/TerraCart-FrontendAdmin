@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import api from "../utils/api";
 import { createSocketConnection } from "../utils/socket";
+import { withCancellation } from "../utils/requestManager";
 
 const STATUS_MAP = {
   AVAILABLE: {
@@ -281,7 +282,9 @@ const Tables = () => {
           setCartId(userId);
         }
       } catch (e) {
-        console.warn("[Tables] Could not decode token for socket room:", e);
+        if (import.meta.env.DEV) {
+          console.warn("[Tables] Could not decode token for socket room:", e);
+        }
       }
     }
 
@@ -348,12 +351,20 @@ const Tables = () => {
 
   const handleUpdateStatus = async (id, status) => {
     setBusyId(id);
+    const requestType = `table-status-${id}`;
+
     try {
-      const { data } = await api.patch(`/tables/${id}`, { status });
+      const { data } = await withCancellation(requestType, async (signal) => {
+        return await api.patch(`/tables/${id}`, { status }, { signal });
+      });
       setTables((prev) =>
         prev.map((t) => (t._id === id ? { ...t, ...data } : t))
       );
     } catch (err) {
+      // Ignore AbortError (request was cancelled)
+      if (err.name === "AbortError" || err.code === "ERR_CANCELED") {
+        return;
+      }
       alert(err.response?.data?.message || "Failed to update table");
       fetchTables();
     } finally {

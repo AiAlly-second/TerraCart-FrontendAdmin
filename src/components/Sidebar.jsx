@@ -75,7 +75,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/franchises", icon: "🏢", label: "Franchises" },
-        { path: "/carts", icon: "🛒", label: "Cart Management" },
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
         { path: "/users", icon: "👥", label: "Administrative Users" },
         { path: "/employees", icon: "👤", label: "Employee Management" },

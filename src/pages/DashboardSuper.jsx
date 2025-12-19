@@ -59,11 +59,17 @@ const Dashboard = () => {
   const updateRevenue = (ordersData) => {
     // Super admin aggregates revenue from ACTIVE franchises only
     // ordersData should already be filtered to active franchises from fetchDashboardData
-    const paidOrders = ordersData.filter((order) => order.status === "Paid");
+    if (!Array.isArray(ordersData)) {
+      return;
+    }
+    const paidOrders = (ordersData || []).filter(
+      (order) => order && order.status === "Paid"
+    );
 
     // Calculate total revenue from paid orders (already filtered to active franchises)
     const totalRevenue = paidOrders.reduce((sum, order) => {
       if (
+        !order ||
         !order.kotLines ||
         !Array.isArray(order.kotLines) ||
         order.kotLines.length === 0
@@ -239,7 +245,9 @@ const Dashboard = () => {
         const usersResponse = await api.get("/users");
         users = usersResponse.data || [];
       } catch (err) {
-        console.error("Error fetching users:", err);
+        if (import.meta.env.DEV) {
+          console.error("Error fetching users:", err);
+        }
         // Continue even if users fetch fails
       }
 
@@ -251,7 +259,7 @@ const Dashboard = () => {
 
       // Get active franchise IDs for filtering orders
       const activeFranchiseIdsSet = new Set(
-        activeFranchises.map((f) => f._id.toString())
+        activeFranchises.filter((f) => f && f._id).map((f) => f._id.toString())
       );
       setActiveFranchiseIds(activeFranchiseIdsSet);
 
@@ -286,7 +294,8 @@ const Dashboard = () => {
         fetchedOrders = ordersResponse.data || [];
 
         // Filter orders to only include those from ACTIVE franchises
-        const activeOrders = fetchedOrders.filter((order) => {
+        const activeOrders = (fetchedOrders || []).filter((order) => {
+          if (!order) return false;
           const franchiseId =
             order.franchiseId?.toString() || order.franchiseId;
           return franchiseId && activeFranchiseIdsSet.has(franchiseId);

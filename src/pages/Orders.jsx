@@ -13,6 +13,7 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { withCancellation } from "../utils/requestManager";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 
 // Helper: get API base URL with protocol ensured
@@ -640,13 +641,25 @@ const Orders = () => {
   };
 
   const changeStatus = async (orderId, newStatus) => {
+    const requestType = `order-status-${orderId}`;
+
     try {
-      const response = await api.patch(`/orders/${orderId}/status`, {
-        status: newStatus,
+      const response = await withCancellation(requestType, async (signal) => {
+        return await api.patch(
+          `/orders/${orderId}/status`,
+          { status: newStatus },
+          { signal }
+        );
       });
       upsertOrder(response.data);
     } catch (e) {
-      console.error("Status change failed:", e);
+      // Ignore AbortError (request was cancelled)
+      if (e.name === "AbortError") {
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error("Status change failed:", e);
+      }
       const errorMessage =
         e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);
@@ -682,23 +695,25 @@ const Orders = () => {
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
             <button
               onClick={() => toggleExpand(order._id)}
-              className="flex items-center gap-1 sm:gap-2"
+              className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 md:gap-2 w-full sm:w-auto"
             >
-              <span className="font-mono text-[10px] sm:text-xs text-gray-500 truncate max-w-[60px] sm:max-w-none">
+              <span className="font-mono text-[9px] sm:text-[10px] md:text-xs text-gray-500 truncate">
                 {buildInvoiceId(order)}
               </span>
-              <span className="text-gray-900 font-medium text-xs sm:text-sm">
+              <span className="text-gray-900 font-medium text-[10px] sm:text-xs md:text-sm">
                 {formattedTime}
               </span>
             </button>
             {expanded[order._id] && (
-              <div className="mt-2 text-[10px] sm:text-xs text-gray-600 space-y-1">
-                <div>Created: {new Date(order.createdAt).toLocaleString()}</div>
-                <div>
+              <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
+                <div className="truncate">
+                  Created: {new Date(order.createdAt).toLocaleString()}
+                </div>
+                <div className="truncate">
                   Invoice:{" "}
                   <span className="font-mono">{buildInvoiceId(order)}</span>
                 </div>
-                <div>
+                <div className="truncate">
                   Service Type:{" "}
                   <span className="font-semibold text-gray-700">
                     {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
@@ -708,9 +723,13 @@ const Orders = () => {
             )}
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{formattedDate}</span>
-              <span className="text-xs text-gray-500">{formattedTime}</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium text-gray-900 text-xs sm:text-sm">
+                {formattedDate}
+              </span>
+              <span className="text-[10px] sm:text-xs text-gray-500">
+                {formattedTime}
+              </span>
             </div>
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
@@ -719,21 +738,23 @@ const Orders = () => {
                 src={tableIcon}
                 alt="Table"
                 title="Table"
-                className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 object-contain"
+                className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 object-contain flex-shrink-0"
               />
-              <span className="text-sm sm:text-base md:text-lg font-semibold text-gray-700">
+              <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
                 {order.tableNumber || "N/A"}
               </span>
             </div>
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
-            <div className="flex flex-col gap-1 sm:gap-2">
+            <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
               <span
-                className={`px-2 sm:px-3 py-0.5 sm:py-1 inline-flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm font-medium rounded-full border ${getStatusClass(
+                className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${getStatusClass(
                   order.status
                 )}`}
               >
-                {getStatusIcon(order.status)}{" "}
+                <span className="text-[10px] sm:text-xs md:text-sm">
+                  {getStatusIcon(order.status)}
+                </span>
                 <span className="truncate">{order.status}</span>
               </span>
               {/* Sequential flow - show only next step + cancel option */}
@@ -752,9 +773,9 @@ const Orders = () => {
                         key="accept"
                         type="button"
                         onClick={() => tryAccept(order)}
-                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50"
+                        className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                       >
-                        ✅ Accept
+                        ✅ <span className="hidden xs:inline">Accept</span>
                       </button>
                     );
                   }
@@ -766,7 +787,7 @@ const Orders = () => {
                         key="next"
                         type="button"
                         onClick={() => changeStatus(order._id, nextStatus)}
-                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50"
+                        className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50 truncate max-w-[80px] sm:max-w-none"
                       >
                         {nextStatus}
                       </button>
@@ -779,9 +800,9 @@ const Orders = () => {
                         key="return"
                         type="button"
                         onClick={() => changeStatus(order._id, "Returned")}
-                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50"
+                        className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                       >
-                        ↩️ Return
+                        ↩️ <span className="hidden xs:inline">Return</span>
                       </button>
                     );
                   } else if (canCancel(order.status)) {
@@ -790,9 +811,9 @@ const Orders = () => {
                         key="cancel"
                         type="button"
                         onClick={() => changeStatus(order._id, "Cancelled")}
-                        className="px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50"
+                        className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                       >
-                        ❌ Cancel
+                        ❌ <span className="hidden xs:inline">Cancel</span>
                       </button>
                     );
                   }
@@ -803,40 +824,42 @@ const Orders = () => {
             </div>
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
-            <div className="flex flex-wrap gap-1 sm:gap-2">
+            <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
               {/* Modify Order button - only show for unpaid orders */}
               {order.status !== "Paid" &&
                 order.status !== "Cancelled" &&
                 order.status !== "Returned" && (
                   <button
                     onClick={() => handleEdit(order)}
-                    className="px-3 py-1 text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium"
+                    className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium whitespace-nowrap"
                     title="Add more items to this order"
                   >
-                    ➕ Modify Order
+                    ➕ <span className="hidden sm:inline">Modify</span>
                   </button>
                 )}
               <button
                 onClick={() => handleEdit(order)}
-                className="px-3 py-1 text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50"
+                className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50 whitespace-nowrap"
+                title="Edit order"
               >
-                ✏️ Edit
+                ✏️ <span className="hidden sm:inline">Edit</span>
               </button>
               {user?.role !== "admin" && (
                 <button
                   type="button"
                   onClick={(e) => handleDelete(e, order._id)}
-                  className="px-3 py-1 text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50"
+                  className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50 whitespace-nowrap"
+                  title="Delete order"
                 >
-                  🗑️ Delete
+                  🗑️ <span className="hidden sm:inline">Delete</span>
                 </button>
               )}
               <button
                 onClick={() => printOrderInvoice(order)}
-                className="px-3 py-1 rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100"
+                className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100 whitespace-nowrap"
                 title="Print invoice"
               >
-                🖨️ Print
+                🖨️ <span className="hidden sm:inline">Print</span>
               </button>
             </div>
           </td>
@@ -844,24 +867,24 @@ const Orders = () => {
 
         {expanded[order._id] && (
           <tr className="bg-gray-50">
-            <td colSpan="5" className="px-6 py-4">
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <td colSpan="5" className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   {Array.isArray(order.kotLines) &&
                     order.kotLines.map((kot, idx) => (
                       <div
                         key={idx}
-                        className="bg-white p-4 rounded-lg border shadow-sm"
+                        className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm"
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-lg font-semibold text-gray-800">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                          <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-800">
                             KOT #{idx + 1}
                           </div>
-                          <div className="text-lg font-bold text-green-600">
+                          <div className="text-sm sm:text-base md:text-lg font-bold text-green-600">
                             ₹{(kot.totalAmount || kot.total || 0).toString()}
                           </div>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 sm:space-y-2">
                           {(kot.items || []).map((item, i) => {
                             if (item.returned) return null; // Skip returned items
                             const isTakeaway =
@@ -869,11 +892,11 @@ const Orders = () => {
                             return (
                               <div
                                 key={i}
-                                className="flex justify-between items-center py-1 border-b"
+                                className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 py-1 border-b"
                               >
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                                   <span
-                                    className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                                    className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex-shrink-0 ${
                                       isTakeaway
                                         ? "bg-green-100 text-green-800"
                                         : "bg-orange-100 text-orange-800"
@@ -881,16 +904,16 @@ const Orders = () => {
                                   >
                                     {item.quantity}x
                                   </span>
-                                  <span className="text-gray-800">
+                                  <span className="text-xs sm:text-sm text-gray-800 truncate min-w-0 flex-1">
                                     {item.name}
                                     {isTakeaway && (
-                                      <span className="ml-2 text-green-600 font-semibold text-xs">
+                                      <span className="ml-1 sm:ml-2 text-green-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
                                         📦 TAKEAWAY
                                       </span>
                                     )}
                                   </span>
                                 </div>
-                                <span className="text-gray-600">
+                                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap flex-shrink-0 sm:ml-2">
                                   ₹
                                   {(
                                     ((item.price || 0) / 100) *
@@ -1098,7 +1121,9 @@ const Orders = () => {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((order) => order._id !== orderId));
     } catch (err) {
-      console.error("Delete failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("Delete failed:", err);
+      }
       const errorMessage =
         err.response?.data?.message || err.message || "Failed to delete order";
       alert(errorMessage);
@@ -1116,8 +1141,13 @@ const Orders = () => {
       // Update status if changed
       const newStatus = form.status.value;
       if (newStatus !== currentOrder.status) {
-        await api.patch(`/orders/${currentOrder._id}/status`, {
-          status: newStatus,
+        const requestType = `order-status-${currentOrder._id}`;
+        await withCancellation(requestType, async (signal) => {
+          return await api.patch(
+            `/orders/${currentOrder._id}/status`,
+            { status: newStatus },
+            { signal }
+          );
         });
       }
 
@@ -1420,7 +1450,10 @@ const Orders = () => {
       );
 
       // Fetch all unknown carts in parallel
-      const fetchPromises = cartIdsToFetch.map(async (cartId) => {
+      const fetchPromises = (
+        Array.isArray(cartIdsToFetch) ? cartIdsToFetch : []
+      ).map(async (cartId) => {
+        if (!cartId) return null;
         try {
           const cartRes = await api.get(`/users/${cartId}`);
           if (cartRes.data) {
@@ -1436,16 +1469,20 @@ const Orders = () => {
               ...prev,
               [cartId]: cartInfo,
             }));
-            console.log(
-              `[Orders] Fetched cart info for ${cartId}: ${cartInfo.cartName}`
-            );
+            if (import.meta.env.DEV) {
+              console.log(
+                `[Orders] Fetched cart info for ${cartId}: ${cartInfo.cartName}`
+              );
+            }
             return { cartId, cartInfo };
           }
         } catch (err) {
-          console.warn(
-            `[Orders] Failed to fetch cart info for ${cartId}:`,
-            err.message
-          );
+          if (import.meta.env.DEV) {
+            console.warn(
+              `[Orders] Failed to fetch cart info for ${cartId}:`,
+              err.message
+            );
+          }
           // Mark as truly unknown
           setUnknownCarts((prev) => ({
             ...prev,
@@ -1765,84 +1802,88 @@ const Orders = () => {
   }, []);
 
   return (
-    <div className="p-3 sm:p-4 md:p-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
-            {filterCafeId && cafeInfo
-              ? `Orders - ${cafeInfo.cafeName || cafeInfo.name}`
-              : "Orders"}
-          </h1>
-          {filterCafeId && (
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">
-              Filtered by specific cart
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+    <div className="p-2 sm:p-3 md:p-4 lg:p-6">
+      <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 truncate">
+              {filterCafeId && cafeInfo
+                ? `Orders - ${cafeInfo.cafeName || cafeInfo.name}`
+                : "Orders"}
+            </h1>
+            {filterCafeId && (
+              <p className="text-[10px] sm:text-xs md:text-sm text-gray-600 mt-0.5 sm:mt-1 truncate">
+                Filtered by specific cart
+              </p>
+            )}
+          </div>
           {filterCafeId && (
             <button
               onClick={() => (window.location.href = "/orders")}
-              className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-xs sm:text-sm whitespace-nowrap"
+              className="px-2 sm:px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-xs sm:text-sm whitespace-nowrap w-full sm:w-auto"
             >
               View All Carts
             </button>
           )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
           <input
             type="text"
             placeholder="Order ID / token"
             value={searchOrderId}
             onChange={(e) => setSearchOrderId(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-48"
+            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
           />
           <input
             type="text"
             placeholder="Table number"
             value={searchTable}
             onChange={(e) => setSearchTable(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-40"
+            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
           />
           <input
             type="text"
             placeholder="Invoice ID"
             value={searchInvoice}
             onChange={(e) => setSearchInvoice(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-52"
+            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
           />
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 sm:flex-initial sm:w-40"
+            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
             title="Filter by order date"
           />
           <button
             onClick={handleAdd}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg shadow text-sm sm:text-base whitespace-nowrap"
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1.5 sm:py-2 px-2 sm:px-3 md:px-4 rounded-lg shadow text-xs sm:text-sm md:text-base whitespace-nowrap w-full"
           >
             + Add Order
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
         {/* Clickable Status Summary Tiles to filter orders */}
         {/* All tile */}
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none ${
+          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
             filterStatus === "all" ? "ring-2 ring-blue-400" : ""
           }`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
             <div className="min-w-0 flex-1">
-              <div className="text-lg sm:text-xl md:text-2xl font-bold">
+              <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
                 {orders.filter((o) => o.serviceType === "DINE_IN").length}
               </div>
-              <div className="text-xs sm:text-sm truncate">All Dine-In</div>
+              <div className="text-[10px] sm:text-xs md:text-sm truncate">
+                All Dine-In
+              </div>
             </div>
-            <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">
+            <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
               📦
             </div>
           </div>
@@ -1862,18 +1903,20 @@ const Orders = () => {
             onClick={() => setFilterStatus(status)}
             className={`p-2 sm:p-3 md:p-4 rounded-lg border ${getStatusClass(
               status
-            )} shadow-sm text-left transition outline-none ${
+            )} shadow-sm text-left transition outline-none hover:shadow-md ${
               filterStatus === status ? "ring-2 ring-blue-400" : ""
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
               <div className="min-w-0 flex-1">
-                <div className="text-lg sm:text-xl md:text-2xl font-bold">
+                <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
                   {count}
                 </div>
-                <div className="text-xs sm:text-sm truncate">{status}</div>
+                <div className="text-[10px] sm:text-xs md:text-sm truncate">
+                  {status}
+                </div>
               </div>
-              <div className="text-lg sm:text-xl md:text-2xl flex-shrink-0 ml-2">
+              <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
                 {getStatusIcon(status)}
               </div>
             </div>
@@ -1901,22 +1944,22 @@ const Orders = () => {
                   <div key={cartId} className="border-b border-gray-300">
                     {/* Cart Header */}
                     <div
-                      className="bg-gray-100 hover:bg-gray-200 cursor-pointer px-6 py-4 flex items-center justify-between"
+                      className="bg-gray-100 hover:bg-gray-200 cursor-pointer px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3"
                       onClick={() => toggleCartExpand(cartId)}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <span className="text-base sm:text-lg flex-shrink-0">
                           {isExpanded ? "▼" : "▶"}
                         </span>
                         {cartCode && (
-                          <span className="px-2 py-1 text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded">
+                          <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded whitespace-nowrap flex-shrink-0">
                             {cartCode}
                           </span>
                         )}
-                        <h3 className="text-lg font-bold text-gray-800">
+                        <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-800 truncate min-w-0 flex-1">
                           {cartName}
                         </h3>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
                           ({filteredCartOrders.length} orders)
                         </span>
                       </div>
@@ -1925,7 +1968,7 @@ const Orders = () => {
                           e.stopPropagation();
                           navigate(`/orders?cafeId=${cartId}`);
                         }}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-500 text-white rounded hover:bg-blue-600 whitespace-nowrap flex-shrink-0"
                       >
                         View All
                       </button>
@@ -2013,10 +2056,10 @@ const Orders = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[9999] p-3 sm:p-4 md:p-6">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[9999] p-2 sm:p-3 md:p-4 lg:p-6">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col my-auto">
-            <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white z-10 flex-shrink-0">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+            <div className="flex justify-between items-center p-3 sm:p-4 md:p-6 border-b border-gray-200 sticky top-0 bg-white z-10 flex-shrink-0">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 truncate">
                 {currentOrder?.isNew ? "Add Order" : "Edit Order"}
               </h2>
               <button
@@ -2025,13 +2068,13 @@ const Orders = () => {
                   setCurrentOrder(null);
                   resetDraft();
                 }}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                className="text-gray-400 hover:text-gray-600 text-xl sm:text-2xl leading-none p-1 ml-2 flex-shrink-0"
                 aria-label="Close modal"
               >
                 ×
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 p-6">
+            <div className="overflow-y-auto flex-1 p-3 sm:p-4 md:p-6">
               <form
                 id="order-form"
                 onSubmit={
@@ -2153,23 +2196,23 @@ const Orders = () => {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                      <div className="xl:col-span-2 space-y-4">
-                        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+                      <div className="xl:col-span-2 space-y-3 sm:space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-2 sm:gap-3">
                           <input
                             type="text"
                             value={draftSearch}
                             onChange={(e) => setDraftSearch(e.target.value)}
                             placeholder="Search menu items..."
-                            className="flex-1 shadow-sm border border-gray-300 rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                            className="flex-1 shadow-sm border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           />
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
                             {menuCategories.map((category) => (
                               <button
                                 type="button"
                                 key={category.id}
                                 onClick={() => setDraftCategory(category.id)}
-                                className={`px-3 py-1 text-sm rounded-full border transition ${
+                                className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
                                   draftCategory === category.id
                                     ? "bg-blue-600 text-white border-blue-600 shadow"
                                     : "border-gray-300 text-gray-600 hover:border-blue-400"
@@ -2180,7 +2223,7 @@ const Orders = () => {
                             ))}
                           </div>
                         </div>
-                        <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y">
+                        <div className="border border-gray-200 rounded-lg max-h-60 sm:max-h-80 overflow-y-auto divide-y">
                           {menuLoading ? (
                             <div className="p-4 text-sm text-gray-500">
                               Loading menu…
@@ -2201,29 +2244,29 @@ const Orders = () => {
                               return (
                                 <div
                                   key={getItemKey(item)}
-                                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50"
+                                  className="flex items-center justify-between gap-2 sm:gap-3 md:gap-4 px-2 sm:px-3 md:px-4 py-2 sm:py-3 hover:bg-gray-50"
                                 >
-                                  <div>
-                                    <div className="text-sm font-semibold text-gray-800">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
                                       {item.name}
                                     </div>
-                                    <div className="text-xs text-gray-500">
+                                    <div className="text-[10px] sm:text-xs text-gray-500 truncate">
                                       ₹{formatMoney(item.price)} ·{" "}
                                       {item.category}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                                     <button
                                       type="button"
                                       onClick={() =>
                                         adjustItemQuantity(item, -1)
                                       }
                                       disabled={quantity === 0}
-                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm"
                                     >
                                       -
                                     </button>
-                                    <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                    <span className="w-6 sm:w-7 md:w-8 text-center text-xs sm:text-sm font-semibold text-gray-700">
                                       {quantity}
                                     </span>
                                     <button
@@ -2231,7 +2274,7 @@ const Orders = () => {
                                       onClick={() =>
                                         adjustItemQuantity(item, 1)
                                       }
-                                      className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                      className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 text-xs sm:text-sm"
                                     >
                                       +
                                     </button>
@@ -2242,9 +2285,9 @@ const Orders = () => {
                           )}
                         </div>
                       </div>
-                      <div className="space-y-4">
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                          <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                      <div className="space-y-3 sm:space-y-4">
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">
                             Order Summary
                           </h3>
                           <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
@@ -2302,16 +2345,16 @@ const Orders = () => {
                 ) : (
                   <div className="space-y-6">
                     {/* Order Info Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <label
                           htmlFor="tableNumber"
-                          className="block text-gray-700 text-sm font-bold mb-2 flex items-center gap-2"
+                          className="block text-gray-700 text-xs sm:text-sm font-bold mb-1 sm:mb-2 flex items-center gap-1.5 sm:gap-2"
                         >
                           <img
                             src={tableIcon}
                             alt="Table"
-                            className="w-5 h-5 object-contain"
+                            className="w-4 h-4 sm:w-5 sm:h-5 object-contain"
                           />
                           Table Number
                         </label>
@@ -2320,14 +2363,14 @@ const Orders = () => {
                           id="tableNumber"
                           name="tableNumber"
                           defaultValue={currentOrder?.tableNumber || ""}
-                          className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                          className="shadow-sm border border-gray-300 rounded-lg w-full py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           readOnly
                         />
                       </div>
                       <div>
                         <label
                           htmlFor="status"
-                          className="block text-gray-700 text-sm font-bold mb-2"
+                          className="block text-gray-700 text-xs sm:text-sm font-bold mb-1 sm:mb-2"
                         >
                           Order Status{" "}
                           {getStatusIcon(currentOrder?.status || "Pending")}
@@ -2336,7 +2379,7 @@ const Orders = () => {
                           id="status"
                           name="status"
                           defaultValue={currentOrder?.status || "Pending"}
-                          className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                          className="shadow-sm border border-gray-300 rounded-lg w-full py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         >
                           <option value="Pending">⏳ Pending</option>
                           <option value="Confirmed">👨‍🍳 Confirmed</option>
@@ -2352,8 +2395,8 @@ const Orders = () => {
 
                     {/* Current Order Items Section */}
                     {currentOrder && !currentOrder.isNew && (
-                      <div className="border-t pt-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                      <div className="border-t pt-4 sm:pt-6">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">
                           Current Order Items
                         </h3>
                         {(() => {
@@ -2396,175 +2439,301 @@ const Orders = () => {
 
                           return (
                             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                              <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                  <thead className="bg-gray-50">
-                                    <tr>
-                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Item
-                                      </th>
-                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Quantity
-                                      </th>
-                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Price
-                                      </th>
-                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Total
-                                      </th>
-                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Action
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="bg-white divide-y divide-gray-200">
-                                    {allItems.map((itemData, idx) => (
-                                      <tr
-                                        key={`${itemData.kotIndex}-${itemData.itemIndex}-${idx}`}
-                                        className={`hover:bg-gray-50 ${
-                                          itemData.isTakeaway
-                                            ? "bg-green-50"
-                                            : ""
-                                        }`}
-                                      >
-                                        <td className="px-4 py-3 text-sm text-gray-800">
-                                          {itemData.name}
-                                          {itemData.isTakeaway && (
-                                            <span className="ml-2 text-green-600 font-semibold text-xs">
-                                              📦 TAKEAWAY
+                              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                                <div className="inline-block min-w-full align-middle">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                          Item
+                                        </th>
+                                        <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                          Qty
+                                        </th>
+                                        <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                          Price
+                                        </th>
+                                        <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                          Total
+                                        </th>
+                                        <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                          Action
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {allItems.map((itemData, idx) => (
+                                        <tr
+                                          key={`${itemData.kotIndex}-${itemData.itemIndex}-${idx}`}
+                                          className={`hover:bg-gray-50 ${
+                                            itemData.isTakeaway
+                                              ? "bg-green-50"
+                                              : ""
+                                          }`}
+                                        >
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-800 min-w-[120px]">
+                                            <span className="truncate block">
+                                              {itemData.name}
                                             </span>
-                                          )}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">
-                                          {itemData.quantity}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">
-                                          ₹{formatMoney(itemData.price)}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm font-semibold text-gray-800">
-                                          ₹
-                                          {formatMoney(
-                                            itemData.price * itemData.quantity
-                                          )}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                          {canModify && (
-                                            <div className="flex flex-wrap gap-2">
-                                              {!isPaid ? (
-                                                <>
-                                                  <button
-                                                    type="button"
-                                                    onClick={async () => {
-                                                      // CRITICAL: window.confirm is now async, must await it
-                                                      const confirmed =
-                                                        await window.confirm(
-                                                          `Cancel ${itemData.quantity}x ${itemData.name}?`
-                                                        );
-                                                      if (confirmed) {
-                                                        try {
-                                                          await api.patch(
-                                                            `/orders/${currentOrder._id}/return-items`,
-                                                            {
-                                                              itemIds: [
-                                                                {
-                                                                  kotIndex:
-                                                                    itemData.kotIndex,
-                                                                  itemIndex:
-                                                                    itemData.itemIndex,
-                                                                },
-                                                              ],
-                                                            }
+                                            {itemData.isTakeaway && (
+                                              <span className="ml-1 sm:ml-2 text-green-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
+                                                📦 TAKEAWAY
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                                            {itemData.quantity}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                                            ₹{formatMoney(itemData.price)}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                                            ₹
+                                            {formatMoney(
+                                              itemData.price * itemData.quantity
+                                            )}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm">
+                                            {canModify && (
+                                              <div className="flex flex-wrap gap-1 sm:gap-2">
+                                                {!isPaid ? (
+                                                  <>
+                                                    <button
+                                                      type="button"
+                                                      onClick={async () => {
+                                                        // CRITICAL: window.confirm is now async, must await it
+                                                        const confirmed =
+                                                          await window.confirm(
+                                                            `Cancel ${itemData.quantity}x ${itemData.name}?`
                                                           );
-                                                          alert(
-                                                            "Item cancelled successfully!"
-                                                          );
-                                                          // Refresh order data
-                                                          const res =
-                                                            await api.get(
-                                                              `/orders/${currentOrder._id}`
+                                                        if (confirmed) {
+                                                          try {
+                                                            await api.patch(
+                                                              `/orders/${currentOrder._id}/return-items`,
+                                                              {
+                                                                itemIds: [
+                                                                  {
+                                                                    kotIndex:
+                                                                      itemData.kotIndex,
+                                                                    itemIndex:
+                                                                      itemData.itemIndex,
+                                                                  },
+                                                                ],
+                                                              }
                                                             );
-                                                          setCurrentOrder(
-                                                            res.data
-                                                          );
-                                                          // Refresh orders list
-                                                          const ordersRes =
-                                                            await api.get(
-                                                              "/orders"
+                                                            alert(
+                                                              "Item cancelled successfully!"
                                                             );
-                                                          const allOrders =
-                                                            Array.isArray(
-                                                              ordersRes.data
-                                                            )
-                                                              ? ordersRes.data
-                                                              : [];
-                                                          let dineInOrders =
-                                                            allOrders.filter(
-                                                              (o) =>
-                                                                o.serviceType ===
-                                                                "DINE_IN"
+                                                            // Refresh order data
+                                                            const res =
+                                                              await api.get(
+                                                                `/orders/${currentOrder._id}`
+                                                              );
+                                                            setCurrentOrder(
+                                                              res.data
                                                             );
-                                                          if (filterCafeId) {
-                                                            dineInOrders =
-                                                              dineInOrders.filter(
-                                                                (order) => {
-                                                                  let orderCafeId =
-                                                                    order.cafeId;
-                                                                  if (
-                                                                    orderCafeId &&
-                                                                    typeof orderCafeId ===
-                                                                      "object"
-                                                                  ) {
-                                                                    orderCafeId =
-                                                                      orderCafeId._id ||
-                                                                      orderCafeId;
-                                                                  }
-                                                                  if (
-                                                                    !orderCafeId &&
-                                                                    order.table &&
-                                                                    order.table
-                                                                      .cafeId
-                                                                  ) {
-                                                                    orderCafeId =
-                                                                      order
-                                                                        .table
-                                                                        .cafeId;
+                                                            // Refresh orders list
+                                                            const ordersRes =
+                                                              await api.get(
+                                                                "/orders"
+                                                              );
+                                                            const allOrders =
+                                                              Array.isArray(
+                                                                ordersRes.data
+                                                              )
+                                                                ? ordersRes.data
+                                                                : [];
+                                                            let dineInOrders =
+                                                              allOrders.filter(
+                                                                (o) =>
+                                                                  o.serviceType ===
+                                                                  "DINE_IN"
+                                                              );
+                                                            if (filterCafeId) {
+                                                              dineInOrders =
+                                                                dineInOrders.filter(
+                                                                  (order) => {
+                                                                    let orderCafeId =
+                                                                      order.cafeId;
                                                                     if (
+                                                                      orderCafeId &&
                                                                       typeof orderCafeId ===
-                                                                      "object"
+                                                                        "object"
                                                                     ) {
                                                                       orderCafeId =
                                                                         orderCafeId._id ||
                                                                         orderCafeId;
                                                                     }
+                                                                    if (
+                                                                      !orderCafeId &&
+                                                                      order.table &&
+                                                                      order
+                                                                        .table
+                                                                        .cafeId
+                                                                    ) {
+                                                                      orderCafeId =
+                                                                        order
+                                                                          .table
+                                                                          .cafeId;
+                                                                      if (
+                                                                        typeof orderCafeId ===
+                                                                        "object"
+                                                                      ) {
+                                                                        orderCafeId =
+                                                                          orderCafeId._id ||
+                                                                          orderCafeId;
+                                                                      }
+                                                                    }
+                                                                    return (
+                                                                      orderCafeId &&
+                                                                      orderCafeId.toString() ===
+                                                                        filterCafeId
+                                                                    );
                                                                   }
-                                                                  return (
-                                                                    orderCafeId &&
-                                                                    orderCafeId.toString() ===
-                                                                      filterCafeId
-                                                                  );
-                                                                }
-                                                              );
+                                                                );
+                                                            }
+                                                            setOrders(
+                                                              dineInOrders
+                                                            );
+                                                          } catch (err) {
+                                                            console.error(
+                                                              "Failed to cancel item:",
+                                                              err
+                                                            );
+                                                            const errorMessage =
+                                                              err.response?.data
+                                                                ?.message ||
+                                                              "Failed to cancel item. Please try again.";
+                                                            alert(errorMessage);
                                                           }
-                                                          setOrders(
-                                                            dineInOrders
-                                                          );
-                                                        } catch (err) {
-                                                          console.error(
-                                                            "Failed to cancel item:",
-                                                            err
-                                                          );
-                                                          const errorMessage =
-                                                            err.response?.data
-                                                              ?.message ||
-                                                            "Failed to cancel item. Please try again.";
-                                                          alert(errorMessage);
                                                         }
-                                                      }
-                                                    }}
-                                                    className="px-3 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 font-medium"
-                                                  >
-                                                    ❌ Cancel
-                                                  </button>
+                                                      }}
+                                                      className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 font-medium whitespace-nowrap"
+                                                    >
+                                                      ❌{" "}
+                                                      <span className="hidden sm:inline">
+                                                        Cancel
+                                                      </span>
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={async () => {
+                                                        // CRITICAL: window.confirm is now async, must await it
+                                                        const confirmed =
+                                                          await window.confirm(
+                                                            `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                          );
+                                                        if (confirmed) {
+                                                          try {
+                                                            await api.patch(
+                                                              `/orders/${currentOrder._id}/convert-to-takeaway`,
+                                                              {
+                                                                itemIds: [
+                                                                  {
+                                                                    kotIndex:
+                                                                      itemData.kotIndex,
+                                                                    itemIndex:
+                                                                      itemData.itemIndex,
+                                                                  },
+                                                                ],
+                                                              }
+                                                            );
+                                                            alert(
+                                                              "Item marked as takeaway in bill. Order remains as dine-in."
+                                                            );
+                                                            // Refresh order data
+                                                            const res =
+                                                              await api.get(
+                                                                `/orders/${currentOrder._id}`
+                                                              );
+                                                            setCurrentOrder(
+                                                              res.data
+                                                            );
+                                                            // Refresh orders list
+                                                            const ordersRes =
+                                                              await api.get(
+                                                                "/orders"
+                                                              );
+                                                            const allOrders =
+                                                              Array.isArray(
+                                                                ordersRes.data
+                                                              )
+                                                                ? ordersRes.data
+                                                                : [];
+                                                            let dineInOrders =
+                                                              allOrders.filter(
+                                                                (o) =>
+                                                                  o.serviceType ===
+                                                                  "DINE_IN"
+                                                              );
+                                                            if (filterCafeId) {
+                                                              dineInOrders =
+                                                                dineInOrders.filter(
+                                                                  (order) => {
+                                                                    let orderCafeId =
+                                                                      order.cafeId;
+                                                                    if (
+                                                                      orderCafeId &&
+                                                                      typeof orderCafeId ===
+                                                                        "object"
+                                                                    ) {
+                                                                      orderCafeId =
+                                                                        orderCafeId._id ||
+                                                                        orderCafeId;
+                                                                    }
+                                                                    if (
+                                                                      !orderCafeId &&
+                                                                      order.table &&
+                                                                      order
+                                                                        .table
+                                                                        .cafeId
+                                                                    ) {
+                                                                      orderCafeId =
+                                                                        order
+                                                                          .table
+                                                                          .cafeId;
+                                                                      if (
+                                                                        typeof orderCafeId ===
+                                                                        "object"
+                                                                      ) {
+                                                                        orderCafeId =
+                                                                          orderCafeId._id ||
+                                                                          orderCafeId;
+                                                                      }
+                                                                    }
+                                                                    return (
+                                                                      orderCafeId &&
+                                                                      orderCafeId.toString() ===
+                                                                        filterCafeId
+                                                                    );
+                                                                  }
+                                                                );
+                                                            }
+                                                            setOrders(
+                                                              dineInOrders
+                                                            );
+                                                          } catch (err) {
+                                                            console.error(
+                                                              "Failed to convert item to takeaway:",
+                                                              err
+                                                            );
+                                                            const errorMessage =
+                                                              err.response?.data
+                                                                ?.message ||
+                                                              "Failed to convert item to takeaway. Please try again.";
+                                                            alert(errorMessage);
+                                                          }
+                                                        }
+                                                      }}
+                                                      className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium whitespace-nowrap"
+                                                    >
+                                                      📦{" "}
+                                                      <span className="hidden sm:inline">
+                                                        Takeaway
+                                                      </span>
+                                                    </button>
+                                                  </>
+                                                ) : (
                                                   <button
                                                     type="button"
                                                     onClick={async () => {
@@ -2589,7 +2758,7 @@ const Orders = () => {
                                                             }
                                                           );
                                                           alert(
-                                                            "Item marked as takeaway in bill. Order remains as dine-in."
+                                                            "Item converted to takeaway successfully!"
                                                           );
                                                           // Refresh order data
                                                           const res =
@@ -2674,143 +2843,35 @@ const Orders = () => {
                                                         }
                                                       }
                                                     }}
-                                                    className="px-3 py-1 text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium"
+                                                    className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium whitespace-nowrap"
                                                   >
-                                                    📦 Takeaway
+                                                    📦{" "}
+                                                    <span className="hidden sm:inline">
+                                                      Takeaway
+                                                    </span>
                                                   </button>
-                                                </>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  onClick={async () => {
-                                                    // CRITICAL: window.confirm is now async, must await it
-                                                    const confirmed =
-                                                      await window.confirm(
-                                                        `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
-                                                      );
-                                                    if (confirmed) {
-                                                      try {
-                                                        await api.patch(
-                                                          `/orders/${currentOrder._id}/convert-to-takeaway`,
-                                                          {
-                                                            itemIds: [
-                                                              {
-                                                                kotIndex:
-                                                                  itemData.kotIndex,
-                                                                itemIndex:
-                                                                  itemData.itemIndex,
-                                                              },
-                                                            ],
-                                                          }
-                                                        );
-                                                        alert(
-                                                          "Item converted to takeaway successfully!"
-                                                        );
-                                                        // Refresh order data
-                                                        const res =
-                                                          await api.get(
-                                                            `/orders/${currentOrder._id}`
-                                                          );
-                                                        setCurrentOrder(
-                                                          res.data
-                                                        );
-                                                        // Refresh orders list
-                                                        const ordersRes =
-                                                          await api.get(
-                                                            "/orders"
-                                                          );
-                                                        const allOrders =
-                                                          Array.isArray(
-                                                            ordersRes.data
-                                                          )
-                                                            ? ordersRes.data
-                                                            : [];
-                                                        let dineInOrders =
-                                                          allOrders.filter(
-                                                            (o) =>
-                                                              o.serviceType ===
-                                                              "DINE_IN"
-                                                          );
-                                                        if (filterCafeId) {
-                                                          dineInOrders =
-                                                            dineInOrders.filter(
-                                                              (order) => {
-                                                                let orderCafeId =
-                                                                  order.cafeId;
-                                                                if (
-                                                                  orderCafeId &&
-                                                                  typeof orderCafeId ===
-                                                                    "object"
-                                                                ) {
-                                                                  orderCafeId =
-                                                                    orderCafeId._id ||
-                                                                    orderCafeId;
-                                                                }
-                                                                if (
-                                                                  !orderCafeId &&
-                                                                  order.table &&
-                                                                  order.table
-                                                                    .cafeId
-                                                                ) {
-                                                                  orderCafeId =
-                                                                    order.table
-                                                                      .cafeId;
-                                                                  if (
-                                                                    typeof orderCafeId ===
-                                                                    "object"
-                                                                  ) {
-                                                                    orderCafeId =
-                                                                      orderCafeId._id ||
-                                                                      orderCafeId;
-                                                                  }
-                                                                }
-                                                                return (
-                                                                  orderCafeId &&
-                                                                  orderCafeId.toString() ===
-                                                                    filterCafeId
-                                                                );
-                                                              }
-                                                            );
-                                                        }
-                                                        setOrders(dineInOrders);
-                                                      } catch (err) {
-                                                        console.error(
-                                                          "Failed to convert item to takeaway:",
-                                                          err
-                                                        );
-                                                        const errorMessage =
-                                                          err.response?.data
-                                                            ?.message ||
-                                                          "Failed to convert item to takeaway. Please try again.";
-                                                        alert(errorMessage);
-                                                      }
-                                                    }
-                                                  }}
-                                                  className="px-3 py-1 text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium"
-                                                >
-                                                  📦 Takeaway
-                                                </button>
-                                              )}
-                                            </div>
-                                          )}
-                                          {!canModify && (
-                                            <span className="text-xs text-gray-400 italic">
-                                              {currentOrder.status ===
-                                              "Cancelled"
-                                                ? "Cancelled"
-                                                : currentOrder.status ===
-                                                  "Returned"
-                                                ? "Returned"
-                                                : "N/A"}
-                                            </span>
-                                          )}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                                )}
+                                              </div>
+                                            )}
+                                            {!canModify && (
+                                              <span className="text-xs text-gray-400 italic">
+                                                {currentOrder.status ===
+                                                "Cancelled"
+                                                  ? "Cancelled"
+                                                  : currentOrder.status ===
+                                                    "Returned"
+                                                  ? "Returned"
+                                                  : "N/A"}
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
-                              <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                              <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200">
                                 <p className="text-xs text-gray-600">
                                   {!isPaid ? (
                                     <>
@@ -2834,8 +2895,8 @@ const Orders = () => {
                     )}
 
                     {/* Add Items Section */}
-                    <div className="border-t pt-6">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    <div className="border-t pt-4 sm:pt-6">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">
                         Add Items to Order
                       </h3>
                       {currentOrder?.status === "Paid" ? (
@@ -2873,17 +2934,17 @@ const Orders = () => {
                           </p>
                         </div>
                       )}
-                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                        <div className="xl:col-span-2 space-y-4">
-                          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+                        <div className="xl:col-span-2 space-y-3 sm:space-y-4">
+                          <div className="flex flex-col lg:flex-row lg:items-center gap-2 sm:gap-3">
                             <input
                               type="text"
                               value={draftSearch}
                               onChange={(e) => setDraftSearch(e.target.value)}
                               placeholder="Search menu items..."
-                              className="flex-1 shadow-sm border border-gray-300 rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                              className="flex-1 shadow-sm border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                             />
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5 sm:gap-2">
                               {menuCategories.length > 0 ? (
                                 menuCategories.map((category) => (
                                   <button
@@ -2892,7 +2953,7 @@ const Orders = () => {
                                     onClick={() =>
                                       setDraftCategory(category.id)
                                     }
-                                    className={`px-3 py-1 text-sm rounded-full border transition ${
+                                    className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
                                       draftCategory === category.id
                                         ? "bg-blue-600 text-white border-blue-600 shadow"
                                         : "border-gray-300 text-gray-600 hover:border-blue-400"
@@ -2902,13 +2963,13 @@ const Orders = () => {
                                   </button>
                                 ))
                               ) : (
-                                <span className="text-xs text-gray-500 px-2">
+                                <span className="text-[10px] sm:text-xs text-gray-500 px-2">
                                   No categories available
                                 </span>
                               )}
                             </div>
                           </div>
-                          <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y">
+                          <div className="border border-gray-200 rounded-lg max-h-60 sm:max-h-80 overflow-y-auto divide-y">
                             {menuLoading ? (
                               <div className="p-4 text-sm text-gray-500">
                                 Loading menu…
@@ -2952,18 +3013,18 @@ const Orders = () => {
                                 return (
                                   <div
                                     key={getItemKey(item)}
-                                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50"
+                                    className="flex items-center justify-between gap-2 sm:gap-3 md:gap-4 px-2 sm:px-3 md:px-4 py-2 sm:py-3 hover:bg-gray-50"
                                   >
-                                    <div>
-                                      <div className="text-sm font-semibold text-gray-800">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
                                         {item.name}
                                       </div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-[10px] sm:text-xs text-gray-500 truncate">
                                         ₹{formatMoney(item.price)} ·{" "}
                                         {item.category}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -2976,11 +3037,11 @@ const Orders = () => {
                                             "Cancelled" ||
                                           currentOrder?.status === "Returned"
                                         }
-                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm"
                                       >
                                         -
                                       </button>
-                                      <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                      <span className="w-6 sm:w-7 md:w-8 text-center text-xs sm:text-sm font-semibold text-gray-700">
                                         {quantity}
                                       </span>
                                       <button
@@ -2994,7 +3055,7 @@ const Orders = () => {
                                             "Cancelled" ||
                                           currentOrder?.status === "Returned"
                                         }
-                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm"
                                       >
                                         +
                                       </button>
@@ -3005,36 +3066,36 @@ const Orders = () => {
                             )}
                           </div>
                         </div>
-                        <div className="space-y-4">
-                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                        <div className="space-y-3 sm:space-y-4">
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">
                               New Items Summary
                             </h3>
                             {currentOrder?.status === "Paid" ||
                             currentOrder?.status === "Cancelled" ||
                             currentOrder?.status === "Returned" ? (
-                              <p className="text-sm text-red-600 font-medium">
+                              <p className="text-xs sm:text-sm text-red-600 font-medium">
                                 ⚠️ Cannot add items to{" "}
                                 {currentOrder?.status.toLowerCase()} orders.
                                 Items can only be added to unpaid orders.
                               </p>
                             ) : draftItemsArray.length === 0 ? (
-                              <p className="text-sm text-gray-500">
+                              <p className="text-xs sm:text-sm text-gray-500">
                                 No new items selected. Select items from the
                                 menu to add them to this order.
                               </p>
                             ) : (
                               <>
-                                <div className="space-y-2 text-sm text-gray-700 mb-4">
+                                <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-700 mb-3 sm:mb-4">
                                   {draftItemsArray.map((entry) => (
                                     <div
                                       key={entry.id}
-                                      className="flex justify-between items-center"
+                                      className="flex justify-between items-center gap-2"
                                     >
-                                      <span>
+                                      <span className="truncate min-w-0 flex-1">
                                         {entry.name} × {entry.quantity}
                                       </span>
-                                      <span>
+                                      <span className="whitespace-nowrap flex-shrink-0">
                                         ₹
                                         {formatMoney(
                                           entry.price * entry.quantity
@@ -3043,7 +3104,7 @@ const Orders = () => {
                                     </div>
                                   ))}
                                 </div>
-                                <div className="mt-4 space-y-1 text-sm text-gray-600 border-t border-gray-300 pt-3">
+                                <div className="mt-3 sm:mt-4 space-y-1 text-xs sm:text-sm text-gray-600 border-t border-gray-300 pt-2 sm:pt-3">
                                   <div className="flex justify-between">
                                     <span>Subtotal</span>
                                     <span>
@@ -3054,7 +3115,7 @@ const Orders = () => {
                                     <span>GST (5%)</span>
                                     <span>₹{formatMoney(draftTotals.gst)}</span>
                                   </div>
-                                  <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
+                                  <div className="flex justify-between font-semibold text-gray-800 pt-1.5 sm:pt-2 border-t border-gray-200">
                                     <span>Total</span>
                                     <span>
                                       ₹{formatMoney(draftTotals.total)}
@@ -3071,8 +3132,8 @@ const Orders = () => {
                 )}
               </form>
             </div>
-            <div className="p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
-              <div className="flex items-center justify-end gap-3">
+            <div className="p-3 sm:p-4 md:p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -3080,7 +3141,7 @@ const Orders = () => {
                     setCurrentOrder(null);
                     resetDraft();
                   }}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg border border-gray-300"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg border border-gray-300 text-xs sm:text-sm md:text-base w-full sm:w-auto"
                 >
                   Cancel
                 </button>
@@ -3088,7 +3149,7 @@ const Orders = () => {
                   type="submit"
                   form="order-form"
                   disabled={currentOrder?.isNew ? createSubmitting : false}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-lg"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-xs sm:text-sm md:text-base w-full sm:w-auto"
                 >
                   {currentOrder?.isNew
                     ? createSubmitting

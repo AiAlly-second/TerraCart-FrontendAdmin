@@ -364,49 +364,51 @@ const RevenueHistory = () => {
   return (
     <div className="space-y-4 md:space-y-6 pb-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#4a2e1f] flex items-center">
-            <FaChartLine className="mr-3 text-[#d86d2a]" />
-            Revenue History
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#4a2e1f] flex items-center flex-wrap">
+            <FaChartLine className="mr-2 sm:mr-3 text-[#d86d2a] flex-shrink-0" />
+            <span className="break-words">Revenue History</span>
           </h1>
-          <p className="text-[#6b4423] mt-2 text-sm md:text-base">
+          <p className="text-[#6b4423] mt-1 sm:mt-2 text-xs sm:text-sm md:text-base">
             Hierarchical revenue tracking: Global → Franchise → Cart
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <button
             onClick={fetchData}
-            className="flex items-center px-4 py-2 bg-white text-[#4a2e1f] rounded-lg hover:bg-[#fef4ec] border border-[#e2c1ac] transition-colors shadow-sm"
+            className="flex items-center justify-center px-3 sm:px-4 py-2 text-sm sm:text-base bg-white text-[#4a2e1f] rounded-lg hover:bg-[#fef4ec] border border-[#e2c1ac] transition-colors shadow-sm whitespace-nowrap"
           >
-            <FaSync className="mr-2" />
-            Refresh
+            <FaSync className="mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="hidden sm:inline">Refresh</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
           <button
             onClick={exportHistory}
-            className="flex items-center px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors shadow-md"
+            className="flex items-center justify-center px-3 sm:px-4 py-2 text-sm sm:text-base bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors shadow-md whitespace-nowrap"
           >
-            <FaDownload className="mr-2" />
-            Export
+            <FaDownload className="mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="hidden sm:inline">Export</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
 
       {/* Period Type Toggle */}
-      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex gap-3">
+      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex gap-2 sm:gap-3">
             <button
               onClick={() => setPeriodType("daily")}
-              className="px-4 md:px-6 py-2 rounded-lg font-medium transition-colors bg-[#d86d2a] text-white shadow-md"
+              className="px-3 sm:px-4 md:px-6 py-2 text-xs sm:text-sm md:text-base rounded-lg font-medium transition-colors bg-[#d86d2a] text-white shadow-md whitespace-nowrap"
             >
               Daily Revenue
             </button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setViewMode("hierarchy")}
-              className={`px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 viewMode === "hierarchy"
                   ? "bg-[#4a2e1f] text-white shadow-md"
                   : "bg-[#fef4ec] text-[#4a2e1f] hover:bg-[#f5e3d5] border border-[#e2c1ac]"
@@ -416,7 +418,7 @@ const RevenueHistory = () => {
             </button>
             <button
               onClick={() => setViewMode("table")}
-              className={`px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 viewMode === "table"
                   ? "bg-[#4a2e1f] text-white shadow-md"
                   : "bg-[#fef4ec] text-[#4a2e1f] hover:bg-[#f5e3d5] border border-[#e2c1ac]"
@@ -442,36 +444,36 @@ const RevenueHistory = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-6">
-          <div className="bg-white/15 rounded-lg p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-xs md:text-sm mb-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-6 mt-4 md:mt-6">
+          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
+            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
               Total Revenue
             </p>
-            <p className="text-xl md:text-3xl font-bold">
+            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold break-words">
               {formatCurrency(currentRevenue?.totalRevenue)}
             </p>
           </div>
-          <div className="bg-white/15 rounded-lg p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-xs md:text-sm mb-1">
+          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
+            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
               Total Orders
             </p>
-            <p className="text-xl md:text-3xl font-bold">
+            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
               {currentRevenue?.totalOrders || 0}
             </p>
           </div>
-          <div className="bg-white/15 rounded-lg p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-xs md:text-sm mb-1">
+          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
+            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
               Active Franchises
             </p>
-            <p className="text-xl md:text-3xl font-bold">
+            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
               {currentRevenue?.franchiseRevenue?.length || 0}
             </p>
           </div>
-          <div className="bg-white/15 rounded-lg p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-xs md:text-sm mb-1">
+          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
+            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
               Active Carts
             </p>
-            <p className="text-xl md:text-3xl font-bold">
+            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
               {currentRevenue?.cartRevenue?.length || 0}
             </p>
           </div>
@@ -517,188 +519,204 @@ const RevenueHistory = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Parent Franchise
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Orders
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Revenue
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    % of Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {!currentRevenue?.franchiseRevenue ||
-                currentRevenue.franchiseRevenue.length === 0 ? (
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="w-full min-w-[640px]">
+                <thead className="bg-gray-50">
                   <tr>
-                    <td
-                      colSpan="7"
-                      className="px-6 py-12 text-center text-gray-500"
-                    >
-                      <FaChartBar className="mx-auto text-4xl mb-4 opacity-50" />
-                      <p>No revenue data available</p>
-                    </td>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      #
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Type
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                      Name
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                      Parent Franchise
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Orders
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Revenue
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      % of Total
+                    </th>
                   </tr>
-                ) : (
-                  <>
-                    {/* Franchise Rows */}
-                    {currentRevenue.franchiseRevenue
-                      .sort((a, b) => b.revenue - a.revenue)
-                      .map((franchise, index) => {
-                        const cafes = getCafesForFranchise(
-                          franchise.franchiseId
-                        );
-                        const franchiseOrders = cafes.reduce(
-                          (sum, c) => sum + (c.orderCount || 0),
-                          0
-                        );
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {!currentRevenue?.franchiseRevenue ||
+                  currentRevenue.franchiseRevenue.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="7"
+                        className="px-6 py-12 text-center text-gray-500"
+                      >
+                        <FaChartBar className="mx-auto text-4xl mb-4 opacity-50" />
+                        <p>No revenue data available</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {/* Franchise Rows */}
+                      {currentRevenue.franchiseRevenue
+                        .sort((a, b) => b.revenue - a.revenue)
+                        .map((franchise, index) => {
+                          const cafes = getCafesForFranchise(
+                            franchise.franchiseId
+                          );
+                          const franchiseOrders = cafes.reduce(
+                            (sum, c) => sum + (c.orderCount || 0),
+                            0
+                          );
 
-                        return (
-                          <React.Fragment key={franchise.franchiseId}>
-                            {/* Franchise Row */}
-                            <tr className="bg-[#fef4ec] hover:bg-[#f5e3d5] transition-colors border-b border-[#e2c1ac]">
-                              <td className="px-4 py-3 text-sm font-bold text-[#4a2e1f]">
-                                {index + 1}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#4a2e1f] text-white">
-                                  <FaBuilding className="mr-1" /> Franchise
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm font-semibold text-[#4a2e1f]">
-                                {franchise.franchiseName}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-[#6b4423]">
-                                —
-                              </td>
-                              <td className="px-4 py-3 text-sm font-medium text-[#4a2e1f]">
-                                {franchiseOrders}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-bold text-[#d86d2a]">
-                                {formatCurrency(franchise.revenue)}
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center">
-                                  <div className="w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden mr-2">
-                                    <div
-                                      className="h-full bg-[#d86d2a] rounded-full"
-                                      style={{
-                                        width: `${calculatePercentage(
-                                          franchise.revenue,
-                                          currentRevenue.totalRevenue
-                                        )}%`,
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="text-xs text-[#6b4423] font-medium">
-                                    {calculatePercentage(
-                                      franchise.revenue,
-                                      currentRevenue.totalRevenue
-                                    )}
-                                    %
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {/* Cart Rows under this Franchise */}
-                            {cafes
-                              .sort((a, b) => b.revenue - a.revenue)
-                              .map((cafe, cafeIndex) => (
-                                <tr
-                                  key={cafe.cartId}
-                                  className="hover:bg-[#fef4ec] transition-colors"
-                                >
-                                  <td className="px-4 py-3 text-sm text-[#6b4423] pl-8">
-                                    {index + 1}.{cafeIndex + 1}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#d86d2a] text-white">
-                                      <FaStore className="mr-1" /> Cart
+                          return (
+                            <React.Fragment key={franchise.franchiseId}>
+                              {/* Franchise Row */}
+                              <tr className="bg-[#fef4ec] hover:bg-[#f5e3d5] transition-colors border-b border-[#e2c1ac]">
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-[#4a2e1f] whitespace-nowrap">
+                                  {index + 1}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3">
+                                  <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-[#4a2e1f] text-white whitespace-nowrap">
+                                    <FaBuilding className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />{" "}
+                                    <span className="hidden sm:inline">
+                                      Franchise
                                     </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-[#4a2e1f] pl-8">
-                                    {cafe.cartName || cafe.cafeName}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-[#6b4423]">
+                                    <span className="sm:hidden">F</span>
+                                  </span>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-[#4a2e1f] min-w-[120px]">
+                                  <span className="truncate block">
                                     {franchise.franchiseName}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-[#4a2e1f]">
-                                    {cafe.orderCount || 0}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-[#d86d2a]">
-                                    {formatCurrency(cafe.revenue)}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center">
-                                      <div className="w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden mr-2">
-                                        <div
-                                          className="h-full bg-[#d86d2a] rounded-full"
-                                          style={{
-                                            width: `${calculatePercentage(
-                                              cafe.revenue,
-                                              currentRevenue.totalRevenue
-                                            )}%`,
-                                          }}
-                                        />
-                                      </div>
-                                      <span className="text-xs text-[#6b4423]">
-                                        {calculatePercentage(
-                                          cafe.revenue,
-                                          currentRevenue.totalRevenue
-                                        )}
-                                        %
-                                      </span>
+                                  </span>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#6b4423] whitespace-nowrap">
+                                  —
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-[#4a2e1f] whitespace-nowrap">
+                                  {franchiseOrders}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-[#d86d2a] whitespace-nowrap">
+                                  {formatCurrency(franchise.revenue)}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3">
+                                  <div className="flex items-center gap-1 sm:gap-2">
+                                    <div className="w-12 sm:w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden flex-shrink-0">
+                                      <div
+                                        className="h-full bg-[#d86d2a] rounded-full"
+                                        style={{
+                                          width: `${calculatePercentage(
+                                            franchise.revenue,
+                                            currentRevenue.totalRevenue
+                                          )}%`,
+                                        }}
+                                      />
                                     </div>
-                                  </td>
-                                </tr>
-                              ))}
-                          </React.Fragment>
-                        );
-                      })}
-                  </>
+                                    <span className="text-[10px] sm:text-xs text-[#6b4423] font-medium whitespace-nowrap">
+                                      {calculatePercentage(
+                                        franchise.revenue,
+                                        currentRevenue.totalRevenue
+                                      )}
+                                      %
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Cart Rows under this Franchise */}
+                              {cafes
+                                .sort((a, b) => b.revenue - a.revenue)
+                                .map((cafe, cafeIndex) => (
+                                  <tr
+                                    key={cafe.cartId}
+                                    className="hover:bg-[#fef4ec] transition-colors"
+                                  >
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#6b4423] pl-4 sm:pl-8 whitespace-nowrap">
+                                      {index + 1}.{cafeIndex + 1}
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-[#d86d2a] text-white whitespace-nowrap">
+                                        <FaStore className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />{" "}
+                                        <span className="hidden sm:inline">
+                                          Cart
+                                        </span>
+                                        <span className="sm:hidden">C</span>
+                                      </span>
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#4a2e1f] pl-4 sm:pl-8 min-w-[120px]">
+                                      <span className="truncate block">
+                                        {cafe.cartName || cafe.cafeName}
+                                      </span>
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#6b4423] min-w-[120px]">
+                                      <span className="truncate block">
+                                        {franchise.franchiseName}
+                                      </span>
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#4a2e1f] whitespace-nowrap">
+                                      {cafe.orderCount || 0}
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-[#d86d2a] whitespace-nowrap">
+                                      {formatCurrency(cafe.revenue)}
+                                    </td>
+                                    <td className="px-2 sm:px-4 py-2 sm:py-3">
+                                      <div className="flex items-center gap-1 sm:gap-2">
+                                        <div className="w-12 sm:w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden flex-shrink-0">
+                                          <div
+                                            className="h-full bg-[#d86d2a] rounded-full"
+                                            style={{
+                                              width: `${calculatePercentage(
+                                                cafe.revenue,
+                                                currentRevenue.totalRevenue
+                                              )}%`,
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="text-[10px] sm:text-xs text-[#6b4423] whitespace-nowrap">
+                                          {calculatePercentage(
+                                            cafe.revenue,
+                                            currentRevenue.totalRevenue
+                                          )}
+                                          %
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </React.Fragment>
+                          );
+                        })}
+                    </>
+                  )}
+                </tbody>
+                {/* Table Footer with Totals */}
+                {currentRevenue?.franchiseRevenue?.length > 0 && (
+                  <tfoot className="bg-[#4a2e1f] border-t-2 border-[#6b4423]">
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-white"
+                      >
+                        GRAND TOTAL
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-white whitespace-nowrap">
+                        {currentRevenue?.totalOrders || 0}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-white whitespace-nowrap">
+                        {formatCurrency(currentRevenue?.totalRevenue)}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-white whitespace-nowrap">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
                 )}
-              </tbody>
-              {/* Table Footer with Totals */}
-              {currentRevenue?.franchiseRevenue?.length > 0 && (
-                <tfoot className="bg-[#4a2e1f] border-t-2 border-[#6b4423]">
-                  <tr>
-                    <td
-                      colSpan="4"
-                      className="px-4 py-3 text-sm font-bold text-white"
-                    >
-                      GRAND TOTAL
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-white">
-                      {currentRevenue?.totalOrders || 0}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-white">
-                      {formatCurrency(currentRevenue?.totalRevenue)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-white">
-                      100%
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -795,9 +813,9 @@ const RevenueHistory = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between md:justify-end space-x-4 md:space-x-6">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:justify-end gap-2 sm:gap-4 md:gap-6 mt-2 sm:mt-0">
                             {/* Progress Bar */}
-                            <div className="hidden md:block w-32">
+                            <div className="hidden sm:block w-full sm:w-32">
                               <div className="h-2 bg-[#e2c1ac] rounded-full overflow-hidden">
                                 <div
                                   className="h-full bg-[#d86d2a] rounded-full transition-all duration-500"
@@ -809,8 +827,8 @@ const RevenueHistory = () => {
                               </p>
                             </div>
 
-                            <div className="text-right">
-                              <p className="text-base md:text-lg font-bold text-[#d86d2a]">
+                            <div className="text-left sm:text-right">
+                              <p className="text-sm sm:text-base md:text-lg font-bold text-[#d86d2a] break-words">
                                 {formatCurrency(franchise.revenue)}
                               </p>
                               <p className="text-xs text-[#6b4423]">
@@ -853,14 +871,14 @@ const RevenueHistory = () => {
                                     return (
                                       <div
                                         key={cafe.cartId}
-                                        className="flex flex-col md:flex-row md:items-center md:justify-between p-4 hover:bg-white transition-colors"
+                                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 hover:bg-white transition-colors gap-2 sm:gap-4"
                                       >
-                                        <div className="flex items-center space-x-3 mb-2 md:mb-0">
-                                          <div className="w-6 h-6 bg-[#d86d2a] rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                                          <div className="w-6 h-6 bg-[#d86d2a] rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                                             {cafeIndex + 1}
                                           </div>
-                                          <div>
-                                            <p className="font-medium text-[#4a2e1f]">
+                                          <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-[#4a2e1f] text-sm sm:text-base truncate">
                                               {cafe.cartName || cafe.cafeName}
                                             </p>
                                             <p className="text-xs text-[#6b4423]">
@@ -869,9 +887,9 @@ const RevenueHistory = () => {
                                           </div>
                                         </div>
 
-                                        <div className="flex items-center space-x-4">
+                                        <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
                                           {/* Mini Progress Bar */}
-                                          <div className="hidden md:block w-24">
+                                          <div className="hidden sm:block w-20 sm:w-24 flex-shrink-0">
                                             <div className="h-1.5 bg-[#e2c1ac] rounded-full overflow-hidden">
                                               <div
                                                 className="h-full bg-[#d86d2a] rounded-full"
@@ -885,7 +903,7 @@ const RevenueHistory = () => {
                                             </p>
                                           </div>
 
-                                          <p className="font-semibold text-[#d86d2a]">
+                                          <p className="font-semibold text-[#d86d2a] text-sm sm:text-base whitespace-nowrap">
                                             {formatCurrency(cafe.revenue)}
                                           </p>
                                         </div>
@@ -921,133 +939,138 @@ const RevenueHistory = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-[#fef4ec]">
-              <tr>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Total Revenue
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Orders
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Franchises
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Carts
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Avg Order Value
-                </th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e2c1ac]">
-              {history.length === 0 ? (
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="inline-block min-w-full align-middle">
+            <table className="w-full min-w-[640px]">
+              <thead className="bg-[#fef4ec]">
                 <tr>
-                  <td
-                    colSpan="7"
-                    className="px-6 py-12 text-center text-[#6b4423]"
-                  >
-                    <FaChartBar className="mx-auto text-4xl mb-4 opacity-50" />
-                    <p>No historical data available</p>
-                    <p className="text-sm mt-2">
-                      Click "Calculate Daily" to generate records
-                    </p>
-                  </td>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Date
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Total Revenue
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Orders
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Franchises
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Carts
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Avg Order Value
+                  </th>
+                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                history.map((record, index) => {
-                  const avgOrderValue =
-                    record.totalOrders > 0
-                      ? record.totalRevenue / record.totalOrders
-                      : 0;
-                  const prevRecord = history[index + 1];
-                  const revenueChange = prevRecord
-                    ? (
-                        ((record.totalRevenue - prevRecord.totalRevenue) /
-                          prevRecord.totalRevenue) *
-                        100
-                      ).toFixed(1)
-                    : null;
-
-                  return (
-                    <tr
-                      key={record._id}
-                      className="hover:bg-[#fef4ec] transition-colors"
+              </thead>
+              <tbody className="divide-y divide-[#e2c1ac]">
+                {history.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="7"
+                      className="px-6 py-12 text-center text-[#6b4423]"
                     >
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <FaCalendarAlt className="mr-2 text-[#6b4423]" />
-                          <span className="text-sm font-medium text-[#4a2e1f]">
-                            {new Date(record.date).toLocaleDateString("en-IN", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="text-sm font-bold text-[#4a2e1f]">
-                            {formatCurrency(record.totalRevenue)}
-                          </span>
-                          {revenueChange !== null && (
-                            <span
-                              className={`ml-2 text-xs flex items-center ${
-                                parseFloat(revenueChange) >= 0
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              {parseFloat(revenueChange) >= 0 ? (
-                                <FaArrowUp className="mr-1" />
-                              ) : (
-                                <FaArrowDown className="mr-1" />
+                      <FaChartBar className="mx-auto text-4xl mb-4 opacity-50" />
+                      <p>No historical data available</p>
+                      <p className="text-sm mt-2">
+                        Click "Calculate Daily" to generate records
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  history.map((record, index) => {
+                    const avgOrderValue =
+                      record.totalOrders > 0
+                        ? record.totalRevenue / record.totalOrders
+                        : 0;
+                    const prevRecord = history[index + 1];
+                    const revenueChange = prevRecord
+                      ? (
+                          ((record.totalRevenue - prevRecord.totalRevenue) /
+                            prevRecord.totalRevenue) *
+                          100
+                        ).toFixed(1)
+                      : null;
+
+                    return (
+                      <tr
+                        key={record._id}
+                        className="hover:bg-[#fef4ec] transition-colors"
+                      >
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <FaCalendarAlt className="mr-1 sm:mr-2 text-[#6b4423] text-xs sm:text-sm flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium text-[#4a2e1f]">
+                              {new Date(record.date).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                }
                               )}
-                              {Math.abs(parseFloat(revenueChange))}%
                             </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-[#4a2e1f]">
-                        {record.totalOrders || 0}
-                      </td>
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-[#4a2e1f]">
-                        {record.franchiseRevenue?.length || 0}
-                      </td>
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-[#4a2e1f]">
-                        {record.cartRevenue?.length ||
-                          record.cafeRevenue?.length ||
-                          0}
-                      </td>
-                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-[#4a2e1f]">
-                        {formatCurrency(avgOrderValue)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => {
-                            console.log("Selected period data:", record);
-                            setSelectedPeriod(record);
-                          }}
-                          className="text-[#d86d2a] hover:text-[#c75b1a] text-sm font-medium hover:underline"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                            <span className="text-xs sm:text-sm font-bold text-[#4a2e1f]">
+                              {formatCurrency(record.totalRevenue)}
+                            </span>
+                            {revenueChange !== null && (
+                              <span
+                                className={`text-[10px] sm:text-xs flex items-center whitespace-nowrap ${
+                                  parseFloat(revenueChange) >= 0
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {parseFloat(revenueChange) >= 0 ? (
+                                  <FaArrowUp className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />
+                                ) : (
+                                  <FaArrowDown className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />
+                                )}
+                                {Math.abs(parseFloat(revenueChange))}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
+                          {record.totalOrders || 0}
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
+                          {record.franchiseRevenue?.length || 0}
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
+                          {record.cartRevenue?.length ||
+                            record.cafeRevenue?.length ||
+                            0}
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
+                          {formatCurrency(avgOrderValue)}
+                        </td>
+                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              console.log("Selected period data:", record);
+                              setSelectedPeriod(record);
+                            }}
+                            className="text-[#d86d2a] hover:text-[#c75b1a] text-xs sm:text-sm font-medium hover:underline whitespace-nowrap"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1083,39 +1106,39 @@ const RevenueHistory = () => {
 
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-                <div className="bg-white rounded-lg p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
-                  <p className="text-xs md:text-sm text-[#6b4423] font-medium">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+                <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-[#6b4423] font-medium truncate">
                     Total Revenue
                   </p>
-                  <p className="text-lg md:text-2xl font-bold text-[#4a2e1f]">
+                  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-[#4a2e1f] break-words">
                     {formatCurrency(selectedPeriod.totalRevenue || 0)}
                   </p>
                 </div>
-                <div className="bg-white rounded-lg p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
-                  <p className="text-xs md:text-sm text-[#6b4423] font-medium">
+                <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-[#6b4423] font-medium truncate">
                     Total Orders
                   </p>
-                  <p className="text-lg md:text-2xl font-bold text-[#4a2e1f]">
+                  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-[#4a2e1f]">
                     {selectedPeriod.totalOrders || 0}
                   </p>
                 </div>
-                <div className="bg-white rounded-lg p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
-                  <p className="text-xs md:text-sm text-[#6b4423] font-medium">
+                <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-[#6b4423] font-medium truncate">
                     Franchises
                   </p>
-                  <p className="text-lg md:text-2xl font-bold text-[#4a2e1f]">
+                  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-[#4a2e1f]">
                     {selectedPeriod.franchiseRevenue &&
                     Array.isArray(selectedPeriod.franchiseRevenue)
                       ? selectedPeriod.franchiseRevenue.length
                       : 0}
                   </p>
                 </div>
-                <div className="bg-white rounded-lg p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
-                  <p className="text-xs md:text-sm text-[#6b4423] font-medium">
+                <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border border-[#e2c1ac] shadow-sm">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-[#6b4423] font-medium truncate">
                     Avg Order Value
                   </p>
-                  <p className="text-lg md:text-2xl font-bold text-[#4a2e1f]">
+                  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-[#4a2e1f] break-words">
                     {formatCurrency(
                       selectedPeriod.totalOrders > 0 &&
                         selectedPeriod.totalRevenue
@@ -1199,85 +1222,91 @@ const RevenueHistory = () => {
                 {(selectedPeriod.cartRevenue || selectedPeriod.cafeRevenue) &&
                 (selectedPeriod.cartRevenue || selectedPeriod.cafeRevenue)
                   .length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-[#fef4ec]">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            #
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            Cart
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            Franchise
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            Orders
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            Revenue
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
-                            % Share
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#e2c1ac]">
-                        {(
-                          selectedPeriod.cartRevenue ||
-                          selectedPeriod.cafeRevenue ||
-                          []
-                        )
-                          .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
-                          .map((cafe, index) => (
-                            <tr
-                              key={cafe.cartId || cafe.cafeId || index}
-                              className="hover:bg-[#fef4ec]"
-                            >
-                              <td className="px-4 py-3 text-sm text-[#6b4423]">
-                                {index + 1}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-medium text-[#4a2e1f]">
-                                {cafe.cartName ||
-                                  cafe.cafeName ||
-                                  "Unknown Cart"}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-[#6b4423]">
-                                {cafe.franchiseName || "Unknown"}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-[#4a2e1f]">
-                                {cafe.orderCount || 0}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-semibold text-[#4a2e1f]">
-                                {formatCurrency(cafe.revenue || 0)}
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center">
-                                  <div className="w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden mr-2">
-                                    <div
-                                      className="h-full bg-[#d86d2a] rounded-full"
-                                      style={{
-                                        width: `${calculatePercentage(
-                                          cafe.revenue || 0,
-                                          selectedPeriod.totalRevenue || 0
-                                        )}%`,
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="text-xs text-[#6b4423]">
-                                    {calculatePercentage(
-                                      cafe.revenue || 0,
-                                      selectedPeriod.totalRevenue || 0
-                                    )}
-                                    %
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <table className="w-full min-w-[500px]">
+                        <thead className="bg-[#fef4ec]">
+                          <tr>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase whitespace-nowrap">
+                              #
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase min-w-[100px]">
+                              Cart
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase min-w-[100px]">
+                              Franchise
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase whitespace-nowrap">
+                              Orders
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase whitespace-nowrap">
+                              Revenue
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase whitespace-nowrap">
+                              % Share
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#e2c1ac]">
+                          {(
+                            selectedPeriod.cartRevenue ||
+                            selectedPeriod.cafeRevenue ||
+                            []
+                          )
+                            .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+                            .map((cafe, index) => (
+                              <tr
+                                key={cafe.cartId || cafe.cafeId || index}
+                                className="hover:bg-[#fef4ec]"
+                              >
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#6b4423] whitespace-nowrap">
+                                  {index + 1}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-[#4a2e1f] min-w-[100px]">
+                                  <span className="truncate block">
+                                    {cafe.cartName ||
+                                      cafe.cafeName ||
+                                      "Unknown Cart"}
                                   </span>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#6b4423] min-w-[100px]">
+                                  <span className="truncate block">
+                                    {cafe.franchiseName || "Unknown"}
+                                  </span>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#4a2e1f] whitespace-nowrap">
+                                  {cafe.orderCount || 0}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-[#4a2e1f] whitespace-nowrap">
+                                  {formatCurrency(cafe.revenue || 0)}
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3">
+                                  <div className="flex items-center gap-1 sm:gap-2">
+                                    <div className="w-12 sm:w-16 h-2 bg-[#e2c1ac] rounded-full overflow-hidden flex-shrink-0">
+                                      <div
+                                        className="h-full bg-[#d86d2a] rounded-full"
+                                        style={{
+                                          width: `${calculatePercentage(
+                                            cafe.revenue || 0,
+                                            selectedPeriod.totalRevenue || 0
+                                          )}%`,
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] sm:text-xs text-[#6b4423] whitespace-nowrap">
+                                      {calculatePercentage(
+                                        cafe.revenue || 0,
+                                        selectedPeriod.totalRevenue || 0
+                                      )}
+                                      %
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-[#6b4423] bg-[#fef4ec] rounded-lg border border-[#e2c1ac]">

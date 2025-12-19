@@ -81,6 +81,8 @@ const Franchises = () => {
   const [cartExistingDocs, setCartExistingDocs] = useState({});
   const [formError, setFormError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all"); // "all", "active", "inactive"
+  const [viewMode, setViewMode] = useState("list"); // "list", "tile"
 
   useEffect(() => {
     fetchFranchises();
@@ -122,10 +124,14 @@ const Franchises = () => {
           setFranchiseCarts(statsMap);
         }
       } catch (err) {
-        console.error("Error fetching cart statistics:", err);
+        if (import.meta.env.DEV) {
+          console.error("Error fetching cart statistics:", err);
+        }
       }
     } catch (error) {
-      console.error("Error fetching franchises:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching franchises:", error);
+      }
       alert("Failed to fetch franchises");
     } finally {
       setLoading(false);
@@ -176,8 +182,8 @@ const Franchises = () => {
           cartFranchiseId?.toString() || String(cartFranchiseId);
         const matches = cartFranchiseIdStr === targetFranchiseId;
 
-        if (!matches && u.franchiseId) {
-          // Debug: log mismatches for troubleshooting
+        if (!matches && u.franchiseId && import.meta.env.DEV) {
+          // Log mismatches for troubleshooting (development only)
           const debugCartFranchiseId =
             typeof u.franchiseId === "object"
               ? u.franchiseId._id?.toString() || u.franchiseId.toString()
@@ -191,18 +197,20 @@ const Franchises = () => {
         return matches;
       });
 
-      console.log(
-        `[Franchises] Fetched ${carts.length} carts for franchise ${franchiseId} ` +
-          `(from ${
-            allUsers.filter((u) => u.role === "admin").length
-          } total carts)`
-      );
-
-      if (carts.length === 0) {
-        console.warn(
-          `[Franchises] No carts found for franchise ${franchiseId}. ` +
-            `This might indicate a data issue or the franchise has no carts yet.`
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Franchises] Fetched ${carts.length} carts for franchise ${franchiseId} ` +
+            `(from ${
+              allUsers.filter((u) => u.role === "admin").length
+            } total carts)`
         );
+
+        if (carts.length === 0) {
+          console.warn(
+            `[Franchises] No carts found for franchise ${franchiseId}. ` +
+              `This might indicate a data issue or the franchise has no carts yet.`
+          );
+        }
       }
 
       // Calculate cart stats from fetched carts
@@ -229,7 +237,9 @@ const Franchises = () => {
         },
       }));
     } catch (error) {
-      console.error("Error fetching carts:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching carts:", error);
+      }
       alert("Failed to fetch carts. Please try again.");
     } finally {
       setLoadingCarts((prev) => ({ ...prev, [franchiseId]: false }));
@@ -351,7 +361,9 @@ const Franchises = () => {
         alert(response.data?.message || "Failed to update cart status");
       }
     } catch (error) {
-      console.error("Error toggling cart status:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error toggling cart status:", error);
+      }
       if (error.response?.status !== 400) {
         // Don't show alert if user cancelled
         const errorMessage =
@@ -468,7 +480,9 @@ const Franchises = () => {
         await fetchFranchises();
       }
     } catch (error) {
-      console.error("Error deleting cart:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error deleting cart:", error);
+      }
       alert(error.response?.data?.message || "Failed to delete cart");
     }
   };
@@ -762,7 +776,9 @@ const Franchises = () => {
       setFormError(null);
       setShowModal(true);
     } catch (error) {
-      console.error("Error fetching franchise details:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching franchise details:", error);
+      }
       const errorMessage =
         error.response?.data?.message || "Failed to fetch franchise details";
       alert(errorMessage);
@@ -856,7 +872,9 @@ const Franchises = () => {
       );
       fetchFranchises();
     } catch (error) {
-      console.error("Error deleting franchise:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error deleting franchise:", error);
+      }
       alert(
         error.response?.data?.message ||
           "Failed to delete franchise. Please try again.",
@@ -865,11 +883,20 @@ const Franchises = () => {
     }
   };
 
-  const filteredFranchises = franchises.filter(
-    (franchise) =>
+  const filteredFranchises = franchises.filter((franchise) => {
+    // Search filter
+    const matchesSearch =
       franchise.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      franchise.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      franchise.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Status filter
+    const matchesStatus =
+      filterStatus === "all" ||
+      (filterStatus === "active" && franchise.isActive !== false) ||
+      (filterStatus === "inactive" && franchise.isActive === false);
+
+    return matchesSearch && matchesStatus;
+  });
 
   // Stats calculations
   const totalFranchises = franchises.length;
@@ -927,7 +954,14 @@ const Franchises = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+        <button
+          onClick={() => setFilterStatus("all")}
+          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "all"
+              ? "border-blue-500 ring-2 ring-blue-200"
+              : "border-gray-200"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500 font-medium">Total</p>
@@ -939,8 +973,15 @@ const Franchises = () => {
               <FaBuilding className="text-blue-600" />
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg border border-green-200 p-3 shadow-sm">
+        </button>
+        <button
+          onClick={() => setFilterStatus("active")}
+          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "active"
+              ? "border-green-500 ring-2 ring-green-200"
+              : "border-green-200"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-green-600 font-medium">Active</p>
@@ -952,8 +993,15 @@ const Franchises = () => {
               <FaCheckCircle className="text-green-600" />
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg border border-red-200 p-3 shadow-sm">
+        </button>
+        <button
+          onClick={() => setFilterStatus("inactive")}
+          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "inactive"
+              ? "border-red-500 ring-2 ring-red-200"
+              : "border-red-200"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-red-600 font-medium">Inactive</p>
@@ -965,7 +1013,7 @@ const Franchises = () => {
               <FaTimesCircle className="text-red-600" />
             </div>
           </div>
-        </div>
+        </button>
         <div className="bg-white rounded-lg border border-purple-200 p-3 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -981,18 +1029,45 @@ const Franchises = () => {
 
       {/* Search & Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        <div className="relative">
-          <FaSearch
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            size={14}
-          />
-          <input
-            type="text"
-            placeholder="Search by name or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <FaSearch
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={14}
+            />
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+                viewMode === "list"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              title="List View"
+            >
+              List
+            </button>
+            <button
+              onClick={() => setViewMode("tile")}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+                viewMode === "tile"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              title="Tile View"
+            >
+              Tile
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1009,6 +1084,139 @@ const Franchises = () => {
             <p className="text-sm mt-1">
               Create your first franchise to get started
             </p>
+          </div>
+        ) : viewMode === "tile" ? (
+          <div className="p-3 sm:p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+              {filteredFranchises.map((franchise) => {
+                const isActive = franchise.isActive !== false;
+                const cartStats = franchiseCarts[franchise._id] || {};
+
+                return (
+                  <div
+                    key={franchise._id}
+                    className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition-all ${
+                      !isActive
+                        ? "opacity-75 border-gray-300"
+                        : "border-gray-200"
+                    } ${
+                      filterStatus === "active" && !isActive ? "hidden" : ""
+                    } ${
+                      filterStatus === "inactive" && isActive ? "hidden" : ""
+                    }`}
+                  >
+                    <div className="p-3 sm:p-4">
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${
+                            isActive
+                              ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                              : "bg-gray-400"
+                          }`}
+                        >
+                          {franchise.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span
+                          className={`px-2 py-1 text-[10px] font-medium rounded whitespace-nowrap ${
+                            isActive
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-200 text-gray-600"
+                          }`}
+                        >
+                          {isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+
+                      {/* Franchise Info */}
+                      <div className="mb-3">
+                        {franchise.franchiseCode && (
+                          <div className="mb-1">
+                            <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded">
+                              {franchise.franchiseCode}
+                            </span>
+                          </div>
+                        )}
+                        <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate">
+                          {franchise.name}
+                        </h3>
+                        <p className="text-xs text-gray-500 truncate mb-1">
+                          <FaEnvelope size={9} className="inline mr-1" />
+                          {franchise.email}
+                        </p>
+                        {franchise.mobile && (
+                          <p className="text-xs text-gray-500 truncate">
+                            <FaPhone size={9} className="inline mr-1" />
+                            {franchise.mobile}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Cart Stats */}
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs">
+                          <FaStore size={10} />
+                          <span className="font-medium">
+                            {cartStats.totalCarts || 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded text-xs">
+                          <FaCheckCircle size={10} />
+                          <span>{cartStats.activeCarts || 0}</span>
+                        </div>
+                        {(cartStats.pendingApproval || 0) > 0 && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-600 rounded text-xs">
+                            <FaClock size={10} />
+                            <span>{cartStats.pendingApproval}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 pt-2 border-t border-gray-100">
+                        <button
+                          onClick={() => setViewDetails(franchise)}
+                          className="flex-1 px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="View Details"
+                        >
+                          <FaEye size={12} className="inline mr-1" />
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(franchise._id)}
+                          className={`px-2 py-1.5 text-xs rounded transition-colors ${
+                            isActive
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-gray-400 hover:bg-gray-100"
+                          }`}
+                          title={isActive ? "Deactivate" : "Activate"}
+                        >
+                          {isActive ? (
+                            <FaToggleOn size={14} />
+                          ) : (
+                            <FaToggleOff size={14} />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleEdit(franchise)}
+                          className="px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit"
+                        >
+                          <FaEdit size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(franchise._id)}
+                          className="px-2 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <FaTrash size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -1844,7 +2052,7 @@ const Franchises = () => {
             )}
             <form
               id="cart-form"
-              className="flex-1 overflow-y-auto"
+              className="flex-1 overflow-y-auto p-4 space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
 
@@ -2156,9 +2364,11 @@ const Franchises = () => {
                   // Refresh franchises and cart stats
                   await fetchFranchises();
                 } catch (error) {
-                  console.error("Error creating/updating cart:", error);
-                  console.error("Error response:", error.response);
-                  console.error("Error data:", error.response?.data);
+                  if (import.meta.env.DEV) {
+                    console.error("Error creating/updating cart:", error);
+                    console.error("Error response:", error.response);
+                    console.error("Error data:", error.response?.data);
+                  }
 
                   const errorMessage =
                     error.response?.data?.message ||
@@ -2214,7 +2424,6 @@ const Franchises = () => {
                   setIsSubmittingCart(false);
                 }
               }}
-              className="flex-1 overflow-y-auto p-4 space-y-4"
             >
               {/* Basic Information */}
               <div className="border-b pb-4">

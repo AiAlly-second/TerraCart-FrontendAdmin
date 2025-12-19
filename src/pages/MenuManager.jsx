@@ -115,23 +115,25 @@ const MenuManager = () => {
       ]);
       const menuData = menuRes.data || [];
 
-      // Debug: Log image data
-      console.log(
-        "[FRANCHISE ADMIN] Menu loaded:",
-        menuData.length,
-        "categories"
-      );
-      menuData.forEach((cat, catIdx) => {
-        if (cat.items && cat.items.length > 0) {
-          cat.items.forEach((item, itemIdx) => {
-            console.log(
-              `[FRANCHISE ADMIN] Category ${catIdx + 1}, Item ${
-                itemIdx + 1
-              }: "${item.name}" - Image: ${item.image || "NO IMAGE"}`
-            );
-          });
-        }
-      });
+      // Log menu data (development only)
+      if (import.meta.env.DEV) {
+        console.log(
+          "[FRANCHISE ADMIN] Menu loaded:",
+          menuData.length,
+          "categories"
+        );
+        menuData.forEach((cat, catIdx) => {
+          if (cat.items && cat.items.length > 0) {
+            cat.items.forEach((item, itemIdx) => {
+              console.log(
+                `[FRANCHISE ADMIN] Category ${catIdx + 1}, Item ${
+                  itemIdx + 1
+                }: "${item.name}" - Image: ${item.image || "NO IMAGE"}`
+              );
+            });
+          }
+        });
+      }
 
       setMenu(menuData);
       if (spiceRes?.data?.spiceLevels) {
@@ -141,7 +143,9 @@ const MenuManager = () => {
         setSelectedCategoryId(menuRes.data[0]._id);
       }
     } catch (err) {
-      console.error(err);
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setError(err.response?.data?.message || "Failed to load menu");
     } finally {
       setLoading(false);

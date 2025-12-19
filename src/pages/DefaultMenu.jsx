@@ -127,7 +127,9 @@ const DefaultMenu = () => {
       // The getImageUrl helper will prepend the API base URL when displaying
       setItemFormData({ ...itemFormData, image: response.data.url });
     } catch (error) {
-      console.error("Error uploading image:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error uploading image:", error);
+      }
       alert(error.response?.data?.message || "Failed to upload image");
     } finally {
       setUploadingImage(false);
@@ -151,7 +153,9 @@ const DefaultMenu = () => {
         );
       }
     } catch (error) {
-      console.error("Error fetching default menu:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching default menu:", error);
+      }
       // Initialize empty menu if none exists
       setDefaultMenu({ categories: [] });
     } finally {
@@ -179,7 +183,9 @@ const DefaultMenu = () => {
       await api.put("/default-menu", {
         categories: menuToSave.categories,
       });
-      // #region agent log
+      // #region agent log (disabled - analytics service not available in production)
+      // Commented out debug analytics call - only enable if analytics service is running
+      /*
       fetch(
         "http://127.0.0.1:7242/ingest/660a5fbf-4359-420f-956f-3831103456fb",
         {
@@ -206,9 +212,12 @@ const DefaultMenu = () => {
           }),
         }
       ).catch(() => {});
+      */
       // #endregion agent log
     } catch (error) {
-      console.error("Error auto-saving default menu:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error auto-saving default menu:", error);
+      }
     } finally {
       setSaving(false);
     }
@@ -243,8 +252,8 @@ const DefaultMenu = () => {
       `Push default menu to ${selectedFranchises.size} franchise(s)?\n\n` +
         `Franchises: ${franchiseNames}\n\n` +
         `This will:\n` +
-        `• Replace the default menu for each selected franchise\n` +
-        `• The franchise menu will then automatically sync to all their carts\n\n` +
+        `� Replace the default menu for each selected franchise\n` +
+        `� The franchise menu will then automatically sync to all their carts\n\n` +
         `Continue?`
     );
     if (!confirmed) {
@@ -341,7 +350,9 @@ const DefaultMenu = () => {
       index < 0 ||
       index >= defaultMenu.categories.length
     ) {
-      console.error("Invalid category index for deletion:", index);
+      if (import.meta.env.DEV) {
+        console.error("Invalid category index for deletion:", index);
+      }
       return;
     }
 
@@ -576,92 +587,99 @@ const DefaultMenu = () => {
       </div>
 
       {/* Menu Flow Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-        <h3 className="font-semibold text-blue-800 mb-2 text-sm sm:text-base">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-3 md:p-4">
+        <h3 className="font-semibold text-blue-800 mb-2 text-xs sm:text-sm md:text-base">
           Menu Hierarchy Flow
         </h3>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 text-xs sm:text-sm text-blue-700">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="bg-blue-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-2 md:gap-3 lg:gap-4 text-[10px] sm:text-xs md:text-sm text-blue-700">
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
+            <span className="bg-blue-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               1
             </span>
-            <span className="whitespace-nowrap">
+            <span className="whitespace-nowrap truncate">
               Super Admin creates Global Menu
             </span>
           </div>
-          <span className="hidden sm:inline">→</span>
-          <span className="sm:hidden text-blue-500">↓</span>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="bg-purple-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">
+          <span className="hidden sm:inline text-blue-500">?</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
+            <span className="bg-purple-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               2
             </span>
-            <span className="whitespace-nowrap">Push to Franchises</span>
+            <span className="whitespace-nowrap truncate">
+              Push to Franchises
+            </span>
           </div>
-          <span className="hidden sm:inline">→</span>
-          <span className="sm:hidden text-blue-500">↓</span>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="bg-green-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">
+          <span className="hidden sm:inline text-blue-500">?</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
+            <span className="bg-green-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               3
             </span>
-            <span className="whitespace-nowrap">Franchise pushes to Carts</span>
+            <span className="whitespace-nowrap truncate">
+              Franchise pushes to Carts
+            </span>
           </div>
-          <span className="hidden sm:inline">→</span>
-          <span className="sm:hidden text-blue-500">↓</span>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="bg-orange-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold flex-shrink-0">
+          <span className="hidden sm:inline text-blue-500">?</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
+            <span className="bg-orange-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               4
             </span>
-            <span className="whitespace-nowrap">
+            <span className="whitespace-nowrap truncate">
               Cart Admin toggles availability
             </span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
+      <div className="bg-white rounded-lg shadow p-2 sm:p-3 md:p-4 lg:p-6">
         {!defaultMenu?.categories || defaultMenu.categories.length === 0 ? (
-          <div className="text-center py-8 sm:py-12 text-gray-500">
-            <FaUtensils className="mx-auto text-3xl sm:text-4xl mb-3 sm:mb-4" />
-            <p className="text-sm sm:text-base mb-2">
+          <div className="text-center py-6 sm:py-8 md:py-12 text-gray-500">
+            <FaUtensils className="mx-auto text-2xl sm:text-3xl md:text-4xl mb-2 sm:mb-3 md:mb-4" />
+            <p className="text-xs sm:text-sm md:text-base mb-2 px-2">
               No categories in default menu. Click "Add Category" to get
               started.
             </p>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-4">
+          <div className="space-y-2 sm:space-y-3 md:space-y-4">
             {defaultMenu.categories.map((category, catIndex) => (
-              <div key={catIndex} className="border border-gray-200 rounded-lg">
+              <div
+                key={catIndex}
+                className="border border-gray-200 rounded-lg overflow-hidden"
+              >
                 <div
-                  className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer relative"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3 md:p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer relative gap-2 sm:gap-0"
                   onClick={() => toggleCategory(catIndex)}
                 >
-                  <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                  <div className="flex items-center space-x-1.5 sm:space-x-2 md:space-x-3 min-w-0 flex-1">
                     {expandedCategories.has(catIndex) ? (
-                      <FaChevronDown className="text-gray-500 flex-shrink-0" />
+                      <FaChevronDown className="text-gray-500 flex-shrink-0 text-xs sm:text-sm" />
                     ) : (
-                      <FaChevronRight className="text-gray-500 flex-shrink-0" />
+                      <FaChevronRight className="text-gray-500 flex-shrink-0 text-xs sm:text-sm" />
                     )}
-                    <FaUtensils className="text-blue-600 flex-shrink-0" />
+                    <FaUtensils className="text-blue-600 flex-shrink-0 text-sm sm:text-base" />
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-sm sm:text-base md:text-lg truncate">
+                      <h3 className="font-semibold text-xs sm:text-sm md:text-base lg:text-lg truncate">
                         {category.name}
                       </h3>
                       {category.description && (
-                        <p className="text-xs sm:text-sm text-gray-500 truncate">
+                        <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate mt-0.5">
                           {category.description}
                         </p>
                       )}
                     </div>
                   </div>
                   <div
-                    className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 flex-shrink-0"
+                    className="flex items-center justify-between sm:justify-end space-x-1.5 sm:space-x-2 md:space-x-3 lg:space-x-4 flex-shrink-0"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="text-xs sm:text-sm text-gray-600 hidden sm:inline">
+                    <span className="text-[10px] sm:text-xs md:text-sm text-gray-600 hidden sm:inline whitespace-nowrap">
                       {category.items?.length || 0} Items
                     </span>
                     <span
-                      className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs whitespace-nowrap ${
+                      className={`px-1 sm:px-1.5 md:px-2 py-0.5 sm:py-1 rounded text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap ${
                         category.isActive
                           ? "bg-green-100 text-green-800"
                           : "bg-gray-200 text-gray-600"
@@ -676,10 +694,10 @@ const DefaultMenu = () => {
                         e.stopPropagation();
                         handleEditCategory(category, catIndex);
                       }}
-                      className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 rounded relative z-10"
+                      className="p-1 sm:p-1.5 md:p-2 text-blue-600 hover:bg-blue-50 rounded relative z-10 transition-colors"
                       title="Edit Category"
                     >
-                      <FaEdit className="text-sm sm:text-base" />
+                      <FaEdit className="text-xs sm:text-sm md:text-base" />
                     </button>
                     <button
                       type="button"
@@ -689,27 +707,27 @@ const DefaultMenu = () => {
                         // Ensure we're deleting the category, not any items
                         handleDeleteCategory(e, catIndex);
                       }}
-                      className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded relative z-10"
+                      className="p-1 sm:p-1.5 md:p-2 text-red-600 hover:bg-red-50 rounded relative z-10 transition-colors"
                       title="Delete Category"
                     >
-                      <FaTrash className="text-sm sm:text-base" />
+                      <FaTrash className="text-xs sm:text-sm md:text-base" />
                     </button>
                   </div>
                 </div>
 
                 {expandedCategories.has(catIndex) && (
-                  <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
-                    <div className="flex justify-end mb-2">
+                  <div className="p-2 sm:p-3 md:p-4 space-y-2 sm:space-y-3 md:space-y-4">
+                    <div className="flex justify-end mb-1 sm:mb-2">
                       <button
                         onClick={() => handleAddItem(catIndex)}
-                        className="flex items-center px-2.5 sm:px-3 py-1 text-xs sm:text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                        className="flex items-center px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
                       >
-                        <FaPlus className="mr-1" />
+                        <FaPlus className="mr-0.5 sm:mr-1 text-xs sm:text-sm" />
                         <span className="whitespace-nowrap">Add Item</span>
                       </button>
                     </div>
                     {category.items && category.items.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-2 md:gap-3">
                         {category.items.map((item, itemIndex) => (
                           <div
                             key={itemIndex}
@@ -720,7 +738,7 @@ const DefaultMenu = () => {
                             }`}
                           >
                             {/* Item Image */}
-                            <div className="h-28 sm:h-32 md:h-36 bg-gradient-to-br from-slate-100 to-slate-200 relative">
+                            <div className="h-24 sm:h-28 md:h-32 lg:h-36 bg-gradient-to-br from-slate-100 to-slate-200 relative">
                               {item.image ? (
                                 <img
                                   src={getImageUrl(item.image)}
@@ -734,26 +752,28 @@ const DefaultMenu = () => {
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <span className="text-2xl text-slate-300">
-                                    🍽️
+                                  <span className="text-xl sm:text-2xl text-slate-300">
+                                    ???
                                   </span>
                                 </div>
                               )}
                               {/* Badges */}
-                              <div className="absolute top-1 left-1 flex gap-0.5">
+                              <div className="absolute top-0.5 sm:top-1 left-0.5 sm:left-1 flex gap-0.5">
                                 {item.isFeatured && (
-                                  <span className="text-xs">⭐</span>
+                                  <span className="text-[10px] sm:text-xs">
+                                    ?
+                                  </span>
                                 )}
                                 {!item.isAvailable && (
-                                  <span className="px-1 py-0.5 bg-red-500 text-white text-[10px] rounded">
+                                  <span className="px-0.5 sm:px-1 py-0.5 bg-red-500 text-white text-[9px] sm:text-[10px] rounded">
                                     Off
                                   </span>
                                 )}
                               </div>
                               {/* Price */}
-                              <div className="absolute bottom-1 right-1">
-                                <span className="px-1.5 py-0.5 bg-blue-600 text-white font-bold rounded text-xs shadow">
-                                  ₹
+                              <div className="absolute bottom-0.5 sm:bottom-1 right-0.5 sm:right-1">
+                                <span className="px-1 sm:px-1.5 md:px-1.5 py-0.5 bg-blue-600 text-white font-bold rounded text-[9px] sm:text-[10px] md:text-xs shadow">
+                                  ?
                                   {typeof item.price === "number"
                                     ? item.price.toFixed(0)
                                     : item.price}
@@ -779,7 +799,9 @@ const DefaultMenu = () => {
                               {/* Meta Tags */}
                               <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px] sm:text-[10px]">
                                 {item.spiceLevel &&
-                                  item.spiceLevel !== "NONE" && <span>🌶️</span>}
+                                  item.spiceLevel !== "NONE" && (
+                                    <span>???</span>
+                                  )}
                                 {item.calories && (
                                   <span className="text-slate-400">
                                     {item.calories}cal
@@ -791,7 +813,7 @@ const DefaultMenu = () => {
                                   </span>
                                 )}
                                 {item.allergens?.length > 0 && (
-                                  <span className="text-red-400">⚠️</span>
+                                  <span className="text-red-400">??</span>
                                 )}
                               </div>
 
@@ -877,9 +899,11 @@ const DefaultMenu = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="col-span-full text-center py-6 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                        <span className="text-2xl mb-1 block">🍽️</span>
-                        <p className="text-sm">
+                      <div className="col-span-full text-center py-4 sm:py-6 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                        <span className="text-xl sm:text-2xl mb-1 block">
+                          ???
+                        </span>
+                        <p className="text-xs sm:text-sm px-2">
                           No items yet. Click "Add Item" to add.
                         </p>
                       </div>
@@ -894,11 +918,11 @@ const DefaultMenu = () => {
 
       {/* Push to Franchises Modal */}
       {showPushModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl my-auto">
-            <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
-                <FaBuilding className="text-purple-600 flex-shrink-0" />
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6 overflow-y-auto">
+          <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl my-auto mx-2 sm:mx-4">
+            <div className="flex justify-between items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                <FaBuilding className="text-purple-600 flex-shrink-0 text-sm sm:text-base md:text-lg" />
                 <span className="truncate">Push Menu to Franchises</span>
               </h2>
               <button
@@ -907,52 +931,54 @@ const DefaultMenu = () => {
                   setPushResults(null);
                   setSelectedFranchises(new Set());
                 }}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
+                className="text-gray-400 hover:text-gray-600 text-xl sm:text-2xl leading-none p-1 ml-1 sm:ml-2 flex-shrink-0"
                 aria-label="Close"
               >
-                ×
+                �
               </button>
             </div>
 
             {pushResults ? (
               // Show results
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg">Push Results</h3>
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="font-semibold text-sm sm:text-base md:text-lg">
+                  Push Results
+                </h3>
                 <div className="space-y-2">
                   {pushResults.map((result, idx) => (
                     <div
                       key={idx}
-                      className={`p-3 rounded-lg ${
+                      className={`p-2 sm:p-3 rounded-lg ${
                         result.success
                           ? "bg-green-50 border border-green-200"
                           : "bg-red-50 border border-red-200"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
+                        <span className="font-medium text-xs sm:text-sm md:text-base truncate">
                           {result.franchiseName}
                         </span>
                         <span
-                          className={`text-sm ${
+                          className={`text-xs sm:text-sm whitespace-nowrap ${
                             result.success ? "text-green-600" : "text-red-600"
                           }`}
                         >
-                          {result.success ? "✓ Success" : "✗ Failed"}
+                          {result.success ? "? Success" : "? Failed"}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
                         {result.message}
                       </p>
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end pt-3 sm:pt-4">
                   <button
                     onClick={() => {
                       setShowPushModal(false);
                       setPushResults(null);
                     }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm md:text-base transition-colors"
                   >
                     Close
                   </button>
@@ -960,15 +986,15 @@ const DefaultMenu = () => {
               </div>
             ) : (
               // Show franchise selection
-              <div className="space-y-4">
-                <p className="text-gray-600 text-sm">
+              <div className="space-y-3 sm:space-y-4">
+                <p className="text-gray-600 text-xs sm:text-sm">
                   Select the franchises you want to push the default menu to.
                   Each franchise will receive a copy of this menu, which they
                   can then customize and push to their carts.
                 </p>
 
-                <div className="flex items-center justify-between border-b pb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 border-b pb-2">
+                  <label className="flex items-center gap-1.5 sm:gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={
@@ -976,23 +1002,23 @@ const DefaultMenu = () => {
                         franchises.length > 0
                       }
                       onChange={toggleSelectAllFranchises}
-                      className="w-4 h-4"
+                      className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                     />
-                    <span className="font-medium">
+                    <span className="font-medium text-xs sm:text-sm md:text-base">
                       Select All ({franchises.length} franchises)
                     </span>
                   </label>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
                     {selectedFranchises.size} selected
                   </span>
                 </div>
 
-                <div className="max-h-64 overflow-y-auto space-y-2">
+                <div className="max-h-48 sm:max-h-64 overflow-y-auto space-y-2">
                   {franchises.length > 0 ? (
                     franchises.map((franchise) => (
                       <label
                         key={franchise._id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-colors ${
                           selectedFranchises.has(franchise._id)
                             ? "bg-purple-50 border-purple-300"
                             : "bg-gray-50 border-gray-200 hover:bg-gray-100"
@@ -1004,16 +1030,18 @@ const DefaultMenu = () => {
                           onChange={() =>
                             toggleFranchiseSelection(franchise._id)
                           }
-                          className="w-4 h-4"
+                          className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0"
                         />
-                        <div className="flex-1">
-                          <p className="font-medium">{franchise.name}</p>
-                          <p className="text-sm text-gray-500">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-xs sm:text-sm md:text-base truncate">
+                            {franchise.name}
+                          </p>
+                          <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">
                             {franchise.email}
                           </p>
                         </div>
                         <span
-                          className={`text-xs px-2 py-1 rounded-full ${
+                          className={`text-[9px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap flex-shrink-0 ${
                             franchise.isActive !== false
                               ? "bg-green-100 text-green-700"
                               : "bg-red-100 text-red-700"
@@ -1024,9 +1052,9 @@ const DefaultMenu = () => {
                       </label>
                     ))
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <FaBuilding className="mx-auto text-3xl mb-2" />
-                      <p>No franchises found</p>
+                    <div className="text-center py-6 sm:py-8 text-gray-500">
+                      <FaBuilding className="mx-auto text-2xl sm:text-3xl mb-2" />
+                      <p className="text-xs sm:text-sm">No franchises found</p>
                     </div>
                   )}
                 </div>
@@ -1066,9 +1094,9 @@ const DefaultMenu = () => {
 
       {/* Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4">
+          <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
+            <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 md:mb-4">
               {editingCategory !== null ? "Edit Category" : "Add Category"}
             </h2>
             <form
@@ -1079,7 +1107,7 @@ const DefaultMenu = () => {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Name *
                 </label>
                 <input
@@ -1092,11 +1120,11 @@ const DefaultMenu = () => {
                       name: e.target.value,
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
@@ -1107,12 +1135,12 @@ const DefaultMenu = () => {
                       description: e.target.value,
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   rows="2"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Sort Order
                 </label>
                 <input
@@ -1124,7 +1152,7 @@ const DefaultMenu = () => {
                       sortOrder: Number(e.target.value),
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="flex items-center">
@@ -1137,9 +1165,11 @@ const DefaultMenu = () => {
                       isActive: e.target.checked,
                     })
                   }
-                  className="mr-2"
+                  className="mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4"
                 />
-                <label className="text-sm text-gray-700">Active</label>
+                <label className="text-xs sm:text-sm text-gray-700">
+                  Active
+                </label>
               </div>
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4">
                 <button
@@ -1166,9 +1196,9 @@ const DefaultMenu = () => {
 
       {/* Item Modal */}
       {showItemModal && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4">
+          <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
+            <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 md:mb-4">
               {editingItem !== null ? "Edit Item" : "Add Item"}
             </h2>
             <form
@@ -1178,9 +1208,9 @@ const DefaultMenu = () => {
               }}
               className="space-y-3 sm:space-y-4"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Name *
                   </label>
                   <input
@@ -1190,12 +1220,12 @@ const DefaultMenu = () => {
                     onChange={(e) =>
                       setItemFormData({ ...itemFormData, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price (₹) *
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Price (?) *
                   </label>
                   <input
                     type="number"
@@ -1209,11 +1239,11 @@ const DefaultMenu = () => {
                         price: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Description
                   </label>
                   <textarea
@@ -1224,15 +1254,15 @@ const DefaultMenu = () => {
                         description: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     rows="2"
                   />
                 </div>
                 <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Item Image
                   </label>
-                  <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                  <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 md:gap-4">
                     {/* Image Preview */}
                     <div className="flex-shrink-0">
                       {itemFormData.image ? (
@@ -1240,7 +1270,7 @@ const DefaultMenu = () => {
                           <img
                             src={getImageUrl(itemFormData.image)}
                             alt="Preview"
-                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg border border-gray-300"
+                            className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 object-cover rounded-lg border border-gray-300"
                             onError={(e) => {
                               e.target.onerror = null;
                               e.target.src =
@@ -1252,32 +1282,32 @@ const DefaultMenu = () => {
                             onClick={() =>
                               setItemFormData({ ...itemFormData, image: "" })
                             }
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 sm:p-1 hover:bg-red-600"
+                            className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 bg-red-500 text-white rounded-full p-0.5 sm:p-1 hover:bg-red-600 transition-colors"
                           >
-                            <FaTimes className="text-[10px] sm:text-xs" />
+                            <FaTimes className="text-[9px] sm:text-[10px] md:text-xs" />
                           </button>
                         </div>
                       ) : (
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center">
-                          <FaImage className="text-gray-400 text-xl sm:text-2xl" />
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center">
+                          <FaImage className="text-gray-400 text-lg sm:text-xl md:text-2xl" />
                         </div>
                       )}
                     </div>
 
                     {/* Upload Controls */}
-                    <div className="flex-grow space-y-2 w-full sm:w-auto">
+                    <div className="flex-grow space-y-2 w-full sm:w-auto min-w-0">
                       <div className="flex items-center space-x-2">
-                        <label className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors text-sm">
+                        <label className="flex items-center px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors text-xs sm:text-sm">
                           {uploadingImage ? (
                             <>
-                              <FaSpinner className="animate-spin mr-1.5 sm:mr-2" />
+                              <FaSpinner className="animate-spin mr-1 sm:mr-1.5 md:mr-2 text-xs sm:text-sm" />
                               <span className="whitespace-nowrap">
                                 Uploading...
                               </span>
                             </>
                           ) : (
                             <>
-                              <FaUpload className="mr-1.5 sm:mr-2" />
+                              <FaUpload className="mr-1 sm:mr-1.5 md:mr-2 text-xs sm:text-sm" />
                               <span className="whitespace-nowrap">
                                 Upload Image
                               </span>
@@ -1292,11 +1322,11 @@ const DefaultMenu = () => {
                           />
                         </label>
                       </div>
-                      <p className="text-[10px] sm:text-xs text-gray-500">
+                      <p className="text-[9px] sm:text-[10px] md:text-xs text-gray-500">
                         Max size: 5MB. Formats: JPG, PNG, GIF
                       </p>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                        <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2">
+                        <span className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 whitespace-nowrap">
                           Or enter URL:
                         </span>
                         <input
@@ -1309,14 +1339,14 @@ const DefaultMenu = () => {
                             })
                           }
                           placeholder="https://example.com/image.jpg or /uploads/image.jpg"
-                          className="flex-grow w-full sm:w-auto px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                          className="flex-grow w-full sm:w-auto min-w-0 px-2 py-1 text-[10px] sm:text-xs md:text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Spice Level
                   </label>
                   <select
@@ -1327,7 +1357,7 @@ const DefaultMenu = () => {
                         spiceLevel: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {spiceLevels.map((level) => (
                       <option key={level} value={level}>
@@ -1337,7 +1367,7 @@ const DefaultMenu = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Sort Order
                   </label>
                   <input
@@ -1349,11 +1379,11 @@ const DefaultMenu = () => {
                         sortOrder: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     Calories
                   </label>
                   <input
@@ -1366,11 +1396,11 @@ const DefaultMenu = () => {
                         calories: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -1381,9 +1411,11 @@ const DefaultMenu = () => {
                         isAvailable: e.target.checked,
                       })
                     }
-                    className="mr-2"
+                    className="mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4"
                   />
-                  <span className="text-sm text-gray-700">Available</span>
+                  <span className="text-xs sm:text-sm text-gray-700">
+                    Available
+                  </span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -1395,9 +1427,11 @@ const DefaultMenu = () => {
                         isFeatured: e.target.checked,
                       })
                     }
-                    className="mr-2"
+                    className="mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4"
                   />
-                  <span className="text-sm text-gray-700">Featured</span>
+                  <span className="text-xs sm:text-sm text-gray-700">
+                    Featured
+                  </span>
                 </label>
               </div>
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3 pt-3 sm:pt-4">

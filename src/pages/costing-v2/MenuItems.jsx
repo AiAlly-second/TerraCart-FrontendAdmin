@@ -145,7 +145,9 @@ const MenuItems = () => {
     }
 
     try {
-      // #region agent log
+      // #region agent log (disabled - analytics service not available in production)
+      // Commented out debug analytics call - only enable if analytics service is running
+      /*
       fetch(
         "http://127.0.0.1:7242/ingest/660a5fbf-4359-420f-956f-3831103456fb",
         {
@@ -167,6 +169,7 @@ const MenuItems = () => {
           }),
         }
       ).catch(() => {});
+      */
       // #endregion agent log
       const itemsToImport = Array.from(selectedDefaultItems).map((index) => {
         const item = defaultMenuItems[index];

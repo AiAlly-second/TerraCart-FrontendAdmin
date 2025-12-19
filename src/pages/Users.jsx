@@ -24,11 +24,13 @@ const Users = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all"); // "all", "active", "inactive"
+  const [viewMode, setViewMode] = useState("list"); // "list", "tile"
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    role: "",
+    role: "super_admin", // Default role for super admin user creation
     franchiseId: "",
     cartName: "",
     location: "",
@@ -47,13 +49,12 @@ const Users = () => {
     const userRole = currentUser.role;
 
     if (userRole === "super_admin") {
-      // Super Admin can create: super_admin, cart_admin
+      // Super Admin can create: super_admin only
       // Note: franchise_admin role is intentionally NOT creatable via this form
       // to keep franchise creation controlled and separate.
-      return [
-        { value: "super_admin", label: "Super Admin" },
-        { value: "cart_admin", label: "Cart Admin" },
-      ];
+      // Note: cart_admin role is intentionally NOT creatable via this form
+      // to keep cart creation controlled through franchise admin.
+      return [{ value: "super_admin", label: "Super Admin" }];
     } else if (userRole === "franchise_admin") {
       // Franchise Admin can create: cart_admin only
       // Excluded: manager, captain, waiter, cook (these should be created via Employee Management)
@@ -170,123 +171,41 @@ const Users = () => {
         await api.put(`/users/${editingUser._id}`, updateData);
         alert("User updated successfully");
       } else {
-        // Create user
-        if (formData.role === "admin" || formData.role === "cart_admin") {
-          // For cart admin, use registerCafeAdmin endpoint with franchiseId
-          if (!formData.franchiseId) {
-            alert("Please select a franchise for the cart admin");
-            return;
-          }
-          if (!formData.cartName || !formData.location) {
-            alert("Please provide cart name and location");
-            return;
-          }
-          // Validate all required fields before sending
-          if (!formData.name?.trim()) {
-            alert("Name is required");
-            return;
-          }
-          if (!formData.email?.trim()) {
-            alert("Email is required");
-            return;
-          }
-          if (!formData.password || formData.password.length < 6) {
-            alert("Password is required and must be at least 6 characters");
-            return;
-          }
-          if (!formData.cartName?.trim()) {
-            alert("Cart name is required");
-            return;
-          }
-          if (!formData.location?.trim()) {
-            alert("Location is required");
-            return;
-          }
-          if (!formData.franchiseId) {
-            alert("Please select a franchise");
-            return;
-          }
-
-          const cartAdminData = {
-            name: formData.name.trim(),
-            email: formData.email.trim().toLowerCase(),
-            password: formData.password,
-            cartName: formData.cartName.trim(),
-            location: formData.location.trim(),
-            franchiseId: formData.franchiseId,
-          };
-
-          // Add optional fields only if they have values
-          if (formData.phone?.trim()) {
-            cartAdminData.phone = formData.phone.trim();
-          }
-          if (formData.address?.trim()) {
-            cartAdminData.address = formData.address.trim();
-          }
-
-          try {
-            console.log(
-              "[Users] Creating cart admin with data:",
-              cartAdminData
-            );
-            const response = await api.post(
-              "/users/register-cafe-admin",
-              cartAdminData
-            );
-            console.log(
-              "[Users] Cart admin created successfully:",
-              response.data
-            );
-            alert("Cart admin created successfully");
-            setShowModal(false);
-            setEditingUser(null);
-            setFormData({
-              name: "",
-              email: "",
-              password: "",
-              role: "",
-              franchiseId: "",
-              cartName: "",
-              location: "",
-              phone: "",
-              address: "",
-            });
-            fetchUsers();
-            fetchFranchises();
-          } catch (error) {
-            console.error("[Users] Error creating cart admin:", error);
-            console.error("[Users] Error response:", error.response?.data);
-            const errorMessage =
-              error.response?.data?.message ||
-              error.message ||
-              "Failed to create cart admin";
-            alert(
-              `Error: ${errorMessage}\n\nPlease check:\n- All required fields are filled\n- Franchise is selected\n- Email is valid\n- Password is at least 6 characters`
-            );
-            // Don't close modal on error so user can fix and retry
-            return;
-          }
-        } else {
-          // For other roles, use regular createUser endpoint
-          const userData = { ...formData };
-          delete userData.franchiseId;
-          delete userData.cartName;
-          delete userData.location;
-          delete userData.phone;
-          delete userData.address;
-          await api.post("/users", userData);
-          alert("User created successfully");
+        // Create user - always create as super_admin (role selector removed from UI)
+        // For super admin panel, all new users are created as super_admin
+        // Validate required fields
+        if (!formData.name?.trim()) {
+          alert("Name is required");
+          return;
         }
-      }
-      // Only close modal if we reach here (not for cart admin creation which handles its own success)
-      if (formData.role !== "admin" && formData.role !== "cart_admin") {
+        if (!formData.email?.trim()) {
+          alert("Email is required");
+          return;
+        }
+        if (!formData.password || formData.password.length < 6) {
+          alert("Password is required and must be at least 6 characters");
+          return;
+        }
+
+        // Create super_admin user
+        const userData = {
+          name: formData.name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          role: "super_admin", // Always set to super_admin
+        };
+
+        await api.post("/users", userData);
+        alert("Super admin user created successfully");
+
+        // Close modal and reset form
         setShowModal(false);
         setEditingUser(null);
         setFormData({
           name: "",
           email: "",
           password: "",
-          role: "employee",
+          role: "super_admin", // Default role for super admin user creation
           franchiseId: "",
           cartName: "",
           location: "",
@@ -367,12 +286,44 @@ const Users = () => {
     }
   };
 
-  const filteredUsers = users.filter(
-    (user) =>
+  const filteredUsers = users.filter((user) => {
+    // Search filter
+    const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      user.role.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Status filter
+    let isEffectivelyActive;
+    if (
+      (user.role === "admin" || user.role === "cart_admin") &&
+      user.effectivelyActive !== undefined
+    ) {
+      isEffectivelyActive = user.effectivelyActive;
+    } else {
+      isEffectivelyActive = user.isActive !== false;
+    }
+
+    const matchesStatus =
+      filterStatus === "all" ||
+      (filterStatus === "active" && isEffectivelyActive) ||
+      (filterStatus === "inactive" && !isEffectivelyActive);
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate stats
+  const totalUsers = users.length;
+  const activeUsers = users.filter((user) => {
+    if (
+      (user.role === "admin" || user.role === "cart_admin") &&
+      user.effectivelyActive !== undefined
+    ) {
+      return user.effectivelyActive;
+    }
+    return user.isActive !== false;
+  }).length;
+  const inactiveUsers = totalUsers - activeUsers;
 
   const roleColors = {
     super_admin: "bg-purple-100 text-purple-800",
@@ -462,7 +413,7 @@ const Users = () => {
               name: "",
               email: "",
               password: "",
-              role: "",
+              role: "super_admin", // Default role for super admin user creation
               franchiseId: "",
               cartName: "",
               location: "",
@@ -480,36 +431,45 @@ const Users = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+        <button
+          onClick={() => setFilterStatus("all")}
+          className={`bg-white rounded-lg shadow p-3 sm:p-4 transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "all"
+              ? "ring-2 ring-blue-500 border-2 border-blue-500"
+              : ""
+          }`}
+        >
           <p className="text-xs sm:text-sm text-gray-500">Total Users</p>
           <p className="text-xl sm:text-2xl font-bold text-gray-800">
-            {users.length}
+            {totalUsers}
           </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+        </button>
+        <button
+          onClick={() => setFilterStatus("active")}
+          className={`bg-white rounded-lg shadow p-3 sm:p-4 transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "active"
+              ? "ring-2 ring-green-500 border-2 border-green-500"
+              : ""
+          }`}
+        >
           <p className="text-xs sm:text-sm text-gray-500">Active</p>
           <p className="text-xl sm:text-2xl font-bold text-green-600">
-            {
-              users.filter((u) =>
-                u.effectivelyActive !== undefined
-                  ? u.effectivelyActive
-                  : u.isActive !== false
-              ).length
-            }
+            {activeUsers}
           </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+        </button>
+        <button
+          onClick={() => setFilterStatus("inactive")}
+          className={`bg-white rounded-lg shadow p-3 sm:p-4 transition-all hover:shadow-md cursor-pointer text-left ${
+            filterStatus === "inactive"
+              ? "ring-2 ring-red-500 border-2 border-red-500"
+              : ""
+          }`}
+        >
           <p className="text-xs sm:text-sm text-gray-500">Inactive</p>
           <p className="text-xl sm:text-2xl font-bold text-red-600">
-            {
-              users.filter((u) =>
-                u.effectivelyActive !== undefined
-                  ? !u.effectivelyActive
-                  : u.isActive === false
-              ).length
-            }
+            {inactiveUsers}
           </p>
-        </div>
+        </button>
         <div className="bg-white rounded-lg shadow p-3 sm:p-4">
           <p className="text-xs sm:text-sm text-gray-500">Franchises</p>
           <p className="text-xl sm:text-2xl font-bold text-blue-600">
@@ -520,15 +480,42 @@ const Users = () => {
 
       <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
         <div className="mb-3 sm:mb-4">
-          <div className="relative">
-            <FaSearch className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm sm:text-base" />
-            <input
-              type="text"
-              placeholder="Search users by name, email, or role..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <FaSearch className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm sm:text-base" />
+              <input
+                type="text"
+                placeholder="Search users by name, email, or role..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+                  viewMode === "list"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+                title="List View"
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode("tile")}
+                className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+                  viewMode === "tile"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+                title="Tile View"
+              >
+                Tile
+              </button>
+            </div>
           </div>
         </div>
 
@@ -540,6 +527,103 @@ const Users = () => {
           <div className="text-center py-12 text-gray-500">
             <FaUsers className="mx-auto text-4xl mb-4 text-gray-300" />
             <p>No users found</p>
+          </div>
+        ) : viewMode === "tile" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {filteredUsers.map((user) => {
+              let isEffectivelyActive;
+              if (
+                (user.role === "admin" || user.role === "cart_admin") &&
+                user.effectivelyActive !== undefined
+              ) {
+                isEffectivelyActive = user.effectivelyActive;
+              } else {
+                isEffectivelyActive = user.isActive !== false;
+              }
+
+              return (
+                <div
+                  key={user._id}
+                  className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition-all p-3 sm:p-4 ${
+                    !isEffectivelyActive
+                      ? "opacity-75 border-gray-300"
+                      : "border-gray-200"
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate">
+                        {user.name}
+                      </h3>
+                      {(user.cartName || user.cafeName) && (
+                        <p className="text-xs text-gray-500 truncate mb-1">
+                          Cart: {user.cartName || user.cafeName}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    {getStatusBadge(user)}
+                  </div>
+
+                  <div className="mb-3">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        roleColors[user.role] || "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {getRoleLabel(user.role)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => handleEdit(user)}
+                      className="flex-1 px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Edit"
+                    >
+                      <FaEdit size={12} className="inline mr-1" />
+                      Edit
+                    </button>
+                    {(user.role === "franchise_admin" ||
+                      user.role === "admin" ||
+                      user.role === "cart_admin") && (
+                      <button
+                        onClick={() => handleToggleStatus(user)}
+                        disabled={togglingStatus === user._id}
+                        className={`px-2 py-1.5 text-xs rounded transition-colors ${
+                          isEffectivelyActive
+                            ? "text-green-600 hover:bg-green-50"
+                            : "text-gray-400 hover:bg-gray-100"
+                        }`}
+                        title={isEffectivelyActive ? "Deactivate" : "Activate"}
+                      >
+                        {togglingStatus === user._id ? (
+                          <FaSpinner className="animate-spin" size={12} />
+                        ) : isEffectivelyActive ? (
+                          <FaToggleOn size={14} />
+                        ) : (
+                          <FaToggleOff size={14} />
+                        )}
+                      </button>
+                    )}
+                    {user.role !== "super_admin" &&
+                      !["manager", "cook", "waiter", "captain"].includes(
+                        user.role
+                      ) && (
+                        <button
+                          onClick={(e) => handleDelete(e, user._id)}
+                          className="px-2 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <FaTrash size={12} />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto -mx-3 sm:mx-0">
@@ -771,68 +855,11 @@ const Users = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {/* Role selector:
-                  - Always visible when creating a user
-                  - When editing, visible only for super admins
-                    EXCEPT for super_admin users themselves, whose role is locked
-               */}
-              {(!editingUser ||
-                (isSuperAdmin && editingUser?.role !== "super_admin")) && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Role
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => {
-                      const newRole = e.target.value;
+              {/* Role selector removed - super admin users are created with "super_admin" role by default */}
 
-                      // If creating a new cart admin, redirect to dedicated Register Cart screen
-                      if (!editingUser && newRole === "cart_admin") {
-                        setShowModal(false);
-                        setEditingUser(null);
-                        setFormData({
-                          name: "",
-                          email: "",
-                          password: "",
-                          role: "",
-                          franchiseId: "",
-                          cartName: "",
-                          location: "",
-                          phone: "",
-                          address: "",
-                        });
-                        navigate("/carts/new");
-                        return;
-                      }
-
-                      setFormData((prev) => ({
-                        ...prev,
-                        role: newRole,
-                        // When changing role in create mode we reset ownership fields;
-                        // in edit mode super admin can keep or update them manually.
-                        franchiseId: editingUser ? prev.franchiseId : "",
-                        cartName: editingUser ? prev.cartName : "",
-                        location: editingUser ? prev.location : "",
-                        phone: editingUser ? prev.phone : "",
-                        address: editingUser ? prev.address : "",
-                      }));
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">Select a role</option>
-                    {getAllowedRoles().map((role) => (
-                      <option key={role.value} value={role.value}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Cart Admin specific fields (only when creating a new cart admin) */}
-              {!editingUser &&
+              {/* Cart Admin specific fields removed - not applicable for super admin user creation */}
+              {false &&
+                !editingUser &&
                 (formData.role === "admin" ||
                   formData.role === "cart_admin") && (
                   <>
