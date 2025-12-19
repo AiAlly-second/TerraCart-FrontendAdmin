@@ -1,8 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../utils/api";
-import { getSocket } from "../utils/socket";
 
 const AttendanceManagement = () => {
+  // Use dynamic imports to avoid circular dependency issues during bundling
+  // Use refs instead of state to avoid closure issues
+  const apiRef = useRef(null);
+  const getSocketRef = useRef(null);
+  const [dependenciesLoaded, setDependenciesLoaded] = useState(false);
+
+  // Load api and socket dynamically on mount
+  useEffect(() => {
+    const loadDependencies = async () => {
+      try {
+        const apiModule = await import("../utils/api");
+        const socketModule = await import("../utils/socket");
+        apiRef.current = apiModule.default;
+        getSocketRef.current = socketModule.getSocket;
+        setDependenciesLoaded(true);
+      } catch (error) {
+        console.error("Failed to load dependencies:", error);
+      }
+    };
+    loadDependencies();
+  }, []);
   const [attendance, setAttendance] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -29,11 +48,13 @@ const AttendanceManagement = () => {
   }, []);
 
   useEffect(() => {
+    if (!dependenciesLoaded || !apiRef.current || !getSocketRef.current) return; // Wait for dependencies to load
+
     fetchEmployees();
     fetchTodayAttendance();
 
     // Set up Socket.IO for real-time updates
-    const socket = getSocket();
+    const socket = getSocketRef.current();
     socketRef.current = socket;
 
     // Listen for attendance updates
@@ -67,23 +88,33 @@ const AttendanceManagement = () => {
     socket.on("attendance:updated", handleAttendanceUpdated);
 
     return () => {
-      socket.off("attendance:checked_in", handleAttendanceCheckedIn);
-      socket.off("attendance:checked_out", handleAttendanceCheckedOut);
-      socket.off("attendance:updated", handleAttendanceUpdated);
+      if (socketRef.current) {
+        socketRef.current.off(
+          "attendance:checked_in",
+          handleAttendanceCheckedIn
+        );
+        socketRef.current.off(
+          "attendance:checked_out",
+          handleAttendanceCheckedOut
+        );
+        socketRef.current.off("attendance:updated", handleAttendanceUpdated);
+      }
     };
-  }, [activeTab]);
+  }, [activeTab, dependenciesLoaded]);
 
   useEffect(() => {
+    if (!dependenciesLoaded || !apiRef.current) return; // Wait for api to load
     if (activeTab === "history") {
       fetchAttendance();
     } else if (activeTab === "stats") {
       fetchStats();
     }
-  }, [activeTab, selectedEmployee, startDate, endDate]);
+  }, [activeTab, selectedEmployee, startDate, endDate, dependenciesLoaded]);
 
   const fetchEmployees = async () => {
+    if (!apiRef.current) return;
     try {
-      const response = await api.get("/employees");
+      const response = await apiRef.current.get("/employees");
       // Ensure employees is always an array
       let employeesData = [];
       if (Array.isArray(response.data)) {
@@ -101,9 +132,10 @@ const AttendanceManagement = () => {
   };
 
   const fetchTodayAttendance = async () => {
+    if (!apiRef.current) return;
     try {
       setLoading(true);
-      const response = await api.get("/attendance/today");
+      const response = await apiRef.current.get("/attendance/today");
       // Ensure todayAttendance is always an array
       let attendanceData = [];
       if (Array.isArray(response.data)) {
@@ -131,6 +163,7 @@ const AttendanceManagement = () => {
   };
 
   const fetchAttendance = async () => {
+    if (!apiRef.current) return;
     try {
       setLoading(true);
       const params = {};
@@ -138,7 +171,7 @@ const AttendanceManagement = () => {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
-      const response = await api.get("/attendance", { params });
+      const response = await apiRef.current.get("/attendance", { params });
       // Ensure attendance is always an array
       let attendanceData = [];
       if (Array.isArray(response.data)) {
@@ -159,6 +192,7 @@ const AttendanceManagement = () => {
   };
 
   const fetchStats = async () => {
+    if (!apiRef.current) return;
     try {
       setLoading(true);
       const params = {};
@@ -166,7 +200,9 @@ const AttendanceManagement = () => {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
-      const response = await api.get("/attendance/stats", { params });
+      const response = await apiRef.current.get("/attendance/stats", {
+        params,
+      });
       setStats(response.data);
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -196,8 +232,14 @@ const AttendanceManagement = () => {
     }
 
     if (!window.confirm("Mark this employee as checked in?")) return;
+    if (!apiRef.current) {
+      alert("System is still loading. Please wait a moment and try again.");
+      return;
+    }
     try {
-      const response = await api.post("/attendance/checkin", { employeeId });
+      const response = await apiRef.current.post("/attendance/checkin", {
+        employeeId,
+      });
 
       // Immediately update the UI with the response data
       if (response.data?.attendance) {
@@ -240,9 +282,13 @@ const AttendanceManagement = () => {
   };
 
   const handleStartBreak = async (attendanceId, employeeId) => {
+    if (!apiRef.current) {
+      alert("System is still loading. Please wait a moment and try again.");
+      return;
+    }
     if (!window.confirm("Start break for this employee?")) return;
     try {
-      const response = await api.post(
+      const response = await apiRef.current.post(
         `/attendance/${attendanceId}/start-break`
       );
 
@@ -275,9 +321,15 @@ const AttendanceManagement = () => {
   };
 
   const handleEndBreak = async (attendanceId, employeeId) => {
+    if (!apiRef.current) {
+      alert("System is still loading. Please wait a moment and try again.");
+      return;
+    }
     if (!window.confirm("End break for this employee?")) return;
     try {
-      const response = await api.post(`/attendance/${attendanceId}/end-break`);
+      const response = await apiRef.current.post(
+        `/attendance/${attendanceId}/end-break`
+      );
 
       // Immediately update the UI
       if (response.data?.attendance) {
@@ -332,8 +384,14 @@ const AttendanceManagement = () => {
     }
 
     if (!window.confirm("Mark this employee as checked out?")) return;
+    if (!apiRef.current) {
+      alert("System is still loading. Please wait a moment and try again.");
+      return;
+    }
     try {
-      const response = await api.post("/attendance/checkout", { employeeId });
+      const response = await apiRef.current.post("/attendance/checkout", {
+        employeeId,
+      });
 
       // Immediately update the UI with the response data
       if (response.data?.attendance) {
