@@ -30,9 +30,22 @@ const STATUS_MAP = {
 const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 const STATUS_SELECTABLE = ["AVAILABLE", "OCCUPIED"];
 
+// Get customer base URL - CRITICAL for takeaway QR codes
 const customerBaseUrl = (
   import.meta.env.VITE_CUSTOMER_BASE_URL || "http://localhost:5173"
 ).replace(/\/$/, "");
+
+// Warn in production if VITE_CUSTOMER_BASE_URL is not set or points to localhost
+if (import.meta.env.PROD) {
+  if (!import.meta.env.VITE_CUSTOMER_BASE_URL || customerBaseUrl.includes("localhost")) {
+    console.error(
+      "⚠️ [Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
+      "Takeaway QR codes will not work in production.",
+      "Please set VITE_CUSTOMER_BASE_URL to your deployed frontend URL (e.g., https://your-frontend.vercel.app)"
+    );
+  }
+}
+
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 
 const TableCard = ({
@@ -662,6 +675,26 @@ const Tables = () => {
             <p className="mt-2 text-xs text-slate-400">
               Cart ID: <span className="font-mono">{cartId}</span>
             </p>
+            {/* Warning if VITE_CUSTOMER_BASE_URL is not set or points to localhost in production */}
+            {import.meta.env.PROD &&
+              (!import.meta.env.VITE_CUSTOMER_BASE_URL ||
+                customerBaseUrl.includes("localhost")) && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 mb-1">
+                    ⚠️ Configuration Error
+                  </p>
+                  <p className="text-xs text-red-600">
+                    VITE_CUSTOMER_BASE_URL is not set or points to localhost.
+                    Takeaway QR codes will not work. Please set{" "}
+                    <span className="font-mono">VITE_CUSTOMER_BASE_URL</span>{" "}
+                    to your deployed frontend URL (e.g.,{" "}
+                    <span className="font-mono">
+                      https://your-frontend.vercel.app
+                    </span>
+                    ) in your deployment environment variables.
+                  </p>
+                </div>
+              )}
           </div>
           <div className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg px-4 py-4">
             {(() => {

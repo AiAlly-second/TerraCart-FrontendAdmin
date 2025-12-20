@@ -5,6 +5,7 @@ import {
   updateIngredient,
   deleteIngredient,
   getFIFOLayers,
+  pushToCartAdmins,
 } from "../../services/costingV2Api";
 import {
   FaPlus,
@@ -14,6 +15,7 @@ import {
   FaBox,
   FaWarehouse,
   FaExclamationTriangle,
+  FaArrowDown,
 } from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
 import { confirm } from "../../utils/confirm";
@@ -44,6 +46,7 @@ const Ingredients = () => {
   const [selectedIngredient, setSelectedIngredient] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
     fetchIngredients();
@@ -172,6 +175,46 @@ const Ingredients = () => {
     }
   };
 
+  const handlePushToCartAdmins = async () => {
+    if (!isSuperAdmin) return;
+
+    const confirmed = await confirm(
+      "This will push all your ingredients and BOMs to all cart admins.\n\n" +
+        "Existing cart admin data will be updated with your master data, but their inventory quantities and costs will be preserved.\n\n" +
+        "Do you want to continue?",
+      {
+        title: "Push to Cart Admins",
+        confirmText: "Push",
+        cancelText: "Cancel",
+        danger: false,
+        requireInput: false,
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setPushing(true);
+      const res = await pushToCartAdmins({});
+      if (res.data.success) {
+        const results = res.data.data;
+        const message =
+          `Successfully pushed data to ${results.cartAdmins.length} cart admin(s)!\n\n` +
+          `Ingredients: ${results.ingredients.created} created, ${results.ingredients.updated} updated\n` +
+          `BOMs: ${results.recipes.created} created, ${results.recipes.updated} updated`;
+        alert(message);
+      } else {
+        alert(res.data.message || "Failed to push data");
+      }
+    } catch (error) {
+      alert(
+        `Failed to push data: ${error.response?.data?.message || error.message}`
+      );
+    } finally {
+      setPushing(false);
+    }
+  };
+
   const filteredIngredients = ingredients.filter((ing) => {
     const matchesSearch = ing.name
       .toLowerCase()
@@ -210,26 +253,38 @@ const Ingredients = () => {
                 : "Manage your inventory ingredients, stock and thresholds."}
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setFormData({
-                name: "",
-                category: "Other",
-                storageLocation: "Dry Storage",
-                uom: "kg",
-                baseUnit: "kg",
-                reorderLevel: 0,
-                shelfTimeDays: 7,
-                qtyOnHand: 0,
-                isActive: true,
-              });
-              setModalOpen(true);
-            }}
-            className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center"
-          >
-            <FaPlus className="text-sm sm:text-base" /> Add Ingredient
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            {isSuperAdmin && (
+              <button
+                onClick={handlePushToCartAdmins}
+                disabled={pushing}
+                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaArrowDown className="text-sm sm:text-base" />
+                {pushing ? "Pushing..." : "Push to Cart Admins"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditing(null);
+                setFormData({
+                  name: "",
+                  category: "Other",
+                  storageLocation: "Dry Storage",
+                  uom: "kg",
+                  baseUnit: "kg",
+                  reorderLevel: 0,
+                  shelfTimeDays: 7,
+                  qtyOnHand: 0,
+                  isActive: true,
+                });
+                setModalOpen(true);
+              }}
+              className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center"
+            >
+              <FaPlus className="text-sm sm:text-base" /> Add Ingredient
+            </button>
+          </div>
         </div>
 
         {/* Search and Filter */}
