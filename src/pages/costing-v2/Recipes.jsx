@@ -18,12 +18,14 @@ import {
   FaUtensils,
   FaCheck,
   FaExclamationTriangle,
+  FaArrowDown,
 } from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
 
 const Recipes = () => {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "super_admin";
+  const isCartAdmin = user?.role === "admin";
   const [searchParams] = useSearchParams();
   const recipeNameFromMenu = searchParams.get("name") || "";
   const [recipes, setRecipes] = useState([]);
@@ -42,6 +44,7 @@ const Recipes = () => {
   });
   const [initializedFromMenu, setInitializedFromMenu] = useState(false);
   const [selectedMenuItemId, setSelectedMenuItemId] = useState("");
+  const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -238,6 +241,47 @@ const Recipes = () => {
     }
   };
 
+  const handlePushToCartAdmins = async () => {
+    if (!isSuperAdmin) return;
+
+    const { confirm } = await import("../../utils/confirm");
+    const confirmed = await confirm(
+      "This will push all your ingredients and BOMs to all cart admins.\n\n" +
+        "Existing cart admin data will be updated with your master data, but their inventory quantities and costs will be preserved.\n\n" +
+        "Do you want to continue?",
+      {
+        title: "Push to Cart Admins",
+        confirmText: "Push",
+        cancelText: "Cancel",
+        danger: false,
+        requireInput: false,
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setPushing(true);
+      const res = await pushToCartAdmins({});
+      if (res.data.success) {
+        const results = res.data.data;
+        const message =
+          `Successfully pushed data to ${results.cartAdmins.length} cart admin(s)!\n\n` +
+          `Ingredients: ${results.ingredients.created} created, ${results.ingredients.updated} updated\n` +
+          `BOMs: ${results.recipes.created} created, ${results.recipes.updated} updated`;
+        alert(message);
+      } else {
+        alert(res.data.message || "Failed to push data");
+      }
+    } catch (error) {
+      alert(
+        `Failed to push data: ${error.response?.data?.message || error.message}`
+      );
+    } finally {
+      setPushing(false);
+    }
+  };
+
   const addIngredient = () => {
     setFormData({
       ...formData,
@@ -297,16 +341,28 @@ const Recipes = () => {
                 : "Define and track bill of materials and recipe costs for your franchise."}
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditing(null);
-              resetForm();
-              setModalOpen(true);
-            }}
-            className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center"
-          >
-            <FaPlus className="text-sm sm:text-base" /> Add BOM
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            {isSuperAdmin && (
+              <button
+                onClick={handlePushToCartAdmins}
+                disabled={pushing}
+                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaArrowDown className="text-sm sm:text-base" />
+                {pushing ? "Pushing..." : "Push to Cart Admins"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditing(null);
+                resetForm();
+                setModalOpen(true);
+              }}
+              className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center"
+            >
+              <FaPlus className="text-sm sm:text-base" /> Add BOM
+            </button>
+          </div>
         </div>
       </div>
 
@@ -568,7 +624,9 @@ const Recipes = () => {
               {/* Link to Menu Item from Menu */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Link to Default Menu Item *
+                  {isCartAdmin
+                    ? "Link to Menu Item *"
+                    : "Link to Default Menu Item *"}
                 </label>
                 <select
                   required
@@ -576,7 +634,17 @@ const Recipes = () => {
                   onChange={(e) => handleSelectMenuItem(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                 >
-                  <option value="">Select from Default Menu...</option>
+                  <option
+                    value={
+                      isCartAdmin
+                        ? "Select from Menu..."
+                        : "Select from Default Menu..."
+                    }
+                  >
+                    {isCartAdmin
+                      ? "Select from Menu..."
+                      : "Select from Default Menu..."}
+                  </option>
                   {defaultMenuItems.map((item, idx) => (
                     <option
                       key={`${item.category}-${item.name}-${idx}`}
@@ -587,8 +655,9 @@ const Recipes = () => {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Selecting a default menu item will set this BOM&apos;s name to
-                  match the default menu item.
+                  {isCartAdmin
+                    ? "Selecting a menu item will set this BOM's name to match the menu item."
+                    : "Selecting a default menu item will set this BOM's name to match the default menu item."}
                 </p>
               </div>
 

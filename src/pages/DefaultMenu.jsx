@@ -252,8 +252,8 @@ const DefaultMenu = () => {
       `Push default menu to ${selectedFranchises.size} franchise(s)?\n\n` +
         `Franchises: ${franchiseNames}\n\n` +
         `This will:\n` +
-        `� Replace the default menu for each selected franchise\n` +
-        `� The franchise menu will then automatically sync to all their carts\n\n` +
+        `? Replace the default menu for each selected franchise\n` +
+        `? The franchise menu will then automatically sync to all their carts\n\n` +
         `Continue?`
     );
     if (!confirmed) {
@@ -600,8 +600,8 @@ const DefaultMenu = () => {
               Super Admin creates Global Menu
             </span>
           </div>
-          <span className="hidden sm:inline text-blue-500">?</span>
-          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <span className="hidden sm:inline text-blue-500">→</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">↓</span>
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
             <span className="bg-purple-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               2
@@ -610,8 +610,8 @@ const DefaultMenu = () => {
               Push to Franchises
             </span>
           </div>
-          <span className="hidden sm:inline text-blue-500">?</span>
-          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <span className="hidden sm:inline text-blue-500">→</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">↓</span>
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
             <span className="bg-green-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               3
@@ -620,8 +620,8 @@ const DefaultMenu = () => {
               Franchise pushes to Carts
             </span>
           </div>
-          <span className="hidden sm:inline text-blue-500">?</span>
-          <span className="sm:hidden text-blue-500 text-center w-full">?</span>
+          <span className="hidden sm:inline text-blue-500">→</span>
+          <span className="sm:hidden text-blue-500 text-center w-full">↓</span>
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0">
             <span className="bg-orange-600 text-white px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] md:text-xs font-bold flex-shrink-0">
               4
@@ -752,16 +752,14 @@ const DefaultMenu = () => {
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <span className="text-xl sm:text-2xl text-slate-300">
-                                    ???
-                                  </span>
+                                  <FaImage className="text-xl sm:text-2xl text-slate-300" />
                                 </div>
                               )}
                               {/* Badges */}
                               <div className="absolute top-0.5 sm:top-1 left-0.5 sm:left-1 flex gap-0.5">
                                 {item.isFeatured && (
-                                  <span className="text-[10px] sm:text-xs">
-                                    ?
+                                  <span className="px-0.5 sm:px-1 py-0.5 bg-yellow-500 text-white text-[9px] sm:text-[10px] rounded">
+                                    ⭐
                                   </span>
                                 )}
                                 {!item.isAvailable && (
@@ -773,7 +771,7 @@ const DefaultMenu = () => {
                               {/* Price */}
                               <div className="absolute bottom-0.5 sm:bottom-1 right-0.5 sm:right-1">
                                 <span className="px-1 sm:px-1.5 md:px-1.5 py-0.5 bg-blue-600 text-white font-bold rounded text-[9px] sm:text-[10px] md:text-xs shadow">
-                                  ?
+                                  ₹
                                   {typeof item.price === "number"
                                     ? item.price.toFixed(0)
                                     : item.price}
@@ -800,11 +798,13 @@ const DefaultMenu = () => {
                               <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px] sm:text-[10px]">
                                 {item.spiceLevel &&
                                   item.spiceLevel !== "NONE" && (
-                                    <span>???</span>
+                                    <span className="text-orange-600">
+                                      🌶️ {item.spiceLevel}
+                                    </span>
                                   )}
                                 {item.calories && (
                                   <span className="text-slate-400">
-                                    {item.calories}cal
+                                    🔥 {item.calories}cal
                                   </span>
                                 )}
                                 {item.tags?.length > 0 && (
@@ -813,7 +813,10 @@ const DefaultMenu = () => {
                                   </span>
                                 )}
                                 {item.allergens?.length > 0 && (
-                                  <span className="text-red-400">??</span>
+                                  <span className="text-red-400">
+                                    ⚠️ {item.allergens.length} allergen
+                                    {item.allergens.length > 1 ? "s" : ""}
+                                  </span>
                                 )}
                               </div>
 
@@ -900,9 +903,7 @@ const DefaultMenu = () => {
                       </div>
                     ) : (
                       <div className="col-span-full text-center py-4 sm:py-6 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                        <span className="text-xl sm:text-2xl mb-1 block">
-                          ???
-                        </span>
+                        <FaUtensils className="text-xl sm:text-2xl mb-1 mx-auto" />
                         <p className="text-xs sm:text-sm px-2">
                           No items yet. Click "Add Item" to add.
                         </p>
@@ -934,7 +935,7 @@ const DefaultMenu = () => {
                 className="text-gray-400 hover:text-gray-600 text-xl sm:text-2xl leading-none p-1 ml-1 sm:ml-2 flex-shrink-0"
                 aria-label="Close"
               >
-                �
+                <FaTimes />
               </button>
             </div>
 
@@ -963,7 +964,7 @@ const DefaultMenu = () => {
                             result.success ? "text-green-600" : "text-red-600"
                           }`}
                         >
-                          {result.success ? "? Success" : "? Failed"}
+                          {result.success ? "✓ Success" : "✗ Failed"}
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
@@ -1225,7 +1226,7 @@ const DefaultMenu = () => {
                 </div>
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Price (?) *
+                    Price (₹) *
                   </label>
                   <input
                     type="number"
