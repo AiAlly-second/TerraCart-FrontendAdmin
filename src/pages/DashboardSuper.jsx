@@ -8,10 +8,7 @@ import {
   FaSpinner,
 } from "react-icons/fa";
 import api from "../utils/api";
-import { getSocket } from "../utils/socket";
-
-// Use centralized socket connection with proper CORS configuration
-const socket = getSocket();
+// Removed socket import - using HTTP polling instead
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -106,75 +103,9 @@ const Dashboard = () => {
   }, []); // Only run once on mount
 
   useEffect(() => {
-    // Set up socket listeners - they will use activeFranchiseIds from state
-    // This effect runs when activeFranchiseIds changes
-
-    // Listen for real-time order updates to update revenue dynamically
-    const handleNewOrder = (order) => {
-      // Filter by active franchises using current state value
-      const orderFranchiseId =
-        order.franchiseId?.toString() || order.franchiseId;
-      if (!orderFranchiseId || !activeFranchiseIds.has(orderFranchiseId)) {
-        return; // Skip orders from inactive franchises
-      }
-
-      setOrders((prev) => {
-        // Check if order already exists (avoid duplicates)
-        const exists = prev.some((o) => o._id === order._id);
-        if (exists) {
-          // If exists, update it instead of adding duplicate
-          const updatedOrders = prev.map((o) =>
-            o._id === order._id ? order : o
-          );
-          // Recalculate revenue with active orders only
-          updateRevenue(updatedOrders);
-          return updatedOrders;
-        }
-
-        // Add new order and recalculate revenue
-        const newOrders = [...prev, order];
-        updateRevenue(newOrders);
-        return newOrders;
-      });
-    };
-
-    const handleOrderUpdated = (updatedOrder) => {
-      // Filter by active franchises using current state value
-      const orderFranchiseId =
-        updatedOrder.franchiseId?.toString() || updatedOrder.franchiseId;
-      if (!orderFranchiseId || !activeFranchiseIds.has(orderFranchiseId)) {
-        // If order is from inactive franchise, remove it if it exists
-        setOrders((prev) => {
-          const filtered = prev.filter((o) => o._id !== updatedOrder._id);
-          updateRevenue(filtered);
-          return filtered;
-        });
-        return;
-      }
-
-      setOrders((prev) => {
-        const orderExists = prev.some((o) => o._id === updatedOrder._id);
-        let updatedOrders;
-
-        if (orderExists) {
-          // Update existing order (status might have changed to "Paid")
-          updatedOrders = prev.map((order) =>
-            order._id === updatedOrder._id ? updatedOrder : order
-          );
-        } else {
-          // Add new order if it doesn't exist (might have been created before page load)
-          updatedOrders = [...prev, updatedOrder];
-        }
-
-        // Recalculate total revenue from active franchises only
-        updateRevenue(updatedOrders);
-        return updatedOrders;
-      });
-    };
-
-    // Listen for payment updates to refresh revenue (only from active franchises)
-    const handlePaymentUpdated = async () => {
-      // Refetch all orders and filter by active franchises
+    // HTTP polling for real-time updates (replaces Socket.IO)
+    // Poll orders every 12 seconds to check for new/updated orders and payments
+    const pollingInterval = setInterval(async () => {
       try {
         const ordersResponse = await api.get("/orders");
         const fetchedOrders = ordersResponse.data || [];
@@ -193,45 +124,15 @@ const Dashboard = () => {
         // Recalculate total revenue from active franchises only
         updateRevenue(activeOrders);
       } catch (err) {
-        console.error("Failed to refresh orders after payment update:", err);
+        // Silently fail polling - don't spam console
+        if (import.meta.env.DEV) {
+          console.error("Failed to poll orders:", err);
+        }
       }
-    };
-
-    // Also listen for paymentCreated to catch new payments
-    const handlePaymentCreated = async () => {
-      // Refetch all orders and filter by active franchises
-      try {
-        const ordersResponse = await api.get("/orders");
-        const fetchedOrders = ordersResponse.data || [];
-
-        // Get current active franchise IDs
-        const currentIds = activeFranchiseIds;
-
-        // Filter to only active franchises
-        const activeOrders = fetchedOrders.filter((order) => {
-          const franchiseId =
-            order.franchiseId?.toString() || order.franchiseId;
-          return franchiseId && currentIds.has(franchiseId);
-        });
-
-        setOrders(activeOrders);
-        // Recalculate total revenue from active franchises only
-        updateRevenue(activeOrders);
-      } catch (err) {
-        console.error("Failed to refresh orders after payment creation:", err);
-      }
-    };
-
-    socket.on("newOrder", handleNewOrder);
-    socket.on("orderUpdated", handleOrderUpdated);
-    socket.on("paymentUpdated", handlePaymentUpdated);
-    socket.on("paymentCreated", handlePaymentCreated);
+    }, 12000); // 12 seconds polling interval
 
     return () => {
-      socket.off("newOrder", handleNewOrder);
-      socket.off("orderUpdated", handleOrderUpdated);
-      socket.off("paymentUpdated", handlePaymentUpdated);
-      socket.off("paymentCreated", handlePaymentCreated);
+      clearInterval(pollingInterval);
     };
   }, [activeFranchiseIds]); // Re-run when activeFranchiseIds changes
 

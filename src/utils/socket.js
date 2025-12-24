@@ -10,10 +10,19 @@ const getApiUrl = () => {
   // In development mode, check if we should use the Vite proxy
   // The proxy is configured in vite.config.js to forward /socket.io to the backend
   if (import.meta.env.DEV && typeof window !== "undefined") {
-    // Use proxy if explicitly enabled or if connecting to remote backend
+    // Use proxy if explicitly enabled, disabled, or if connecting to remote backend
+    // Default to using proxy for remote backends to avoid CORS and connection issues
+    const explicitlyDisabled = import.meta.env.VITE_USE_PROXY === "false";
+    const explicitlyEnabled = import.meta.env.VITE_USE_PROXY === "true";
+    const isRemoteBackend =
+      envUrl &&
+      (envUrl.includes("onrender.com") ||
+        envUrl.includes("herokuapp.com") ||
+        envUrl.includes("vercel.app") ||
+        envUrl.includes("netlify.app"));
+
     const useProxy =
-      import.meta.env.VITE_USE_PROXY === "true" ||
-      (envUrl && envUrl.includes("terracart-backendmain-2.onrender.com"));
+      explicitlyEnabled || (!explicitlyDisabled && isRemoteBackend);
 
     if (useProxy) {
       // Use same origin - Vite proxy will handle forwarding to backend
@@ -32,28 +41,39 @@ const getApiUrl = () => {
  */
 export const createSocketConnection = (options = {}) => {
   const apiUrl = getApiUrl();
+  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 
   // Determine if we're connecting to a different origin (cross-origin)
   const isCrossOrigin =
     typeof window !== "undefined" &&
     window.location.origin !== new URL(apiUrl, window.location.href).origin;
 
+  // Check if connecting to Render.com (which can be slow to wake up)
+  // Use envUrl to check the actual backend, not the proxied URL
+  const isRenderBackend = envUrl.includes("onrender.com");
+
+  // Use longer timeout for remote servers, especially Render.com
+  // Render.com free tier can take 30-60 seconds to wake up from sleep
+  const baseTimeout = isRenderBackend ? 120000 : 60000; // 120s for Render, 60s for others
+
   // Configure Socket.IO with proper options for cross-origin connections
   const socketOptions = {
-    // Force websocket transport for better cross-origin support
-    transports: ["websocket", "polling"],
+    // Try polling first for better compatibility, then upgrade to websocket
+    transports: ["polling", "websocket"],
     // Enable auto-connect
     autoConnect: true,
-    // Reconnection options
+    // Reconnection options - more aggressive for remote servers
     reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    reconnectionAttempts: 5,
-    // Timeout for connection - increased to match backend pingTimeout (60s)
+    reconnectionDelay: isRenderBackend ? 2000 : 1000,
+    reconnectionDelayMax: isRenderBackend ? 10000 : 5000,
+    reconnectionAttempts: isRenderBackend ? 10 : 5,
+    // Timeout for connection - increased for remote servers
     // This gives enough time for slow networks or high latency connections
-    timeout: 60000,
+    timeout: baseTimeout,
     // Connection timeout for initial handshake
-    connectTimeout: 60000,
+    connectTimeout: baseTimeout,
+    // Upgrade timeout - time to wait for transport upgrade
+    upgradeTimeout: 30000,
     // For cross-origin connections, ensure proper handshake
     ...options,
   };
@@ -65,68 +85,119 @@ export const createSocketConnection = (options = {}) => {
 
   console.log(`[Socket] Connecting to: ${apiUrl}`, {
     isCrossOrigin,
+    isRenderBackend,
+    timeout: baseTimeout,
     options: socketOptions,
   });
 
   const socket = io(apiUrl, socketOptions);
 
+  // Track connection attempts to avoid spam
+  let connectionAttempts = 0;
+  let lastErrorTime = 0;
+  const ERROR_LOG_INTERVAL = 10000; // Only log detailed errors every 10 seconds
+
   // Add error handlers
   socket.on("connect_error", (error) => {
-    console.error("[Socket] Connection error:", error);
+    connectionAttempts++;
+    const now = Date.now();
+    const shouldLogDetailed = now - lastErrorTime > ERROR_LOG_INTERVAL;
 
-    // Handle timeout errors specifically
-    if (
-      error.message?.includes("timeout") ||
-      (error.type === "TransportError" && error.message?.includes("timeout"))
-    ) {
-      console.error(
-        "[Socket] Connection Timeout Error!\n" +
-          `Attempting to connect to: ${apiUrl}\n` +
-          `Error: ${error.message}\n\n` +
-          "🔧 Possible Solutions:\n" +
-          "1. Check if the backend server is running and accessible\n" +
-          "2. Verify network connectivity and firewall settings\n" +
-          "3. Check if the API URL is correct in your .env file\n" +
-          "4. For remote backends, ensure the server is not blocked by CORS or firewall\n" +
-          "5. Try increasing timeout if on a slow network connection"
-      );
-    } else if (
-      error.message?.includes("CORS") ||
-      error.message?.includes("Not allowed by CORS") ||
-      error.type === "TransportError"
-    ) {
-      console.error(
-        "[Socket] CORS/Connection Error Detected!\n" +
-          `Frontend origin: ${
-            typeof window !== "undefined" ? window.location.origin : "N/A"
-          }\n` +
-          `Attempting to connect to: ${apiUrl}\n\n` +
-          "🔧 Solutions:\n" +
-          "1. Use Vite proxy: Set VITE_USE_PROXY=true in .env (recommended for dev)\n" +
-          "2. Backend CORS: Add your origin to ALLOWED_ORIGINS on Render\n" +
-          "3. See TROUBLESHOOTING_CORS.md for detailed steps"
-      );
+    if (shouldLogDetailed) {
+      lastErrorTime = now;
 
-      // If in dev mode and not using proxy, suggest it
+      // Handle timeout errors specifically
       if (
-        import.meta.env.DEV &&
-        apiUrl.includes("terracart-backendmain-2.onrender.com")
+        error.message?.includes("timeout") ||
+        error.type === "TransportError" ||
+        error.message?.includes("xhr poll error")
       ) {
+        const backendUrl =
+          apiUrl !== window?.location?.origin ? apiUrl : envUrl;
         console.warn(
-          "💡 TIP: To avoid CORS in development, add this to your .env file:\n" +
-            "VITE_USE_PROXY=true\n" +
-            "Then restart your dev server."
+          `[Socket] Connection Timeout (Attempt ${connectionAttempts})!\n` +
+            `Connecting to: ${backendUrl}\n` +
+            (apiUrl !== window?.location?.origin
+              ? `(via proxy: ${apiUrl})\n`
+              : "") +
+            (isRenderBackend
+              ? "⏳ Render.com servers may take 30-60s to wake up from sleep. Please wait...\n"
+              : "") +
+            `\n🔧 Solutions:\n` +
+            `1. Check if backend server is running\n` +
+            `2. Verify network connectivity\n` +
+            `3. For Render.com: Server may be sleeping (free tier)\n` +
+            `4. Check API URL in .env file\n` +
+            (import.meta.env.DEV && apiUrl === window?.location?.origin
+              ? `5. Proxy is enabled - connection will retry automatically\n`
+              : import.meta.env.DEV
+              ? `5. Try setting VITE_USE_PROXY=true in .env to use Vite proxy\n`
+              : "")
         );
+      } else if (
+        error.message?.includes("CORS") ||
+        error.message?.includes("Not allowed by CORS")
+      ) {
+        const backendUrl =
+          apiUrl !== window?.location?.origin ? apiUrl : envUrl;
+        console.error(
+          "[Socket] CORS Error Detected!\n" +
+            `Frontend: ${
+              typeof window !== "undefined" ? window.location.origin : "N/A"
+            }\n` +
+            `Backend: ${backendUrl}\n` +
+            (apiUrl !== window?.location?.origin
+              ? `(via proxy: ${apiUrl})\n`
+              : "") +
+            `\n🔧 Solutions:\n` +
+            (apiUrl === window?.location?.origin
+              ? "1. Proxy is enabled - this shouldn't happen. Check Vite proxy config.\n"
+              : "1. Set VITE_USE_PROXY=true in .env (recommended for dev)\n") +
+            "2. Add your origin to backend CORS settings\n" +
+            "3. Restart dev server after changing .env"
+        );
+      } else {
+        // Other connection errors - log less frequently
+        if (connectionAttempts % 3 === 0) {
+          console.warn(
+            `[Socket] Connection error (attempt ${connectionAttempts}):`,
+            error.message || error.type
+          );
+        }
       }
     }
   });
 
   socket.on("connect", () => {
-    console.log("[Socket] Connected successfully:", socket.id);
+    connectionAttempts = 0; // Reset on successful connection
+    console.log(`[Socket] ✅ Connected successfully (ID: ${socket.id})`);
   });
 
   socket.on("disconnect", (reason) => {
-    console.log("[Socket] Disconnected:", reason);
+    if (reason === "io server disconnect") {
+      // Server disconnected the client, reconnect manually
+      console.warn("[Socket] Server disconnected. Reconnecting...");
+      socket.connect();
+    } else {
+      console.log(`[Socket] Disconnected: ${reason}`);
+    }
+  });
+
+  socket.on("reconnect_attempt", (attemptNumber) => {
+    if (attemptNumber % 3 === 0 || attemptNumber === 1) {
+      console.log(`[Socket] Reconnection attempt ${attemptNumber}...`);
+    }
+  });
+
+  socket.on("reconnect", (attemptNumber) => {
+    console.log(`[Socket] ✅ Reconnected after ${attemptNumber} attempts`);
+  });
+
+  socket.on("reconnect_failed", () => {
+    console.error(
+      "[Socket] ❌ Reconnection failed after all attempts.\n" +
+        "Please refresh the page or check your network connection."
+    );
   });
 
   return socket;

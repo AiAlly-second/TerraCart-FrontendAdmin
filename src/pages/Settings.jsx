@@ -68,6 +68,12 @@ const Settings = () => {
       const storedUser = localStorage.getItem('superAdminUser');
       const userData = storedUser ? JSON.parse(storedUser) : {};
       
+      if (!userData._id) {
+        setError('User ID is missing. Please log in again.');
+        setSaving(false);
+        return;
+      }
+      
       await api.put(`/users/${userData._id}`, {
         name: profile.name,
         email: profile.email,
@@ -105,6 +111,12 @@ const Settings = () => {
       setSaving(true);
       const storedUser = localStorage.getItem('superAdminUser');
       const userData = storedUser ? JSON.parse(storedUser) : {};
+      
+      if (!userData._id) {
+        setError('User ID is missing. Please log in again.');
+        setSaving(false);
+        return;
+      }
       
       await api.put(`/users/${userData._id}`, {
         password: passwordData.newPassword,

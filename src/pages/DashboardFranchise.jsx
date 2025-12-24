@@ -2,10 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { getSocket } from "../utils/socket";
-
-// Use centralized socket connection with proper CORS configuration
-const socket = getSocket();
+// Removed socket import - using HTTP polling instead
 
 const StatCard = ({
   title,
@@ -150,47 +147,14 @@ const Dashboard = () => {
 
     fetchDashboardData();
 
-    // Socket listeners for real-time updates
-    socket.on("newOrder", (order) => {
-      let orderFranchiseId = order.franchiseId;
-      if (orderFranchiseId && typeof orderFranchiseId === "object") {
-        orderFranchiseId = orderFranchiseId._id || orderFranchiseId;
-      }
-      if (
-        orderFranchiseId &&
-        orderFranchiseId.toString() === user._id.toString()
-      ) {
-        setOrders((prev) => [...prev, order]);
-        fetchDashboardData(); // Refresh stats
-      }
-    });
-
-    socket.on("orderUpdated", (updatedOrder) => {
-      let orderFranchiseId = updatedOrder.franchiseId;
-      if (orderFranchiseId && typeof orderFranchiseId === "object") {
-        orderFranchiseId = orderFranchiseId._id || orderFranchiseId;
-      }
-      if (
-        orderFranchiseId &&
-        orderFranchiseId.toString() === user._id.toString()
-      ) {
-        setOrders((prev) =>
-          prev.map((order) =>
-            order._id === updatedOrder._id ? updatedOrder : order
-          )
-        );
-        fetchDashboardData(); // Refresh stats
-      }
-    });
-
-    socket.on("paymentUpdated", () => {
+    // HTTP polling for real-time updates (replaces Socket.IO)
+    // Poll dashboard data every 12 seconds to check for new/updated orders and payments
+    const pollingInterval = setInterval(() => {
       fetchDashboardData();
-    });
+    }, 12000); // 12 seconds polling interval
 
     return () => {
-      socket.off("newOrder");
-      socket.off("orderUpdated");
-      socket.off("paymentUpdated");
+      clearInterval(pollingInterval);
     };
   }, [user]);
 

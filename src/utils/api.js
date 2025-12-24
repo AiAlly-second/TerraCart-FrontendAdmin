@@ -13,8 +13,20 @@ const getApiUrl = () => {
 
 const nodeApiBase = getApiUrl();
 
+// Check if connecting to Render.com (which can be slow to wake up)
+const isRenderBackend = nodeApiBase.includes("onrender.com");
+
+// Configure timeout - longer for remote servers, especially Render.com
+// Render.com free tier can take 30-60 seconds to wake up from sleep
+const timeout = isRenderBackend ? 120000 : 60000; // 120s for Render, 60s for others
+
 const api = axios.create({
   baseURL: `${nodeApiBase.replace(/\/$/, "")}/api`,
+  timeout: timeout,
+  // Add headers for better compatibility
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 // Get the appropriate token based on user role
@@ -140,7 +152,25 @@ api.interceptors.response.use(
         console.error("[API Error - Response Data]:", error.response.data);
       }
     } else {
-      console.error("[API Error - No Response]:", error.message);
+      // Network error - log with context but don't spam console
+      const isNetworkError =
+        error.code === "ERR_NETWORK" ||
+        error.code === "ERR_CONNECTION_CLOSED" ||
+        error.message?.includes("Network Error") ||
+        error.message?.includes("ERR_CONNECTION_CLOSED");
+
+      if (isNetworkError && isRenderBackend) {
+        // For Render.com, these errors are expected when server is sleeping
+        // Log as warning instead of error to reduce console noise
+        console.warn(
+          `[API Network Warning] ${error.message}\n` +
+            `Backend: ${nodeApiBase}\n` +
+            `Render.com servers may be sleeping (free tier). Server will wake up automatically.\n` +
+            `Please wait 30-60 seconds and try again.`
+        );
+      } else {
+        console.error("[API Error - No Response]:", error.message);
+      }
     }
 
     if (error.response?.status === 400) {
@@ -294,18 +324,48 @@ api.interceptors.response.use(
       }
       alert("Server error. Please try again later.", "error");
     } else if (!error.response) {
-      // Network error
+      // Network error - no response from server
+      const isTimeout =
+        error.code === "ECONNABORTED" || error.message?.includes("timeout");
+      const isConnectionClosed =
+        error.message?.includes("ERR_CONNECTION_CLOSED") ||
+        error.code === "ERR_CONNECTION_CLOSED";
+      const isNetworkError =
+        error.code === "ERR_NETWORK" ||
+        error.message?.includes("Network Error");
+
       if (import.meta.env.DEV) {
         console.error("[Network Error]", {
           message: error.message,
+          code: error.code,
           url: error.config?.url,
           baseURL: error.config?.baseURL,
+          isTimeout,
+          isConnectionClosed,
+          isNetworkError,
         });
       }
-      alert(
-        "Network error. Please check if the backend server is running.",
-        "error"
-      );
+
+      // Provide helpful error messages based on error type
+      let errorMessage = "Network error. ";
+
+      if (isTimeout) {
+        errorMessage += isRenderBackend
+          ? "The backend server is taking longer than expected to respond. Render.com servers may need 30-60 seconds to wake up from sleep. Please wait and try again."
+          : "Request timed out. The server may be slow or unavailable.";
+      } else if (isConnectionClosed || isNetworkError) {
+        errorMessage += isRenderBackend
+          ? "Connection to the backend server was closed. Render.com servers may be sleeping (free tier). The server will wake up automatically when you make a request - please wait 30-60 seconds and try again."
+          : "Cannot connect to the backend server. Please check if the server is running and accessible.";
+      } else {
+        errorMessage +=
+          "Please check your network connection and ensure the backend server is running.";
+      }
+
+      // Only show alert if not explicitly skipped
+      if (!error.config?.skipErrorAlert) {
+        alert(errorMessage, "error");
+      }
     }
 
     return Promise.reject(error);

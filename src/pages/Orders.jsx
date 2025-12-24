@@ -2102,6 +2102,21 @@ const Orders = () => {
                               onClick={() => {
                                 setDraftServiceType(type);
                                 setSelectedTableId("");
+                                
+                                // Emit "dine" event immediately when user selects DINE_IN
+                                if (type === "DINE_IN") {
+                                  try {
+                                    socket.emit("dine", {
+                                      timestamp: new Date().toISOString(),
+                                      serviceType: "DINE_IN",
+                                    });
+                                    if (import.meta.env.DEV) {
+                                      console.log("[Orders] Emitted 'dine' event for DINE_IN selection");
+                                    }
+                                  } catch (error) {
+                                    console.error("[Orders] Error emitting 'dine' event:", error);
+                                  }
+                                }
                               }}
                               className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
                                 draftServiceType === type
