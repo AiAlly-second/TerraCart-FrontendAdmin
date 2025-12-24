@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../utils/api";
+import { createSocketConnection } from "../utils/socket";
 
 const TableDashboard = () => {
   const [tables, setTables] = useState([]);
@@ -14,7 +15,50 @@ const TableDashboard = () => {
   useEffect(() => {
     fetchTables();
     const interval = setInterval(fetchTables, 5000); // Refresh every 5 seconds
-    return () => clearInterval(interval);
+    
+    // Socket setup for real-time table merge/unmerge updates
+    const socket = createSocketConnection();
+    
+    const handleTableMerged = (payload) => {
+      if (!payload?.primaryTable) return;
+      // Refresh tables to get updated merge status
+      fetchTables();
+    };
+
+    const handleTableUnmerged = (payload) => {
+      if (!payload) return;
+      // Refresh tables to get updated unmerge status
+      fetchTables();
+    };
+
+    const token =
+      localStorage.getItem("adminToken") ||
+      localStorage.getItem("franchiseAdminToken") ||
+      localStorage.getItem("superAdminToken");
+    
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const userId = payload.id;
+        if (userId) {
+          socket.emit("join:cafe", userId);
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.warn("[TableDashboard] Could not decode token for socket room:", e);
+        }
+      }
+    }
+
+    socket.on("table:merged", handleTableMerged);
+    socket.on("table:unmerged", handleTableUnmerged);
+
+    return () => {
+      clearInterval(interval);
+      socket.off("table:merged", handleTableMerged);
+      socket.off("table:unmerged", handleTableUnmerged);
+      socket.disconnect();
+    };
   }, []);
 
   const fetchTables = async () => {

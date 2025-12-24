@@ -301,10 +301,26 @@ const Tables = () => {
       }
     }
 
+    const handleTableMerged = (payload) => {
+      if (!payload?.primaryTable) return;
+      // Refresh tables to get updated merge status
+      fetchTables();
+    };
+
+    const handleTableUnmerged = (payload) => {
+      if (!payload) return;
+      // Refresh tables to get updated unmerge status
+      fetchTables();
+    };
+
     socket.on("table:status:updated", handleTableStatusUpdated);
+    socket.on("table:merged", handleTableMerged);
+    socket.on("table:unmerged", handleTableUnmerged);
 
     return () => {
       socket.off("table:status:updated", handleTableStatusUpdated);
+      socket.off("table:merged", handleTableMerged);
+      socket.off("table:unmerged", handleTableUnmerged);
       socket.disconnect();
     };
   }, []);
