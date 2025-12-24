@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
+// Removed socket import - using HTTP polling instead
+import { confirm } from "../utils/confirm";
 
 const AttendanceManagement = () => {
   // Use dynamic imports to avoid circular dependency issues during bundling
   // Use refs instead of state to avoid closure issues
   const apiRef = useRef(null);
-  const getSocketRef = useRef(null);
   const [dependenciesLoaded, setDependenciesLoaded] = useState(false);
 
-  // Load api and socket dynamically on mount
+  // Load api dynamically on mount
   useEffect(() => {
     const loadDependencies = async () => {
       try {
         const apiModule = await import("../utils/api");
-        const socketModule = await import("../utils/socket");
         apiRef.current = apiModule.default;
-        getSocketRef.current = socketModule.getSocket;
         setDependenciesLoaded(true);
       } catch (error) {
         console.error("Failed to load dependencies:", error);
@@ -36,7 +35,8 @@ const AttendanceManagement = () => {
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'stats'
   const [currentTime, setCurrentTime] = useState(new Date()); // For real-time timer updates
-  const socketRef = useRef(null);
+  const pollingIntervalRef = useRef(null); // For HTTP polling interval
+  const [processingAction, setProcessingAction] = useState(null); // Track which action is being processed
 
   // Real-time timer that updates every second
   useEffect(() => {
@@ -48,56 +48,23 @@ const AttendanceManagement = () => {
   }, []);
 
   useEffect(() => {
-    if (!dependenciesLoaded || !apiRef.current || !getSocketRef.current) return; // Wait for dependencies to load
+    if (!dependenciesLoaded || !apiRef.current) return; // Wait for dependencies to load
 
     fetchEmployees();
     fetchTodayAttendance();
 
-    // Set up Socket.IO for real-time updates
-    const socket = getSocketRef.current();
-    socketRef.current = socket;
-
-    // Listen for attendance updates
-    const handleAttendanceCheckedIn = (data) => {
-      console.log("[AttendanceManagement] Socket: attendance:checked_in", data);
-      // Immediately update the UI with new attendance data
+    // Set up HTTP polling for real-time updates (replaces Socket.IO)
+    // Poll every 8 seconds for attendance updates
+    pollingIntervalRef.current = setInterval(() => {
       if (activeTab === "today") {
         fetchTodayAttendance();
       }
-    };
-
-    const handleAttendanceCheckedOut = (data) => {
-      console.log(
-        "[AttendanceManagement] Socket: attendance:checked_out",
-        data
-      );
-      if (activeTab === "today") {
-        fetchTodayAttendance();
-      }
-    };
-
-    const handleAttendanceUpdated = (data) => {
-      console.log("[AttendanceManagement] Socket: attendance:updated", data);
-      if (activeTab === "today") {
-        fetchTodayAttendance();
-      }
-    };
-
-    socket.on("attendance:checked_in", handleAttendanceCheckedIn);
-    socket.on("attendance:checked_out", handleAttendanceCheckedOut);
-    socket.on("attendance:updated", handleAttendanceUpdated);
+    }, 8000); // 8 seconds polling interval
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.off(
-          "attendance:checked_in",
-          handleAttendanceCheckedIn
-        );
-        socketRef.current.off(
-          "attendance:checked_out",
-          handleAttendanceCheckedOut
-        );
-        socketRef.current.off("attendance:updated", handleAttendanceUpdated);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
   }, [activeTab, dependenciesLoaded]);
@@ -212,7 +179,19 @@ const AttendanceManagement = () => {
     }
   };
 
-  const handleCheckIn = async (employeeId) => {
+  const handleCheckIn = async (employeeId, event) => {
+    // Prevent event propagation and default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Prevent multiple simultaneous clicks
+    const actionKey = `checkin-${employeeId}`;
+    if (processingAction === actionKey) {
+      return; // Already processing
+    }
+
     // Check if already checked in before showing confirmation
     const todayRecord = Array.isArray(todayAttendance)
       ? todayAttendance.find(
@@ -231,7 +210,12 @@ const AttendanceManagement = () => {
       return;
     }
 
-    if (!window.confirm("Mark this employee as checked in?")) return;
+    // Use custom confirm dialog and await the result
+    const confirmed = await confirm("Mark this employee as checked in?");
+    if (!confirmed) return;
+
+    // Set processing state to prevent duplicate calls
+    setProcessingAction(actionKey);
     if (!apiRef.current) {
       alert("System is still loading. Please wait a moment and try again.");
       return;
@@ -278,15 +262,36 @@ const AttendanceManagement = () => {
       } else {
         alert("❌ " + errorMessage);
       }
+    } finally {
+      // Clear processing state
+      setProcessingAction(null);
     }
   };
 
-  const handleStartBreak = async (attendanceId, employeeId) => {
+  const handleStartBreak = async (attendanceId, employeeId, event) => {
+    // Prevent event propagation and default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Prevent multiple simultaneous clicks
+    const actionKey = `startbreak-${attendanceId}`;
+    if (processingAction === actionKey) {
+      return; // Already processing
+    }
+
     if (!apiRef.current) {
       alert("System is still loading. Please wait a moment and try again.");
       return;
     }
-    if (!window.confirm("Start break for this employee?")) return;
+
+    // Use custom confirm dialog and await the result
+    const confirmed = await confirm("Start break for this employee?");
+    if (!confirmed) return;
+
+    // Set processing state to prevent duplicate calls
+    setProcessingAction(actionKey);
     try {
       const response = await apiRef.current.post(
         `/attendance/${attendanceId}/start-break`
@@ -317,15 +322,36 @@ const AttendanceManagement = () => {
         error.response?.data?.message || "Failed to start break";
       alert("❌ " + errorMessage);
       fetchTodayAttendance();
+    } finally {
+      // Clear processing state
+      setProcessingAction(null);
     }
   };
 
-  const handleEndBreak = async (attendanceId, employeeId) => {
+  const handleEndBreak = async (attendanceId, employeeId, event) => {
+    // Prevent event propagation and default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Prevent multiple simultaneous clicks
+    const actionKey = `endbreak-${attendanceId}`;
+    if (processingAction === actionKey) {
+      return; // Already processing
+    }
+
     if (!apiRef.current) {
       alert("System is still loading. Please wait a moment and try again.");
       return;
     }
-    if (!window.confirm("End break for this employee?")) return;
+
+    // Use custom confirm dialog and await the result
+    const confirmed = await confirm("End break for this employee?");
+    if (!confirmed) return;
+
+    // Set processing state to prevent duplicate calls
+    setProcessingAction(actionKey);
     try {
       const response = await apiRef.current.post(
         `/attendance/${attendanceId}/end-break`
@@ -356,10 +382,25 @@ const AttendanceManagement = () => {
         error.response?.data?.message || "Failed to end break";
       alert("❌ " + errorMessage);
       fetchTodayAttendance();
+    } finally {
+      // Clear processing state
+      setProcessingAction(null);
     }
   };
 
-  const handleCheckOut = async (employeeId) => {
+  const handleCheckOut = async (employeeId, event) => {
+    // Prevent event propagation and default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Prevent multiple simultaneous clicks
+    const actionKey = `checkout-${employeeId}`;
+    if (processingAction === actionKey) {
+      return; // Already processing
+    }
+
     // Check if already checked out before showing confirmation
     const todayRecord = Array.isArray(todayAttendance)
       ? todayAttendance.find(
@@ -383,11 +424,17 @@ const AttendanceManagement = () => {
       return;
     }
 
-    if (!window.confirm("Mark this employee as checked out?")) return;
+    // Use custom confirm dialog and await the result
+    const confirmed = await confirm("Mark this employee as checked out?");
+    if (!confirmed) return;
+
     if (!apiRef.current) {
       alert("System is still loading. Please wait a moment and try again.");
       return;
     }
+
+    // Set processing state to prevent duplicate calls
+    setProcessingAction(actionKey);
     try {
       const response = await apiRef.current.post("/attendance/checkout", {
         employeeId,
@@ -426,7 +473,11 @@ const AttendanceManagement = () => {
         fetchTodayAttendance();
       } else {
         alert("❌ " + errorMessage);
+        fetchTodayAttendance();
       }
+    } finally {
+      // Clear processing state
+      setProcessingAction(null);
     }
   };
 
@@ -763,7 +814,7 @@ const AttendanceManagement = () => {
                                 {!hasCheckedIn ? (
                                   <button
                                     type="button"
-                                    onClick={() => handleCheckIn(employee._id)}
+                                    onClick={(e) => handleCheckIn(employee._id, e)}
                                     className="text-green-600 hover:text-green-900 text-[10px] sm:text-xs px-2 py-1 border border-green-600 rounded hover:bg-green-50"
                                   >
                                     Check In
@@ -773,23 +824,25 @@ const AttendanceManagement = () => {
                                     {todayRecord?.isOnBreak ? (
                                       <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={(e) =>
                                           handleEndBreak(
                                             todayRecord._id,
-                                            employee._id
+                                            employee._id,
+                                            e
                                           )
                                         }
                                         className="text-orange-600 hover:text-orange-900 text-[10px] sm:text-xs px-2 py-1 border border-orange-600 rounded hover:bg-orange-50"
                                       >
-                                        End Break
+End Break
                                       </button>
                                     ) : (
                                       <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={(e) =>
                                           handleStartBreak(
                                             todayRecord._id,
-                                            employee._id
+                                            employee._id,
+                                            e
                                           )
                                         }
                                         className="text-yellow-600 hover:text-yellow-900 text-[10px] sm:text-xs px-2 py-1 border border-yellow-600 rounded hover:bg-yellow-50"
@@ -799,8 +852,8 @@ const AttendanceManagement = () => {
                                     )}
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        handleCheckOut(employee._id)
+                                      onClick={(e) =>
+                                        handleCheckOut(employee._id, e)
                                       }
                                       className="text-blue-600 hover:text-blue-900 text-[10px] sm:text-xs px-2 py-1 border border-blue-600 rounded hover:bg-blue-50"
                                     >

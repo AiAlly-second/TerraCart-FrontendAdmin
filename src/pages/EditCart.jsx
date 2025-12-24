@@ -33,10 +33,21 @@ const EditCart = () => {
   });
 
   useEffect(() => {
-    fetchCartDetails();
+    if (id) {
+      fetchCartDetails();
+    } else {
+      // If no ID, redirect to carts page
+      navigate("/carts");
+    }
   }, [id]);
 
   const fetchCartDetails = async () => {
+    if (!id) {
+      console.error("Cart ID is missing from URL");
+      alert("Invalid cart ID. Redirecting to carts page.");
+      navigate("/carts");
+      return;
+    }
     try {
       setFetching(true);
       const response = await api.get(`/users/${id}`);
@@ -117,6 +128,12 @@ const EditCart = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!id) {
+      alert("Cart ID is missing. Cannot update cart.");
+      navigate("/carts");
+      return;
+    }
 
     if (
       !formData.name ||

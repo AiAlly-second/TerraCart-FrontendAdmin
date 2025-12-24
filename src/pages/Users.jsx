@@ -166,6 +166,13 @@ const Users = () => {
           delete updateData.location;
           delete updateData.phone;
           delete updateData.address;
+        } else {
+          // For super admin editing non-super_admin users:
+          // Convert empty strings to null for ObjectId fields
+          // Backend expects null/undefined, not empty strings
+          if (updateData.franchiseId === "") {
+            updateData.franchiseId = null;
+          }
         }
 
         await api.put(`/users/${editingUser._id}`, updateData);

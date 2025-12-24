@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { AlertProvider } from "./context/AlertContext";
@@ -10,6 +10,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
+import { getSocket } from "./utils/socket";
 
 // Import all pages
 import Dashboard from "./pages/Dashboard";
@@ -65,6 +66,31 @@ function App() {
   const { user } = useAuth();
   const showLayout = user && !["/login", "/"].includes(location.pathname);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+  // Initialize socket connection early on app load
+  useEffect(() => {
+    // Get socket instance - this will create connection if it doesn't exist
+    const socket = getSocket();
+    
+    // Ensure socket is connected
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    // Log connection status
+    if (import.meta.env.DEV) {
+      console.log("[App] Socket initialized early:", {
+        connected: socket.connected,
+        id: socket.id,
+      });
+    }
+
+    // Cleanup on unmount (though we want to keep connection alive)
+    return () => {
+      // Don't disconnect on unmount - keep connection alive for better UX
+      // Socket will be managed by individual components that need it
+    };
+  }, []); // Run once on mount
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);

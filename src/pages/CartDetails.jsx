@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/api";
-import { getSocket } from "../utils/socket";
-
-// Use centralized socket connection with proper CORS configuration
-const socket = getSocket();
+// Removed socket import - using HTTP polling instead
 
 const CartDetails = () => {
   const { id } = useParams();
@@ -155,45 +152,17 @@ const CartDetails = () => {
     }
   }, [id, fetchCartStats]);
 
-  // Set up real-time socket listeners for order updates
+  // HTTP polling for real-time updates (replaces Socket.IO)
   useEffect(() => {
     if (!id) return;
 
-    const handleNewOrder = (order) => {
-      // Check if order belongs to this cart
-      let orderCartId = order.cartId;
-      if (orderCartId && typeof orderCartId === "object") {
-        orderCartId = orderCartId._id || orderCartId;
-      }
-      if (orderCartId && orderCartId.toString() === id) {
-        fetchCartStats(); // Refresh stats when new order is created
-      }
-    };
-
-    const handleOrderUpdated = (updatedOrder) => {
-      // Check if order belongs to this cart
-      let orderCartId = updatedOrder.cartId;
-      if (orderCartId && typeof orderCartId === "object") {
-        orderCartId = orderCartId._id || orderCartId;
-      }
-      if (orderCartId && orderCartId.toString() === id) {
-        fetchCartStats(); // Refresh stats when order is updated (e.g., status changed to Paid)
-      }
-    };
-
-    const handleOrderDeleted = ({ id: deletedOrderId }) => {
-      // Refresh stats when any order is deleted (we'll filter in fetchCartStats)
+    // Poll cart stats every 10 seconds to check for new/updated/deleted orders
+    const pollingInterval = setInterval(() => {
       fetchCartStats();
-    };
-
-    socket.on("newOrder", handleNewOrder);
-    socket.on("orderUpdated", handleOrderUpdated);
-    socket.on("orderDeleted", handleOrderDeleted);
+    }, 10000); // 10 seconds polling interval
 
     return () => {
-      socket.off("newOrder", handleNewOrder);
-      socket.off("orderUpdated", handleOrderUpdated);
-      socket.off("orderDeleted", handleOrderDeleted);
+      clearInterval(pollingInterval);
     };
   }, [id, fetchCartStats]);
 

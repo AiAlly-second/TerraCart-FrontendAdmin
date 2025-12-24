@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getSocket } from "../utils/socket";
+// Removed socket import - using HTTP polling instead
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-
-// Use centralized socket connection with proper CORS configuration
-const socket = getSocket();
 
 // Reusable Stat Card with equal height and small fonts
 const StatCard = ({ title, value, icon, onClick, clickable = false }) => (
@@ -216,33 +213,35 @@ const Dashboard = () => {
       fetchTableData();
     }, 5 * 60 * 1000);
 
-    // Listen for real-time updates
-    socket.on("newOrder", (order) => {
-      setOrders((prev) => {
-        const newOrders = [...prev, order];
-        updateStats(newOrders);
-        return newOrders;
-      });
-      // Refresh table data when new order is created (table becomes occupied)
-      fetchTableData();
-    });
-
-    socket.on("orderUpdated", (updatedOrder) => {
-      setOrders((prev) => {
-        const updatedOrders = prev.map((order) =>
-          order._id === updatedOrder._id ? updatedOrder : order
-        );
-        updateStats(updatedOrders);
-        return updatedOrders;
-      });
-      // Refresh table data when order status changes (table might become available/occupied)
-      fetchTableData();
-    });
+    // HTTP polling for real-time updates (replaces Socket.IO)
+    // Poll orders every 12 seconds to check for new/updated orders
+    const ordersPollingInterval = setInterval(async () => {
+      try {
+        const res = await api.get("/orders");
+        // Ensure orders is always an array
+        let ordersData = [];
+        if (Array.isArray(res.data)) {
+          ordersData = res.data;
+        } else if (res.data && Array.isArray(res.data.orders)) {
+          ordersData = res.data.orders;
+        } else if (res.data && Array.isArray(res.data.data)) {
+          ordersData = res.data.data;
+        }
+        setOrders(ordersData);
+        updateStats(ordersData);
+        // Refresh table data when orders are updated
+        fetchTableData();
+      } catch (error) {
+        // Silently fail polling - don't spam console
+        if (import.meta.env.DEV) {
+          console.error("[Dashboard] Error polling orders:", error);
+        }
+      }
+    }, 12000); // 12 seconds polling interval
 
     return () => {
-      socket.off("newOrder");
-      socket.off("orderUpdated");
       clearInterval(dataInterval);
+      clearInterval(ordersPollingInterval);
     };
   }, [authLoading, user]);
 
