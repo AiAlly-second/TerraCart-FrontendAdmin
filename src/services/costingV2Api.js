@@ -30,6 +30,8 @@ export const receivePurchase = (id) =>
 // ==================== INVENTORY ====================
 export const consumeInventory = (data) =>
   api.post("/costing-v2/inventory/consume", data);
+export const returnToInventory = (data) =>
+  api.post("/costing-v2/inventory/return", data);
 export const getInventoryTransactions = (params) =>
   api.get("/costing-v2/inventory/transactions", { params });
 export const getLowStock = () => api.get("/costing-v2/low-stock");

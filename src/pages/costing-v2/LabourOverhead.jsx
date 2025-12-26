@@ -41,7 +41,9 @@ const LabourOverhead = () => {
       if (labourRes.data.success) setLabourCosts(labourRes.data.data);
       if (overheadRes.data.success) setOverheads(overheadRes.data.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching data:", error);
+      }
       alert("Failed to fetch data");
     } finally {
       setLoading(false);

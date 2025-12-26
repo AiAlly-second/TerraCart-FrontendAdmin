@@ -33,7 +33,9 @@ const Suppliers = () => {
         setSuppliers(res.data.data);
       }
     } catch (error) {
-      console.error("Error fetching suppliers:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching suppliers:", error);
+      }
       alert("Failed to fetch suppliers");
     } finally {
       setLoading(false);

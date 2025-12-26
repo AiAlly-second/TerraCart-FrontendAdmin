@@ -2114,7 +2114,9 @@ const Orders = () => {
                                       console.log("[Orders] Emitted 'dine' event for DINE_IN selection");
                                     }
                                   } catch (error) {
-                                    console.error("[Orders] Error emitting 'dine' event:", error);
+                                    if (import.meta.env.DEV) {
+                                      console.error("[Orders] Error emitting 'dine' event:", error);
+                                    }
                                   }
                                 }
                               }}

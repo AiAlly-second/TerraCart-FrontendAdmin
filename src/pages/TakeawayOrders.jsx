@@ -67,7 +67,7 @@ const aggregateKotItems = (kotLines = []) => {
 };
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
-const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
+const computeKotTotals = (kotLines = [], aggregatedItems = [], order = null) => {
   // Calculate subtotal from non-returned items (amount is already in rupees)
   const subtotal = aggregatedItems.reduce((sum, item) => {
     const amount = Number(item.amount) || 0;
@@ -80,12 +80,18 @@ const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
   // Calculate GST (5%)
   const gst = Number((subtotalRounded * 0.05).toFixed(2));
 
-  // Calculate total amount
-  const totalAmount = Number((subtotalRounded + gst).toFixed(2));
+  // Add delivery charge if applicable
+  const deliveryCharge = order?.orderType === "DELIVERY" && order?.deliveryInfo?.deliveryCharge
+    ? Number(order.deliveryInfo.deliveryCharge) || 0
+    : 0;
+
+  // Calculate total amount (subtotal + GST + delivery charge)
+  const totalAmount = Number((subtotalRounded + gst + deliveryCharge).toFixed(2));
 
   return {
     subtotal: subtotalRounded,
     gst: gst,
+    deliveryCharge: deliveryCharge,
     totalAmount: totalAmount,
   };
 };
@@ -95,7 +101,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   const invoiceNumber = buildInvoiceId(order);
   const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
   const aggregatedItems = aggregateKotItems(kotLines);
-  const totals = computeKotTotals(kotLines, aggregatedItems);
+  const totals = computeKotTotals(kotLines, aggregatedItems, order);
 
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
@@ -213,10 +219,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
         ${
-          order.serviceType === "TAKEAWAY"
+          order.serviceType === "TAKEAWAY" || order.orderType
             ? `
-              <div style="font-size: 9px;">
-                Takeaway Order${
+              <div style="font-size: 9px; font-weight: bold; margin-bottom: 4px;">
+                ${
+                  order.orderType === "PICKUP"
+                    ? "📦 Pickup Order"
+                    : order.orderType === "DELIVERY"
+                    ? "🚚 Delivery Order"
+                    : "Takeaway Order"
+                }${
                   order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
                 }
               </div>
@@ -227,6 +239,42 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                     }${
                       order.customerMobile ? ` (${order.customerMobile})` : ""
                     }</div>`
+                  : ""
+              }
+              ${
+                order.orderType === "PICKUP" && order.pickupLocation
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+                      <div style="font-weight: 600;">Pickup Location:</div>
+                      <div>${order.pickupLocation.address || "Address not set"}</div>
+                    </div>`
+                  : ""
+              }
+              ${
+                order.orderType === "DELIVERY" && order.customerLocation
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+                      <div style="font-weight: 600;">Delivery Address:</div>
+                      <div>${order.customerLocation.address || "Address not set"}</div>
+                      ${
+                        order.deliveryInfo
+                          ? `<div style="margin-top: 4px;">
+                              <div>Distance: ${order.deliveryInfo.distance?.toFixed(2) || "N/A"} km</div>
+                              ${
+                                order.deliveryInfo.deliveryCharge > 0
+                                  ? `<div style="color: #059669; font-weight: 600;">Delivery Charge: ₹${order.deliveryInfo.deliveryCharge.toFixed(2)}</div>`
+                                  : ""
+                              }
+                            </div>`
+                          : ""
+                      }
+                    </div>`
+                  : ""
+              }
+              ${
+                order.specialInstructions
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+                      <div style="font-weight: 600;">Special Instructions:</div>
+                      <div style="font-style: italic;">${order.specialInstructions}</div>
+                    </div>`
                   : ""
               }
             `
@@ -260,6 +308,14 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             <span>GST (5%)</span>
             <span>₹${formatMoney(totals.gst)}</span>
           </div>
+          ${
+            totals.deliveryCharge > 0
+              ? `<div class="invoice-line">
+                  <span>Delivery Charge</span>
+                  <span>₹${formatMoney(totals.deliveryCharge)}</span>
+                </div>`
+              : ""
+          }
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
@@ -1362,7 +1418,31 @@ const TakeawayOrders = () => {
                               {buildInvoiceId(order)}
                             </span>
                           </div>
-                          <div>Service Type: Takeaway</div>
+                          <div>
+                            Service Type:{" "}
+                            <span className="font-semibold">
+                              {order.orderType === "PICKUP"
+                                ? "Pickup"
+                                : order.orderType === "DELIVERY"
+                                ? "Delivery"
+                                : "Takeaway"}
+                            </span>
+                          </div>
+                          {order.orderType && (
+                            <div className="mt-1">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${
+                                  order.orderType === "PICKUP"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-green-100 text-green-700"
+                                }`}
+                              >
+                                {order.orderType === "PICKUP"
+                                  ? "📦 PICKUP ORDER"
+                                  : "🚚 DELIVERY ORDER"}
+                              </span>
+                            </div>
+                          )}
                           {order.takeawayToken && (
                             <div className="font-semibold text-blue-600">
                               Token: {order.takeawayToken}
@@ -1388,6 +1468,64 @@ const TakeawayOrders = () => {
                               </div>
                             )}
                           </div>
+                          {/* Delivery/Pickup Location Info - Always show section */}
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            {order.orderType === "PICKUP" ? (
+                              <>
+                                <div className="font-semibold text-gray-800 mb-1">
+                                  📦 Pickup Location:
+                                </div>
+                                {order.pickupLocation ? (
+                                  <div className="text-[9px] text-gray-600 bg-blue-50 p-2 rounded">
+                                    📍 {order.pickupLocation.address || "Address not set"}
+                                  </div>
+                                ) : (
+                                  <div className="text-[9px] text-gray-400 italic">
+                                    Pickup location not set
+                                  </div>
+                                )}
+                              </>
+                            ) : order.orderType === "DELIVERY" ? (
+                              <>
+                                <div className="font-semibold text-gray-800 mb-1">
+                                  🚚 Delivery Details:
+                                </div>
+                                {order.customerLocation ? (
+                                  <div className="text-[9px] text-gray-600 bg-green-50 p-2 rounded space-y-1">
+                                    <div>📍 {order.customerLocation.address || "Address not set"}</div>
+                                    {order.deliveryInfo && (
+                                      <div className="mt-1 pt-1 border-t border-green-200">
+                                        <div>📏 Distance: {order.deliveryInfo.distance?.toFixed(2) || "N/A"} km</div>
+                                        {order.deliveryInfo.deliveryCharge > 0 && (
+                                          <div className="text-green-700 font-semibold">
+                                            💰 Delivery Charge: ₹{order.deliveryInfo.deliveryCharge.toFixed(2)}
+                                          </div>
+                                        )}
+                                        {order.deliveryInfo.estimatedTime && (
+                                          <div>⏱️ Est. Time: {order.deliveryInfo.estimatedTime} min</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-[9px] text-gray-400 italic">
+                                    Delivery address not set
+                                  </div>
+                                )}
+                              </>
+                            ) : null}
+                          </div>
+                          {/* Special Instructions */}
+                          {order.specialInstructions && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <div className="font-semibold text-gray-800">
+                                Special Instructions:
+                              </div>
+                              <div className="text-[9px] text-gray-600 italic">
+                                {order.specialInstructions}
+                              </div>
+                            </div>
+                          )}
                           {order.sessionToken && (
                             <div className="mt-2 pt-2 border-t border-gray-200">
                               <div className="font-semibold text-gray-800">
@@ -1421,6 +1559,26 @@ const TakeawayOrders = () => {
                             {order.tableNumber || "TAKEAWAY"}
                           </span>
                         </div>
+                        {/* Order Type Badge - Always show for clarity */}
+                        <div className="mt-1 mb-1">
+                          {order.orderType ? (
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${
+                                order.orderType === "PICKUP"
+                                  ? "bg-blue-100 text-blue-700 border border-blue-300"
+                                  : "bg-green-100 text-green-700 border border-green-300"
+                              }`}
+                            >
+                              {order.orderType === "PICKUP"
+                                ? "📦 PICKUP ORDER"
+                                : "🚚 DELIVERY ORDER"}
+                            </span>
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                              🥡 TAKEAWAY
+                            </span>
+                          )}
+                        </div>
                         {/* Always show customer info section for takeaway orders */}
                         {order.customerName || order.customerMobile ? (
                           <div className="text-xs sm:text-sm mt-1 space-y-0.5 sm:space-y-1">
@@ -1440,6 +1598,24 @@ const TakeawayOrders = () => {
                             Customer info not available
                           </div>
                         )}
+                        {/* Delivery Info */}
+                        {order.orderType === "DELIVERY" &&
+                          order.deliveryInfo && (
+                            <div className="text-[10px] sm:text-xs mt-1 space-y-0.5">
+                              {order.deliveryInfo.distance && (
+                                <div className="text-gray-600">
+                                  📏 {order.deliveryInfo.distance.toFixed(2)}{" "}
+                                  km away
+                                </div>
+                              )}
+                              {order.deliveryInfo.deliveryCharge > 0 && (
+                                <div className="text-green-600 font-semibold">
+                                  💰 Delivery: ₹
+                                  {order.deliveryInfo.deliveryCharge.toFixed(2)}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         {order.takeawayToken && (
                           <div className="text-sm mt-2 font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
                             Token: {order.takeawayToken}
