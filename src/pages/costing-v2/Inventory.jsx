@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import {
   getInventoryTransactions,
   consumeInventory,
+  returnToInventory,
   getIngredients,
 } from "../../services/costingV2Api";
-import { FaPlus, FaFilter, FaSearch, FaExclamationTriangle } from "react-icons/fa";
+import { FaPlus, FaFilter, FaSearch, FaExclamationTriangle, FaUndo } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
-import { formatUnit } from "../../utils/unitConverter";
+import { formatUnit, convertUnit } from "../../utils/unitConverter";
 
 const Inventory = () => {
   const [ingredients, setIngredients] = useState([]);
@@ -18,12 +19,21 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [formData, setFormData] = useState({
     ingredientId: "",
     qty: 0,
     uom: "kg",
     refType: "manual",
+  });
+  const [returnFormData, setReturnFormData] = useState({
+    ingredientId: "",
+    qty: 0,
+    uom: "kg",
+    originalTransactionId: null,
+    notes: "",
   });
 
   useEffect(() => {
@@ -41,7 +51,9 @@ const Inventory = () => {
       if (transactionsRes.data.success) setTransactions(transactionsRes.data.data);
       if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching data:", error);
+      }
       alert("Failed to fetch data");
     } finally {
       setLoading(false);
@@ -53,6 +65,7 @@ const Inventory = () => {
     try {
       await consumeInventory({
         ...formData,
+        outletId: selectedOutlet,
       });
       alert("Inventory consumed successfully!");
       setModalOpen(false);
@@ -66,6 +79,51 @@ const Inventory = () => {
     } catch (error) {
       alert(`Failed to consume inventory: ${error.response?.data?.message || error.message}`);
     }
+  };
+
+  const handleReturnSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!returnFormData.ingredientId || returnFormData.qty <= 0) {
+      alert("Please select an ingredient and enter a valid quantity.");
+      return;
+    }
+
+    try {
+      await returnToInventory({
+        ingredientId: returnFormData.ingredientId,
+        qty: returnFormData.qty,
+        uom: returnFormData.uom,
+        refType: "return",
+        notes: returnFormData.notes || "Unused ingredients returned to inventory",
+        outletId: selectedOutlet,
+      });
+      alert("Unused ingredients returned to inventory successfully!");
+      setReturnModalOpen(false);
+      setReturnFormData({
+        ingredientId: "",
+        qty: 0,
+        uom: "kg",
+        originalTransactionId: null,
+        notes: "",
+      });
+      fetchData();
+    } catch (error) {
+      alert(`Failed to return inventory: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
+  const handleReturnClick = () => {
+    // Simple return - just open modal to return unused ingredients
+    setSelectedTransaction(null);
+    setReturnFormData({
+      ingredientId: "",
+      qty: 0,
+      uom: "kg",
+      originalTransactionId: null,
+      notes: "",
+    });
+    setReturnModalOpen(true);
   };
 
   // Get unique categories
@@ -111,12 +169,20 @@ const Inventory = () => {
             <h1 className="text-3xl font-bold text-gray-800">Inventory Management</h1>
             <p className="text-gray-600 mt-1">Manage all inventory items including ingredients, supplies, and consumables</p>
           </div>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
-          >
-            <FaPlus /> Consume Inventory
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setModalOpen(true)}
+              className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
+            >
+              <FaPlus /> Consume Inventory
+            </button>
+            <button
+              onClick={handleReturnClick}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <FaUndo /> Return to Inventory
+            </button>
+          </div>
         </div>
         <div className="flex justify-end">
           <OutletFilter selectedOutlet={selectedOutlet} onOutletChange={setSelectedOutlet} />
@@ -261,7 +327,11 @@ const Inventory = () => {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {items.map((ing) => {
-                            const isLowStock = ing.qtyOnHand <= ing.reorderLevel;
+                            // Convert reorderLevel to base unit for comparison if needed
+                            const reorderLevelInBaseUnit = ing.baseUnit && ing.baseUnit !== ing.uom
+                              ? convertUnit(ing.reorderLevel, ing.uom, ing.baseUnit)
+                              : ing.reorderLevel;
+                            const isLowStock = ing.qtyOnHand <= reorderLevelInBaseUnit;
                             const stockValue = ing.qtyOnHand * ing.currentCostPerBaseUnit;
                             return (
                               <tr key={ing._id} className={isLowStock ? "bg-red-50" : ""}>
@@ -279,11 +349,59 @@ const Inventory = () => {
                                 <td className="px-4 py-3 whitespace-nowrap">{ing.uom}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   <span className={isLowStock ? "text-red-600 font-semibold" : ""}>
-                                    {formatUnit(ing.qtyOnHand, ing.uom)}
+                                    {ing.baseUnit && ing.baseUnit !== ing.uom
+                                      ? formatUnit(convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom), ing.uom)
+                                      : formatUnit(ing.qtyOnHand, ing.uom)}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">{formatUnit(ing.reorderLevel, ing.uom)}</td>
-                                <td className="px-4 py-3 whitespace-nowrap">₹{ing.currentCostPerBaseUnit.toFixed(2)}</td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {formatUnit(ing.reorderLevel, ing.uom)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {(() => {
+                                    const baseCost = ing.currentCostPerBaseUnit || 0;
+                                    if (!baseCost || baseCost === 0) {
+                                      return `₹0.00 / ${ing.uom || ""}`;
+                                    }
+                                    
+                                    let costPerDisplayUnit = baseCost;
+                                    
+                                    if (ing.baseUnit && ing.uom && ing.baseUnit !== ing.uom) {
+                                      try {
+                                        // Convert cost from base unit to display unit
+                                        // Formula: cost per display unit = cost per base unit × (base units per display unit)
+                                        // Example: If cost is ₹0.22/g (base) and uom is kg, we need ₹220/kg
+                                        // convertUnit(1, "kg", "g") = 1000 (grams in 1 kg)
+                                        // So: 0.22 × 1000 = 220
+                                        const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
+                                        costPerDisplayUnit = baseCost * baseUnitsPerDisplayUnit;
+                                        
+                                        // Detect if cost might be stored incorrectly
+                                        // If cost per kg > 10000, the baseCost might be stored per display unit instead
+                                        if (costPerDisplayUnit > 10000 && (ing.uom === "kg" || ing.uom === "l")) {
+                                          // Check if baseCost itself is a reasonable cost per display unit
+                                          if (baseCost > 1 && baseCost < 10000) {
+                                            // Cost is likely stored per display unit, use it directly
+                                            if (import.meta.env.DEV) {
+                                              console.warn(
+                                                `[Cost Display] Cost correction for ${ing.name}: ` +
+                                                `Base cost appears to be stored per ${ing.uom} instead of per ${ing.baseUnit}.`
+                                              );
+                                            }
+                                            costPerDisplayUnit = baseCost;
+                                          }
+                                        }
+                                      } catch (error) {
+                                        if (import.meta.env.DEV) {
+                                          console.error(`Cost conversion error for ${ing.name}:`, error);
+                                        }
+                                        costPerDisplayUnit = baseCost;
+                                      }
+                                    }
+                                    
+                                    return `₹${isNaN(costPerDisplayUnit) ? "0.00" : costPerDisplayUnit.toFixed(2)} / ${ing.uom || ""}`;
+                                  })()}
+                                </td>
                                 <td className="px-4 py-3 whitespace-nowrap">₹{stockValue.toFixed(2)}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   <span
@@ -323,12 +441,13 @@ const Inventory = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Allocated</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {transactions.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
                         No transactions found
                       </td>
                     </tr>
@@ -355,6 +474,8 @@ const Inventory = () => {
                                 ? "bg-red-100 text-red-800"
                                 : txn.type === "WASTE"
                                 ? "bg-yellow-100 text-yellow-800"
+                                : txn.type === "RETURN"
+                                ? "bg-blue-100 text-blue-800"
                                 : "bg-gray-100 text-gray-800"
                             }`}
                           >
@@ -369,6 +490,9 @@ const Inventory = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {txn.refType}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {/* Actions column - can be used for future features */}
                         </td>
                       </tr>
                     ))
@@ -412,8 +536,8 @@ const Inventory = () => {
                     required
                     min="0"
                     step="0.01"
-                    value={formData.qty}
-                    onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) })}
+                    value={formData.qty || ""}
+                    onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   />
                 </div>
@@ -463,6 +587,121 @@ const Inventory = () => {
                   className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a]"
                 >
                   Consume
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Return Modal - Simple return unused ingredients */}
+      {returnModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4">Return Unused Ingredients to Inventory</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Return unused ingredients back to inventory stock. Items will be valued at current weighted average cost.
+            </p>
+            <form onSubmit={handleReturnSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ingredient *</label>
+                <select
+                  required
+                  value={returnFormData.ingredientId}
+                  onChange={(e) => {
+                    const selectedIng = ingredients.find(ing => ing._id === e.target.value);
+                    setReturnFormData({ 
+                      ...returnFormData, 
+                      ingredientId: e.target.value,
+                      uom: selectedIng?.uom || "kg"
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">Select Ingredient</option>
+                  {ingredients
+                    .filter((ing) => ing.isActive)
+                    .map((ing) => (
+                      <option key={ing._id} value={ing._id}>
+                        {ing.name} ({ing.category || "Other"}) - Stock: {ing.baseUnit && ing.baseUnit !== ing.uom
+                          ? formatUnit(convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom), ing.uom)
+                          : formatUnit(ing.qtyOnHand, ing.uom)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Return Quantity *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={returnFormData.qty || ""}
+                    onChange={(e) => setReturnFormData({ ...returnFormData, qty: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
+                  <select
+                    required
+                    value={returnFormData.uom}
+                    onChange={(e) => setReturnFormData({ ...returnFormData, uom: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="l">l</option>
+                    <option value="ml">ml</option>
+                    <option value="pcs">pcs</option>
+                    <option value="pack">pack</option>
+                    <option value="box">box</option>
+                    <option value="bottle">bottle</option>
+                    <option value="dozen">dozen</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason/Notes</label>
+                <textarea
+                  value={returnFormData.notes}
+                  onChange={(e) => setReturnFormData({ ...returnFormData, notes: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows="3"
+                  placeholder="e.g., Unused from preparation, Over-ordered, etc."
+                />
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-800">
+                  <strong>How it works:</strong> The returned quantity will be added back to inventory stock and valued at the current weighted average cost. This does not recalculate the average cost.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReturnModalOpen(false);
+                    setSelectedTransaction(null);
+                    setReturnFormData({
+                      ingredientId: "",
+                      qty: 0,
+                      uom: "kg",
+                      originalTransactionId: null,
+                      notes: "",
+                    });
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <FaUndo /> Return to Inventory
                 </button>
               </div>
             </form>

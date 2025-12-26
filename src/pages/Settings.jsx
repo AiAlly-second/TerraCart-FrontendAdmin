@@ -35,20 +35,309 @@ const Settings = () => {
     systemUpdates: true,
   });
 
+  // Check if user is cart admin
+  const [userRole, setUserRole] = useState(null);
+  const [cartSettings, setCartSettings] = useState({
+    pickupEnabled: true,
+    deliveryEnabled: false,
+    deliveryRadius: 5,
+    deliveryCharge: 0,
+    pinCode: '',
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'India',
+      fullAddress: '',
+    },
+    coordinates: {
+      latitude: '',
+      longitude: '',
+    },
+  });
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+
   useEffect(() => {
     fetchUserData();
+    // Get user role from localStorage - check all possible keys
+    let storedUser = null;
+    try {
+      // Check in priority: superAdminUser > franchiseAdminUser > adminUser
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
+      
+      if (superAdminUser) {
+        storedUser = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        storedUser = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        storedUser = JSON.parse(adminUser);
+      }
+      
+      if (storedUser) {
+        setUserRole(storedUser.role);
+        console.log('[Settings] User role detected:', storedUser.role);
+        
+        // If cart admin, fetch cart settings
+        if (storedUser.role === 'admin' || storedUser.role === 'cart_admin') {
+          console.log('[Settings] Fetching cart settings for cart admin');
+          fetchCartSettings();
+        }
+      } else {
+        console.log('[Settings] No user found in localStorage');
+      }
+    } catch (err) {
+      console.error('Error parsing user data:', err);
+    }
   }, []);
+
+  const fetchCartSettings = async () => {
+    try {
+      const response = await api.get('/carts/my-settings');
+      if (response.data.success && response.data.data) {
+        const cart = response.data.data;
+        setCartSettings({
+          pickupEnabled: cart.pickupEnabled !== undefined ? cart.pickupEnabled : true,
+          deliveryEnabled: cart.deliveryEnabled !== undefined ? cart.deliveryEnabled : false,
+          deliveryRadius: cart.deliveryRadius || 5,
+          deliveryCharge: cart.deliveryCharge || 0,
+          pinCode: cart.pinCode || '',
+          address: cart.address || {
+            street: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: 'India',
+            fullAddress: '',
+          },
+          coordinates: cart.coordinates || {
+            latitude: '',
+            longitude: '',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching cart settings:', error);
+    }
+  };
+
+  // Reverse geocode coordinates to get address
+  const reverseGeocode = async (latitude, longitude) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'TerraCart-Admin-Panel'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch address");
+      }
+      
+      const data = await response.json();
+      if (data && data.address) {
+        const addr = data.address;
+        // Format address in Indian style
+        const parts = [];
+        
+        if (addr.building) {
+          parts.push(addr.building);
+        } else if (addr.house_name) {
+          parts.push(addr.house_name);
+        } else if (addr.house_number) {
+          parts.push(addr.house_number);
+        }
+        
+        if (addr.road) {
+          parts.push(addr.road);
+        }
+        
+        if (addr.city) {
+          parts.push(addr.city);
+        } else if (addr.town) {
+          parts.push(addr.town);
+        } else if (addr.village) {
+          parts.push(addr.village);
+        }
+        
+        if (addr.state) {
+          if (addr.postcode) {
+            parts.push(`${addr.state} - ${addr.postcode}`);
+          } else {
+            parts.push(addr.state);
+          }
+        } else if (addr.postcode) {
+          parts.push(addr.postcode);
+        }
+        
+        return {
+          fullAddress: parts.join(", ") || data.display_name || "",
+          pinCode: addr.postcode || "",
+          city: addr.city || addr.town || addr.village || "",
+          state: addr.state || "",
+        };
+      }
+      
+      return {
+        fullAddress: data.display_name || "",
+        pinCode: "",
+        city: "",
+        state: "",
+      };
+    } catch (error) {
+      console.error("Reverse geocoding error:", error);
+      return null;
+    }
+  };
+
+  // Get current location using GPS
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setFetchingLocation(true);
+    setError('');
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        
+        // Update coordinates
+        setCartSettings((prev) => ({
+          ...prev,
+          coordinates: {
+            latitude: latitude,
+            longitude: longitude,
+          },
+        }));
+        
+        // Try to reverse geocode to get address
+        try {
+          const addressData = await reverseGeocode(latitude, longitude);
+          if (addressData) {
+            setCartSettings((prev) => ({
+              ...prev,
+              coordinates: {
+                latitude: latitude,
+                longitude: longitude,
+              },
+              pinCode: addressData.pinCode || prev.pinCode,
+              address: {
+                ...prev.address,
+                fullAddress: addressData.fullAddress || prev.address.fullAddress,
+                city: addressData.city || prev.address.city,
+                state: addressData.state || prev.address.state,
+                zipCode: addressData.pinCode || prev.address.zipCode,
+              },
+            }));
+            setSuccess('Location captured successfully! Address has been auto-filled.');
+            setTimeout(() => setSuccess(''), 3000);
+          } else {
+            setSuccess('Coordinates captured successfully! Please enter the address manually.');
+            setTimeout(() => setSuccess(''), 3000);
+          }
+        } catch (error) {
+          console.error("Error reverse geocoding:", error);
+          setSuccess('Coordinates captured successfully! Please enter the address manually.');
+          setTimeout(() => setSuccess(''), 3000);
+        }
+        
+        setFetchingLocation(false);
+      },
+      (error) => {
+        setFetchingLocation(false);
+        let errorMessage = 'Unable to get your location. ';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage += 'Please allow location access in your browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Location information is unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage += 'Location request timed out.';
+            break;
+          default:
+            errorMessage += 'An unknown error occurred.';
+            break;
+        }
+        setError(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const handleCartSettingsUpdate = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    
+    try {
+      setSaving(true);
+      // Get user from all possible localStorage keys
+      let userData = null;
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
+      
+      if (superAdminUser) {
+        userData = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        userData = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        userData = JSON.parse(adminUser);
+      }
+      
+      if (!userData || !userData._id) {
+        setError('User ID is missing. Please log in again.');
+        setSaving(false);
+        return;
+      }
+
+      await api.put(`/carts/my-settings`, cartSettings);
+      
+      setSuccess('Cart settings updated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update cart settings');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      // Get user data from localStorage or API
-      const storedUser = localStorage.getItem('superAdminUser');
+      // Get user data from localStorage - check all possible keys
+      let storedUser = null;
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
+      
+      if (superAdminUser) {
+        storedUser = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        storedUser = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        storedUser = JSON.parse(adminUser);
+      }
+      
       if (storedUser) {
-        const userData = JSON.parse(storedUser);
         setProfile({
-          name: userData.name || '',
-          email: userData.email || '',
+          name: storedUser.name || '',
+          email: storedUser.email || '',
         });
       }
     } catch (err) {
@@ -141,6 +430,7 @@ const Settings = () => {
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'security', label: 'Security', icon: FaLock },
     { id: 'notifications', label: 'Notifications', icon: FaBell },
+    ...(userRole === 'admin' || userRole === 'cart_admin' ? [{ id: 'cart', label: 'Cart Settings', icon: FaCog }] : []),
   ];
 
   return (
@@ -355,6 +645,205 @@ const Settings = () => {
                     </button>
                   </div>
                 </div>
+              )}
+
+              {/* Cart Settings Tab - Only for Cart Admins */}
+              {activeTab === 'cart' && (userRole === 'admin' || userRole === 'cart_admin') && (
+                <form onSubmit={handleCartSettingsUpdate} className="max-w-2xl space-y-6">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Pickup & Delivery Settings</h2>
+                  
+                  {/* Pickup Settings */}
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-gray-800">Pickup (Takeaway)</h3>
+                        <p className="text-xs sm:text-sm text-gray-600">Allow customers to order and collect from your store</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cartSettings.pickupEnabled}
+                          onChange={(e) => setCartSettings({ ...cartSettings, pickupEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-300 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Delivery Settings */}
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-gray-800">Delivery</h3>
+                        <p className="text-xs sm:text-sm text-gray-600">Allow customers to get orders delivered to their location</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cartSettings.deliveryEnabled}
+                          onChange={(e) => setCartSettings({ ...cartSettings, deliveryEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-300 peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                      </label>
+                    </div>
+
+                    {cartSettings.deliveryEnabled && (
+                      <div className="mt-4 space-y-4 pt-4 border-t border-green-200">
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                            Maximum Delivery Radius (km)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={cartSettings.deliveryRadius}
+                            onChange={(e) => setCartSettings({ ...cartSettings, deliveryRadius: parseFloat(e.target.value) || 5 })}
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            placeholder="5"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Maximum distance (in km) you can deliver orders</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                            Delivery Charge (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={cartSettings.deliveryCharge}
+                            onChange={(e) => setCartSettings({ ...cartSettings, deliveryCharge: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            placeholder="0.00"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Additional charge for delivery orders (0 for free delivery)</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Store Location */}
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="font-semibold text-gray-800 mb-3 sm:mb-4">Store Location</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Set your store address and coordinates for distance calculation</p>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Pin Code (Postal Code)</label>
+                        <input
+                          type="text"
+                          value={cartSettings.pinCode || ''}
+                          onChange={(e) => setCartSettings({
+                            ...cartSettings,
+                            pinCode: e.target.value
+                          })}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="e.g., 400001"
+                          maxLength={6}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Enter 6-digit pin code for easier location search</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Full Address</label>
+                        <textarea
+                          value={cartSettings.address.fullAddress || ''}
+                          onChange={(e) => setCartSettings({
+                            ...cartSettings,
+                            address: { ...cartSettings.address, fullAddress: e.target.value }
+                          })}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          rows={3}
+                          placeholder="Enter complete store address"
+                        />
+                      </div>
+
+                      <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">Get Store Location</h4>
+                            <p className="text-xs text-blue-700">Use your device's GPS to automatically get coordinates</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleGetCurrentLocation}
+                            disabled={fetchingLocation}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          >
+                            {fetchingLocation ? (
+                              <>
+                                <FaSpinner className="animate-spin" />
+                                Getting Location...
+                              </>
+                            ) : (
+                              <>
+                                📍 Use Current Location
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-2">
+                          💡 Make sure you're at your store location and allow location access when prompted.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Latitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={cartSettings.coordinates.latitude || ''}
+                            onChange={(e) => setCartSettings({
+                              ...cartSettings,
+                              coordinates: { ...cartSettings.coordinates, latitude: parseFloat(e.target.value) || '' }
+                            })}
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="e.g., 19.0760"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Or get from Google Maps manually</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Longitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={cartSettings.coordinates.longitude || ''}
+                            onChange={(e) => setCartSettings({
+                              ...cartSettings,
+                              coordinates: { ...cartSettings.coordinates, longitude: parseFloat(e.target.value) || '' }
+                            })}
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="e.g., 72.8777"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Or get from Google Maps manually</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-xs text-gray-700">
+                          <strong>💡 Alternative method:</strong> Open Google Maps, right-click on your store location, and copy the coordinates manually.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 sm:pt-4">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
+                    >
+                      {saving ? <FaSpinner className="animate-spin" /> : <FaSave />}
+                      Save Cart Settings
+                    </button>
+                  </div>
+                </form>
               )}
             </>
           )}

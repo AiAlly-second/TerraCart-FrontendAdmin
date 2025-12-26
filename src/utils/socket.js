@@ -27,7 +27,9 @@ const getApiUrl = () => {
     if (useProxy) {
       // Use same origin - Vite proxy will handle forwarding to backend
       // Socket.IO will connect to the same origin, avoiding CORS
-      console.log("[Socket] Using Vite proxy to avoid CORS issues");
+      if (import.meta.env.DEV) {
+        console.log("[Socket] Using Vite proxy to avoid CORS issues");
+      }
       return window.location.origin; // e.g., "http://localhost:5174"
     }
   }
@@ -83,12 +85,14 @@ export const createSocketConnection = (options = {}) => {
     socketOptions.withCredentials = true;
   }
 
-  console.log(`[Socket] Connecting to: ${apiUrl}`, {
-    isCrossOrigin,
-    isRenderBackend,
-    timeout: baseTimeout,
-    options: socketOptions,
-  });
+  if (import.meta.env.DEV) {
+    console.log(`[Socket] Connecting to: ${apiUrl}`, {
+      isCrossOrigin,
+      isRenderBackend,
+      timeout: baseTimeout,
+      options: socketOptions,
+    });
+  }
 
   const socket = io(apiUrl, socketOptions);
 
@@ -114,51 +118,53 @@ export const createSocketConnection = (options = {}) => {
       ) {
         const backendUrl =
           apiUrl !== window?.location?.origin ? apiUrl : envUrl;
-        console.warn(
-          `[Socket] Connection Timeout (Attempt ${connectionAttempts})!\n` +
-            `Connecting to: ${backendUrl}\n` +
-            (apiUrl !== window?.location?.origin
-              ? `(via proxy: ${apiUrl})\n`
-              : "") +
-            (isRenderBackend
-              ? "⏳ Render.com servers may take 30-60s to wake up from sleep. Please wait...\n"
-              : "") +
-            `\n🔧 Solutions:\n` +
-            `1. Check if backend server is running\n` +
-            `2. Verify network connectivity\n` +
-            `3. For Render.com: Server may be sleeping (free tier)\n` +
-            `4. Check API URL in .env file\n` +
-            (import.meta.env.DEV && apiUrl === window?.location?.origin
-              ? `5. Proxy is enabled - connection will retry automatically\n`
-              : import.meta.env.DEV
-              ? `5. Try setting VITE_USE_PROXY=true in .env to use Vite proxy\n`
-              : "")
-        );
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[Socket] Connection Timeout (Attempt ${connectionAttempts})!\n` +
+              `Connecting to: ${backendUrl}\n` +
+              (apiUrl !== window?.location?.origin
+                ? `(via proxy: ${apiUrl})\n`
+                : "") +
+              (isRenderBackend
+                ? "⏳ Render.com servers may take 30-60s to wake up from sleep. Please wait...\n"
+                : "") +
+              `\n🔧 Solutions:\n` +
+              `1. Check if backend server is running\n` +
+              `2. Verify network connectivity\n` +
+              `3. For Render.com: Server may be sleeping (free tier)\n` +
+              `4. Check API URL in .env file\n` +
+              (apiUrl === window?.location?.origin
+                ? `5. Proxy is enabled - connection will retry automatically\n`
+                : `5. Try setting VITE_USE_PROXY=true in .env to use Vite proxy\n`)
+          );
+        }
       } else if (
         error.message?.includes("CORS") ||
         error.message?.includes("Not allowed by CORS")
       ) {
         const backendUrl =
           apiUrl !== window?.location?.origin ? apiUrl : envUrl;
-        console.error(
-          "[Socket] CORS Error Detected!\n" +
-            `Frontend: ${
-              typeof window !== "undefined" ? window.location.origin : "N/A"
-            }\n` +
-            `Backend: ${backendUrl}\n` +
-            (apiUrl !== window?.location?.origin
-              ? `(via proxy: ${apiUrl})\n`
-              : "") +
-            `\n🔧 Solutions:\n` +
-            (apiUrl === window?.location?.origin
-              ? "1. Proxy is enabled - this shouldn't happen. Check Vite proxy config.\n"
-              : "1. Set VITE_USE_PROXY=true in .env (recommended for dev)\n") +
-            "2. Add your origin to backend CORS settings\n" +
-            "3. Restart dev server after changing .env"
-        );
+        if (import.meta.env.DEV) {
+          console.error(
+            "[Socket] CORS Error Detected!\n" +
+              `Frontend: ${
+                typeof window !== "undefined" ? window.location.origin : "N/A"
+              }\n` +
+              `Backend: ${backendUrl}\n` +
+              (apiUrl !== window?.location?.origin
+                ? `(via proxy: ${apiUrl})\n`
+                : "") +
+              `\n🔧 Solutions:\n` +
+              (apiUrl === window?.location?.origin
+                ? "1. Proxy is enabled - this shouldn't happen. Check Vite proxy config.\n"
+                : "1. Set VITE_USE_PROXY=true in .env (recommended for dev)\n") +
+              "2. Add your origin to backend CORS settings\n" +
+              "3. Restart dev server after changing .env"
+          );
+        }
       } else {
         // Other connection errors - log less frequently
-        if (connectionAttempts % 3 === 0) {
+        if (import.meta.env.DEV && connectionAttempts % 3 === 0) {
           console.warn(
             `[Socket] Connection error (attempt ${connectionAttempts}):`,
             error.message || error.type
@@ -170,34 +176,44 @@ export const createSocketConnection = (options = {}) => {
 
   socket.on("connect", () => {
     connectionAttempts = 0; // Reset on successful connection
-    console.log(`[Socket] ✅ Connected successfully (ID: ${socket.id})`);
+    if (import.meta.env.DEV) {
+      console.log(`[Socket] ✅ Connected successfully (ID: ${socket.id})`);
+    }
   });
 
   socket.on("disconnect", (reason) => {
     if (reason === "io server disconnect") {
       // Server disconnected the client, reconnect manually
-      console.warn("[Socket] Server disconnected. Reconnecting...");
+      if (import.meta.env.DEV) {
+        console.warn("[Socket] Server disconnected. Reconnecting...");
+      }
       socket.connect();
     } else {
-      console.log(`[Socket] Disconnected: ${reason}`);
+      if (import.meta.env.DEV) {
+        console.log(`[Socket] Disconnected: ${reason}`);
+      }
     }
   });
 
   socket.on("reconnect_attempt", (attemptNumber) => {
-    if (attemptNumber % 3 === 0 || attemptNumber === 1) {
+    if (import.meta.env.DEV && (attemptNumber % 3 === 0 || attemptNumber === 1)) {
       console.log(`[Socket] Reconnection attempt ${attemptNumber}...`);
     }
   });
 
   socket.on("reconnect", (attemptNumber) => {
-    console.log(`[Socket] ✅ Reconnected after ${attemptNumber} attempts`);
+    if (import.meta.env.DEV) {
+      console.log(`[Socket] ✅ Reconnected after ${attemptNumber} attempts`);
+    }
   });
 
   socket.on("reconnect_failed", () => {
-    console.error(
-      "[Socket] ❌ Reconnection failed after all attempts.\n" +
-        "Please refresh the page or check your network connection."
-    );
+    if (import.meta.env.DEV) {
+      console.error(
+        "[Socket] ❌ Reconnection failed after all attempts.\n" +
+          "Please refresh the page or check your network connection."
+      );
+    }
   });
 
   return socket;

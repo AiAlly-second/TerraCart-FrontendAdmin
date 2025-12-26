@@ -58,7 +58,9 @@ const Reports = () => {
           break;
       }
     } catch (error) {
-      console.error("Error fetching report:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching report:", error);
+      }
       alert("Failed to fetch report");
     } finally {
       setLoading(false);

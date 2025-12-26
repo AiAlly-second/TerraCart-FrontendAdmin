@@ -17,7 +17,7 @@ import {
 } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
-import { formatUnit } from "../../utils/unitConverter";
+import { formatUnit, convertUnit } from "../../utils/unitConverter";
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -72,7 +72,9 @@ const Dashboard = () => {
         if (pnlRes.data.success) setPnl(pnlRes.data.data);
       }
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching dashboard data:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -688,8 +690,12 @@ const Dashboard = () => {
             <ul className="list-disc list-inside text-xs sm:text-sm text-yellow-700 space-y-1">
               {lowStock.slice(0, 5).map((item) => (
                 <li key={item._id} className="break-words">
-                  {item.name}: {formatUnit(item.qtyOnHand, item.uom)} (Reorder:{" "}
-                  {formatUnit(item.reorderLevel, item.uom)})
+                  {item.name}: {item.baseUnit && item.baseUnit !== item.uom
+                    ? formatUnit(convertUnit(item.qtyOnHand, item.baseUnit, item.uom), item.uom)
+                    : formatUnit(item.qtyOnHand, item.uom)} (Reorder:{" "}
+                  {item.baseUnit && item.baseUnit !== item.uom
+                    ? formatUnit(convertUnit(item.reorderLevel, item.baseUnit, item.uom), item.uom)
+                    : formatUnit(item.reorderLevel, item.uom)})
                 </li>
               ))}
             </ul>

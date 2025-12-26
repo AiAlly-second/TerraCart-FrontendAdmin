@@ -193,7 +193,9 @@ const Expenses = () => {
       if (expensesRes.data.success) setExpenses(expensesRes.data.data);
       if (summaryRes.data.success) setSummary(summaryRes.data.data);
     } catch (error) {
-      console.error("Error fetching expenses:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching expenses:", error);
+      }
       alert("Failed to fetch expenses");
     } finally {
       setLoading(false);

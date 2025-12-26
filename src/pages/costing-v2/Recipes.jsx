@@ -82,7 +82,9 @@ const Recipes = () => {
       if (defaultMenuRes.data.success)
         setDefaultMenuItems(defaultMenuRes.data.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching data:", error);
+      }
       alert("Failed to fetch data");
     } finally {
       setLoading(false);

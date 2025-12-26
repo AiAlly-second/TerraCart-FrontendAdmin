@@ -17,7 +17,7 @@ import {
   FaExclamationTriangle,
   FaArrowDown,
 } from "react-icons/fa";
-import { formatUnit } from "../../utils/unitConverter";
+import { formatUnit, convertUnit } from "../../utils/unitConverter";
 import { confirm } from "../../utils/confirm";
 import { useAuth } from "../../context/AuthContext";
 
@@ -60,7 +60,9 @@ const Ingredients = () => {
         setIngredients(res.data.data);
       }
     } catch (error) {
-      console.error("Error fetching ingredients:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching ingredients:", error);
+      }
       alert("Failed to fetch ingredients");
     } finally {
       setLoading(false);
@@ -136,6 +138,14 @@ const Ingredients = () => {
     const ingredient = ingredients.find((ing) => ing._id === id);
     const name = ingredient?.name || "this ingredient";
 
+    // Check if this is a shared ingredient and user is cart admin
+    if (userRole === "admin" && !ingredient?.outletId) {
+      alert(
+        "Cannot delete shared ingredients.\n\nShared ingredients are managed by super admins or franchise admins. Please contact your administrator if you need to remove this ingredient."
+      );
+      return;
+    }
+
     const confirmed = await confirm(
       `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`,
       {
@@ -154,11 +164,14 @@ const Ingredients = () => {
       alert(`Ingredient "${name}" deleted successfully!`);
       fetchIngredients();
     } catch (error) {
-      alert(
-        `Failed to delete ingredient: ${
-          error.response?.data?.message || error.message
-        }`
-      );
+      const errorMessage = error.response?.data?.message || error.message;
+      if (errorMessage.includes("shared ingredients")) {
+        alert(
+          "Cannot delete shared ingredients.\n\nShared ingredients are managed by super admins or franchise admins. Please contact your administrator if you need to remove this ingredient."
+        );
+      } else {
+        alert(`Failed to delete ingredient: ${errorMessage}`);
+      }
     }
   };
 
@@ -409,7 +422,9 @@ const Ingredients = () => {
                         Quantity on Hand
                       </span>
                       <span className="font-bold text-sm sm:text-base text-gray-800">
-                        {formatUnit(ing.qtyOnHand, ing.uom)}
+                        {ing.baseUnit && ing.baseUnit !== ing.uom
+                          ? formatUnit(convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom), ing.uom)
+                          : formatUnit(ing.qtyOnHand, ing.uom)}
                       </span>
                     </div>
                     {ing.qtyOnHand <= ing.reorderLevel && (
@@ -425,7 +440,9 @@ const Ingredients = () => {
                         Reorder Level
                       </span>
                       <span className="text-sm sm:text-base text-gray-700">
-                        {formatUnit(ing.reorderLevel, ing.uom)}
+                        {ing.baseUnit && ing.baseUnit !== ing.uom
+                          ? formatUnit(convertUnit(ing.reorderLevel, ing.baseUnit, ing.uom), ing.uom)
+                          : formatUnit(ing.reorderLevel, ing.uom)}
                       </span>
                     </div>
                   </>
@@ -439,10 +456,64 @@ const Ingredients = () => {
                 {!isSuperAdmin && (
                   <div className="flex items-center justify-between border-t pt-3">
                     <span className="text-xs sm:text-sm text-gray-600">
-                      Cost/Unit
+                      Cost/Unit ({ing.uom})
                     </span>
                     <span className="text-sm sm:text-base font-bold text-[#d86d2a]">
-                      ₹{ing.currentCostPerBaseUnit?.toFixed(2) || "0.00"}
+                      {(() => {
+                        const baseCost = ing.currentCostPerBaseUnit || 0;
+                        if (!baseCost || baseCost === 0) {
+                          return "₹0.00";
+                        }
+                        
+                        if (ing.baseUnit && ing.baseUnit !== ing.uom) {
+                          try {
+                            // Convert cost from base unit to display unit
+                            // Formula: cost per display unit = cost per base unit × (base units per display unit)
+                            // Example: If cost is ₹0.22/g (base) and uom is kg, we need ₹220/kg
+                            // convertUnit(1, "kg", "g") = 1000 (how many grams in 1 kg)
+                            // So: 0.22 × 1000 = 220
+                            const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
+                            let costPerDisplayUnit = baseCost * baseUnitsPerDisplayUnit;
+                            
+                            // Detect if cost might be stored incorrectly
+                            // If cost per kg > 10000, the baseCost might be stored per display unit instead of per base unit
+                            // Example: If baseCost = 220 (stored as ₹220/kg instead of ₹0.22/g)
+                            // Then costPerDisplayUnit = 220 * 1000 = 220000 (wrong!)
+                            // Correction: If baseCost seems to be per display unit, use it directly
+                            if (costPerDisplayUnit > 10000 && (ing.uom === "kg" || ing.uom === "l")) {
+                              // Check if baseCost itself is a reasonable cost per display unit
+                              // If baseCost is between 1 and 10000, it might be stored per display unit
+                              if (baseCost > 1 && baseCost < 10000) {
+                                // Cost is likely stored per display unit, use it directly
+                                if (import.meta.env.DEV) {
+                                  console.warn(
+                                    `[Cost Display] Cost correction for ${ing.name}: ` +
+                                    `Base cost (₹${baseCost}/${ing.baseUnit}) appears to be stored per ${ing.uom} instead of per ${ing.baseUnit}. ` +
+                                    `Displaying ₹${baseCost.toFixed(2)}/${ing.uom} directly.`
+                                  );
+                                }
+                                costPerDisplayUnit = baseCost;
+                              } else {
+                                // Still seems wrong, log warning but use calculated value
+                                if (import.meta.env.DEV) {
+                                  console.warn(
+                                    `[Cost Display] Unusually high cost for ${ing.name}: ₹${costPerDisplayUnit.toFixed(2)}/${ing.uom}. ` +
+                                    `Base cost: ₹${baseCost}/${ing.baseUnit}. Please verify purchase data.`
+                                  );
+                                }
+                              }
+                            }
+                            
+                            return `₹${costPerDisplayUnit.toFixed(2)}`;
+                          } catch (error) {
+                            if (import.meta.env.DEV) {
+                              console.error(`Cost conversion error for ${ing.name}:`, error);
+                            }
+                            return `₹${baseCost.toFixed(2)}`;
+                          }
+                        }
+                        return `₹${baseCost.toFixed(2)}`;
+                      })()}
                     </span>
                   </div>
                 )}
@@ -468,6 +539,7 @@ const Ingredients = () => {
                 >
                   <FaEdit className="text-sm sm:text-base" />
                 </button>
+                {/* Show delete button for all ingredients */}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -475,8 +547,17 @@ const Ingredients = () => {
                     e.stopPropagation();
                     handleDelete(ing._id, ing.name);
                   }}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete"
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    userRole === "admin" && !ing.outletId
+                      ? "text-gray-400 hover:bg-gray-50"
+                      : "text-red-600 hover:bg-red-50"
+                  }`}
+                  title={
+                    userRole === "admin" && !ing.outletId
+                      ? "Cannot delete shared ingredients (contact administrator)"
+                      : "Delete"
+                  }
+                  style={{ pointerEvents: "auto" }}
                 >
                   <FaTrash className="text-sm sm:text-base" />
                 </button>

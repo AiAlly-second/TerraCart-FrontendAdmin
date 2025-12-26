@@ -41,7 +41,9 @@ const Waste = () => {
       if (wasteRes.data.success) setWasteRecords(wasteRes.data.data);
       if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching data:", error);
+      }
       alert("Failed to fetch data");
     } finally {
       setLoading(false);
@@ -86,7 +88,9 @@ const Waste = () => {
         setFormData(prev => ({ ...prev, uom: newUom, qty: converted.toFixed(2) }));
         setConvertedQty(null);
       } catch (error) {
-        console.error("Conversion error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Conversion error:", error);
+        }
         setFormData(prev => ({ ...prev, uom: newUom }));
         setConvertedQty(null);
       }

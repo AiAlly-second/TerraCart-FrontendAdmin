@@ -44,7 +44,9 @@ const Purchases = () => {
       if (suppliersRes.data.success) setSuppliers(suppliersRes.data.data);
       if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching data:", error);
+      }
       alert("Failed to fetch data");
     } finally {
       setLoading(false);
