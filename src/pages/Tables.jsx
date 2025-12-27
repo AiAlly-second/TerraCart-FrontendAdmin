@@ -266,7 +266,15 @@ const Tables = () => {
     socketRef.current = socket;
 
     const handleTableStatusUpdated = (payload) => {
-      if (!payload?.id || !payload?.status) return;
+      if (!payload?.id || !payload?.status) {
+        console.warn("[Tables] Received invalid table status update:", payload);
+        return;
+      }
+      console.log("[Tables] Received table:status:updated:", {
+        id: payload.id,
+        number: payload.number,
+        status: payload.status,
+      });
       setTables((prev) =>
         prev.map((t) =>
           t._id === payload.id || t.id === payload.id
@@ -290,7 +298,10 @@ const Tables = () => {
         const payload = JSON.parse(atob(token.split(".")[1]));
         const userId = payload.id;
         if (userId) {
+          console.log("[Tables] Joining socket room with userId:", userId);
           socket.emit("join:cafe", userId);
+          // Also join cart room for compatibility
+          socket.emit("join:cart", userId);
           // Remember this cart admin ID so we can generate takeaway QR specific to this cart
           setCartId(userId);
         }
@@ -299,6 +310,8 @@ const Tables = () => {
           console.warn("[Tables] Could not decode token for socket room:", e);
         }
       }
+    } else {
+      console.warn("[Tables] No token found - socket room not joined");
     }
 
     const handleTableMerged = (payload) => {
