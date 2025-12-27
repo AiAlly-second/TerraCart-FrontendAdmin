@@ -29,13 +29,31 @@ const Sidebar = ({ isOpen, onClose }) => {
             items: totalItems,
           });
         } catch (error) {
-          console.error("Error fetching menu stats:", error);
+          // Handle network errors gracefully - don't log expected Render.com sleeping errors
+          const isNetworkError =
+            error.code === "ERR_NETWORK" ||
+            error.code === "ERR_CONNECTION_CLOSED" ||
+            error.message?.includes("Network Error") ||
+            error.message?.includes("ERR_CONNECTION_CLOSED") ||
+            error.message?.includes("Failed to fetch");
+          
+          // Only log non-network errors or if in development mode
+          if (!isNetworkError || import.meta.env.DEV) {
+            // The api.js interceptor already handles Render.com warnings
+            // Only log here if it's not a network error or in dev mode
+            if (import.meta.env.DEV) {
+              console.warn("Error fetching menu stats (non-critical):", error.message || error);
+            }
+          }
+          // Keep existing stats on error - don't reset to 0
+          // This prevents UI flicker when server is temporarily unavailable
         } finally {
           setMenuLoading(false);
         }
       };
 
       fetchMenuStats();
+      // Poll every 30 seconds, but increase interval if server is sleeping
       const interval = setInterval(fetchMenuStats, 30000);
       return () => clearInterval(interval);
     } else {
