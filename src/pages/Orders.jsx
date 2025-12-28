@@ -356,7 +356,9 @@ const printOrderInvoice = async (order) => {
       }
     }
   } catch (err) {
-    console.error("Failed to load franchise/cart data:", err);
+    if (import.meta.env.DEV) {
+      console.error("Failed to load franchise/cart data:", err);
+    }
   }
 
   const html = buildInvoiceMarkup(order, franchiseData, cartData);
@@ -458,7 +460,9 @@ const downloadOrderInvoice = async (order) => {
       }
     }
   } catch (err) {
-    console.error("Failed to load franchise/cart data:", err);
+    if (import.meta.env.DEV) {
+      console.error("Failed to load franchise/cart data:", err);
+    }
   }
 
   const html = buildInvoiceMarkup(order, franchiseData, cartData);
@@ -514,7 +518,9 @@ const downloadOrderInvoice = async (order) => {
 
     pdf.save(`${buildInvoiceId(order)}.pdf`);
   } catch (err) {
-    console.error("Failed to download invoice PDF", err);
+    if (import.meta.env.DEV) {
+      console.error("Failed to download invoice PDF", err);
+    }
     alert("Failed to generate PDF. Please try again.");
   } finally {
     if (document.body.contains(wrapper)) {
@@ -557,11 +563,13 @@ const Orders = () => {
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
     // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
     if (!incoming || incoming.serviceType !== "DINE_IN") {
-      console.log(
-        "[Orders] Ignoring non-DINE_IN order:",
-        incoming?.serviceType,
-        incoming?._id
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          "[Orders] Ignoring non-DINE_IN order:",
+          incoming?.serviceType,
+          incoming?._id
+        );
+      }
       return;
     }
     const incomingId = normalizeId(incoming._id);
@@ -943,7 +951,9 @@ const Orders = () => {
           const cafeRes = await api.get(`/users/${filterCafeId}`);
           setCafeInfo(cafeRes.data);
         } catch (err) {
-          console.error("Failed to fetch cart info:", err);
+          if (import.meta.env.DEV) {
+            console.error("Failed to fetch cart info:", err);
+          }
         }
       }
 
@@ -970,16 +980,20 @@ const Orders = () => {
             );
           });
           setCarts(franchiseCarts);
-          console.log(
-            `[Orders] Found ${franchiseCarts.length} carts for franchise admin (user ID: ${user._id})`
-          );
-          if (franchiseCarts.length === 0) {
-            console.warn(
-              `[Orders] No carts found for franchise admin. This might indicate a data issue.`
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Orders] Found ${franchiseCarts.length} carts for franchise admin (user ID: ${user._id})`
             );
+            if (franchiseCarts.length === 0) {
+              console.warn(
+                `[Orders] No carts found for franchise admin. This might indicate a data issue.`
+              );
+            }
           }
         } catch (err) {
-          console.error("Failed to fetch carts:", err);
+          if (import.meta.env.DEV) {
+            console.error("Failed to fetch carts:", err);
+          }
         }
       }
 
@@ -1009,22 +1023,28 @@ const Orders = () => {
             }
             return orderCafeId && orderCafeId.toString() === filterCafeId;
           });
-          console.log(
-            `Filtered orders for cart ${filterCafeId}:`,
-            dineInOrders.length
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `Filtered orders for cart ${filterCafeId}:`,
+              dineInOrders.length
+            );
+          }
         }
 
-        console.log(
-          "Fetched dine-in orders:",
-          dineInOrders.length,
-          "out of",
-          data.length || 0,
-          "total orders"
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            "Fetched dine-in orders:",
+            dineInOrders.length,
+            "out of",
+            data.length || 0,
+            "total orders"
+          );
+        }
         setOrders(dineInOrders);
       } catch (err) {
-        console.error("Failed to fetch orders:", err);
+        if (import.meta.env.DEV) {
+          console.error("Failed to fetch orders:", err);
+        }
       }
     };
 
@@ -1193,7 +1213,9 @@ const Orders = () => {
       resetDraft();
       alert("Order updated successfully!");
     } catch (err) {
-      console.error("Save failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("Save failed:", err);
+      }
       const errorMessage =
         err.response?.data?.message ||
         "Failed to update order. Please try again.";
@@ -1316,16 +1338,20 @@ const Orders = () => {
           return [created, ...filteredPrev];
         });
       } else {
-        console.log(
-          "[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list"
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            "[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list"
+          );
+        }
       }
       setIsModalOpen(false);
       setCurrentOrder(null);
       resetDraft();
       loadTables();
     } catch (err) {
-      console.error("Failed to create order", err);
+      if (import.meta.env.DEV) {
+        console.error("Failed to create order", err);
+      }
       setCreateError(
         err.message || "Failed to create order. Please try again."
       );
@@ -1445,9 +1471,11 @@ const Orders = () => {
         return;
       }
 
-      console.log(
-        `[Orders] Fetching info for ${cartIdsToFetch.length} unknown cart(s)...`
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Orders] Fetching info for ${cartIdsToFetch.length} unknown cart(s)...`
+        );
+      }
 
       // Fetch all unknown carts in parallel
       const fetchPromises = (
@@ -1645,15 +1673,19 @@ const Orders = () => {
           category: category.name,
         }))
       );
-      console.log("[Orders] Menu loaded:", {
-        categories: categories.length,
-        items: flatItems.length,
-        categoriesList: categories.map((c) => c.label),
-        itemsList: flatItems.map((i) => i.name).slice(0, 5),
-      });
+      if (import.meta.env.DEV) {
+        console.log("[Orders] Menu loaded:", {
+          categories: categories.length,
+          items: flatItems.length,
+          categoriesList: categories.map((c) => c.label),
+          itemsList: flatItems.map((i) => i.name).slice(0, 5),
+        });
+      }
       setMenuItems(flatItems);
     } catch (err) {
-      console.error("Failed to load menu", err);
+      if (import.meta.env.DEV) {
+        console.error("Failed to load menu", err);
+      }
       const errorMessage =
         err.response?.data?.message || err.message || "Failed to load menu";
       setMenuError(errorMessage);
@@ -1687,12 +1719,16 @@ const Orders = () => {
       });
 
       setTables(sortedTables);
-      console.log(`[Orders] Loaded ${sortedTables.length} tables`);
+      if (import.meta.env.DEV) {
+        console.log(`[Orders] Loaded ${sortedTables.length} tables`);
+      }
     } catch (err) {
-      console.error("Failed to load tables", err);
-      const errorMessage =
-        err.response?.data?.message || err.message || "Failed to load tables";
-      console.error("Error details:", errorMessage);
+      if (import.meta.env.DEV) {
+        console.error("Failed to load tables", err);
+        const errorMessage =
+          err.response?.data?.message || err.message || "Failed to load tables";
+        console.error("Error details:", errorMessage);
+      }
       setTables([]);
     } finally {
       setTableLoading(false);
@@ -2613,10 +2649,12 @@ const Orders = () => {
                                                               dineInOrders
                                                             );
                                                           } catch (err) {
-                                                            console.error(
-                                                              "Failed to cancel item:",
-                                                              err
-                                                            );
+                                                            if (import.meta.env.DEV) {
+                                                              console.error(
+                                                                "Failed to cancel item:",
+                                                                err
+                                                              );
+                                                            }
                                                             const errorMessage =
                                                               err.response?.data
                                                                 ?.message ||
@@ -2730,10 +2768,12 @@ const Orders = () => {
                                                               dineInOrders
                                                             );
                                                           } catch (err) {
-                                                            console.error(
-                                                              "Failed to convert item to takeaway:",
-                                                              err
-                                                            );
+                                                            if (import.meta.env.DEV) {
+                                                              console.error(
+                                                                "Failed to convert item to takeaway:",
+                                                                err
+                                                              );
+                                                            }
                                                             const errorMessage =
                                                               err.response?.data
                                                                 ?.message ||

@@ -38,6 +38,7 @@ const Settings = () => {
   // Check if user is cart admin
   const [userRole, setUserRole] = useState(null);
   const [cartSettings, setCartSettings] = useState({
+    name: '',
     pickupEnabled: true,
     deliveryEnabled: false,
     deliveryRadius: 5,
@@ -78,18 +79,34 @@ const Settings = () => {
       
       if (storedUser) {
         setUserRole(storedUser.role);
-        console.log('[Settings] User role detected:', storedUser.role);
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.log('[Settings] User role detected:', storedUser.role);
+          }
+        }
         
         // If cart admin, fetch cart settings
         if (storedUser.role === 'admin' || storedUser.role === 'cart_admin') {
-          console.log('[Settings] Fetching cart settings for cart admin');
+          if (import.meta.env.DEV) {
+            if (import.meta.env.DEV) {
+              console.log('[Settings] Fetching cart settings for cart admin');
+            }
+          }
           fetchCartSettings();
         }
       } else {
-        console.log('[Settings] No user found in localStorage');
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.log('[Settings] No user found in localStorage');
+          }
+        }
       }
     } catch (err) {
-      console.error('Error parsing user data:', err);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error('Error parsing user data:', err);
+        }
+      }
     }
   }, []);
 
@@ -99,6 +116,7 @@ const Settings = () => {
       if (response.data.success && response.data.data) {
         const cart = response.data.data;
         setCartSettings({
+          name: cart.name || '',
           pickupEnabled: cart.pickupEnabled !== undefined ? cart.pickupEnabled : true,
           deliveryEnabled: cart.deliveryEnabled !== undefined ? cart.deliveryEnabled : false,
           deliveryRadius: cart.deliveryRadius || 5,
@@ -119,7 +137,11 @@ const Settings = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching cart settings:', error);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error('Error fetching cart settings:', error);
+        }
+      }
     }
   };
 
@@ -190,7 +212,11 @@ const Settings = () => {
         state: "",
       };
     } catch (error) {
-      console.error("Reverse geocoding error:", error);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Reverse geocoding error:", error);
+        }
+      }
       return null;
     }
   };
@@ -245,7 +271,11 @@ const Settings = () => {
             setTimeout(() => setSuccess(''), 3000);
           }
         } catch (error) {
-          console.error("Error reverse geocoding:", error);
+          if (import.meta.env.DEV) {
+            if (import.meta.env.DEV) {
+              console.error("Error reverse geocoding:", error);
+            }
+          }
           setSuccess('Coordinates captured successfully! Please enter the address manually.');
           setTimeout(() => setSuccess(''), 3000);
         }
@@ -341,7 +371,11 @@ const Settings = () => {
         });
       }
     } catch (err) {
-      console.error('Error fetching user data:', err);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error('Error fetching user data:', err);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -650,8 +684,26 @@ const Settings = () => {
               {/* Cart Settings Tab - Only for Cart Admins */}
               {activeTab === 'cart' && (userRole === 'admin' || userRole === 'cart_admin') && (
                 <form onSubmit={handleCartSettingsUpdate} className="max-w-2xl space-y-6">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Pickup & Delivery Settings</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Cart Settings</h2>
                   
+                  {/* Cart Name */}
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                        Cart Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={cartSettings.name || ''}
+                        onChange={(e) => setCartSettings({ ...cartSettings, name: e.target.value })}
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter your cart name"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">This is the name that customers will see for your cart</p>
+                    </div>
+                  </div>
+
                   {/* Pickup Settings */}
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center justify-between mb-4">

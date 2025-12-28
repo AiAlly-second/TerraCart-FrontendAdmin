@@ -35,7 +35,7 @@ const Reports = () => {
       const params = {
         from: dateRange.from,
         to: dateRange.to,
-        ...(selectedOutlet && { outletId: selectedOutlet }),
+        ...(selectedOutlet && { cartId: selectedOutlet }),
       };
 
       switch (activeReport) {

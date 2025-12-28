@@ -26,7 +26,9 @@ const OutletFilter = ({
         setOutlets(res.data.data);
       }
     } catch (error) {
-      console.error("Error fetching outlets:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching outlets:", error);
+      }
     } finally {
       setLoading(false);
     }

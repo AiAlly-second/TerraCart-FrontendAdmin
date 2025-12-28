@@ -43,7 +43,7 @@ const Inventory = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
+      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [transactionsRes, ingredientsRes] = await Promise.all([
         getInventoryTransactions(params),
         getIngredients(params),
@@ -65,7 +65,7 @@ const Inventory = () => {
     try {
       await consumeInventory({
         ...formData,
-        outletId: selectedOutlet,
+        cartId: selectedOutlet,
       });
       alert("Inventory consumed successfully!");
       setModalOpen(false);
@@ -96,7 +96,7 @@ const Inventory = () => {
         uom: returnFormData.uom,
         refType: "return",
         notes: returnFormData.notes || "Unused ingredients returned to inventory",
-        outletId: selectedOutlet,
+        cartId: selectedOutlet,
       });
       alert("Unused ingredients returned to inventory successfully!");
       setReturnModalOpen(false);
@@ -150,7 +150,20 @@ const Inventory = () => {
   // Calculate statistics
   const totalItems = ingredients.length;
   const lowStockItems = ingredients.filter((ing) => ing.qtyOnHand <= ing.reorderLevel).length;
-  const totalValue = ingredients.reduce((sum, ing) => sum + (ing.qtyOnHand * ing.currentCostPerBaseUnit), 0);
+  // Calculate total value - handle null/undefined values and ensure we use valid numbers
+  // Only include ingredients with stock > 0 for accurate total value
+  const totalValue = ingredients.reduce((sum, ing) => {
+    const qty = Number(ing.qtyOnHand) || 0;
+    const cost = Number(ing.currentCostPerBaseUnit) || 0;
+    const itemValue = qty * cost;
+    
+    // Debug logging in development
+    if (import.meta.env.DEV && qty > 0 && cost > 0) {
+      console.log(`[Inventory Value] ${ing.name}: ${qty} × ₹${cost} = ₹${itemValue.toFixed(2)}`);
+    }
+    
+    return sum + itemValue;
+  }, 0);
 
   if (loading) {
     return (
@@ -161,26 +174,26 @@ const Inventory = () => {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-4 md:p-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Inventory Management</h1>
-            <p className="text-gray-600 mt-1">Manage all inventory items including ingredients, supplies, and consumables</p>
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4 mb-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Inventory Management</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Manage all inventory items including ingredients, supplies, and consumables</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto">
             <button
               onClick={() => setModalOpen(true)}
-              className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
+              className="bg-[#d86d2a] text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center justify-center gap-2 text-sm sm:text-base"
             >
-              <FaPlus /> Consume Inventory
+              <FaPlus /> <span className="whitespace-nowrap">Consume Inventory</span>
             </button>
             <button
               onClick={handleReturnClick}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm sm:text-base"
             >
-              <FaUndo /> Return to Inventory
+              <FaUndo /> <span className="whitespace-nowrap">Return to Inventory</span>
             </button>
           </div>
         </div>
@@ -190,7 +203,7 @@ const Inventory = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-sm text-gray-600">Total Items</div>
           <div className="text-2xl font-bold text-gray-800">{totalItems}</div>
@@ -240,8 +253,8 @@ const Inventory = () => {
 
         {/* Filters */}
         {activeTab === "stock" && (
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
               <div className="relative">
                 <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
@@ -292,7 +305,7 @@ const Inventory = () => {
                   Low Stock Only
                 </label>
               </div>
-              <div className="text-sm text-gray-600 flex items-center">
+              <div className="text-xs sm:text-sm text-gray-600 flex items-center sm:col-span-2 lg:col-span-1">
                 Showing {filteredIngredients.length} of {totalItems} items
               </div>
             </div>
@@ -301,7 +314,7 @@ const Inventory = () => {
 
         {/* Stock Levels Tab */}
         {activeTab === "stock" && (
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {Object.keys(groupedByCategory).length === 0 ? (
               <div className="text-center py-12 text-gray-500">No items found</div>
             ) : (
@@ -311,18 +324,18 @@ const Inventory = () => {
                     <div className="bg-gray-100 px-4 py-3 font-semibold text-gray-800 border-b border-gray-200">
                       {category} ({items.length} items)
                     </div>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto -mx-3 sm:mx-0">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Storage</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UOM</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Level</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Value</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Item Name</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Storage</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">UOM</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Stock</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Reorder Level</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Unit Cost</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Total Value</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Status</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -332,32 +345,52 @@ const Inventory = () => {
                               ? convertUnit(ing.reorderLevel, ing.uom, ing.baseUnit)
                               : ing.reorderLevel;
                             const isLowStock = ing.qtyOnHand <= reorderLevelInBaseUnit;
-                            const stockValue = ing.qtyOnHand * ing.currentCostPerBaseUnit;
+                            // Calculate stock value - handle null/undefined values
+                            const qty = Number(ing.qtyOnHand) || 0;
+                            const cost = Number(ing.currentCostPerBaseUnit) || 0;
+                            const stockValue = qty * cost;
                             return (
                               <tr key={ing._id} className={isLowStock ? "bg-red-50" : ""}>
-                                <td className="px-4 py-3 whitespace-nowrap font-medium">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap font-medium text-sm sm:text-base">
                                   {ing.name}
                                   {isLowStock && (
                                     <FaExclamationTriangle className="inline-block ml-2 text-red-600" title="Low Stock" />
                                   )}
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
                                     {ing.storageLocation || "Dry Storage"}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">{ing.uom}</td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
+                                  {/* Display the preferred unit (uom) for this ingredient */}
+                                  {ing.uom}
+                                </td>
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span className={isLowStock ? "text-red-600 font-semibold" : ""}>
-                                    {ing.baseUnit && ing.baseUnit !== ing.uom
-                                      ? formatUnit(convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom), ing.uom)
-                                      : formatUnit(ing.qtyOnHand, ing.uom)}
+                                    {(() => {
+                                      // qtyOnHand is always stored in baseUnit (g, ml, or pcs)
+                                      // Convert from baseUnit to the ingredient's preferred uom for display
+                                      if (ing.baseUnit && ing.uom) {
+                                        if (ing.baseUnit !== ing.uom) {
+                                          // Convert from base unit to display unit (uom)
+                                          const convertedQty = convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom);
+                                          // Format with the ingredient's uom (no auto-conversion, respect the uom setting)
+                                          return formatUnit(convertedQty, ing.uom, { autoConvert: false });
+                                        } else {
+                                          // Same unit, just format it
+                                          return formatUnit(ing.qtyOnHand, ing.uom, { autoConvert: false });
+                                        }
+                                      }
+                                      // Fallback
+                                      return formatUnit(ing.qtyOnHand || 0, ing.uom || "pcs", { autoConvert: false });
+                                    })()}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   {formatUnit(ing.reorderLevel, ing.uom)}
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   {(() => {
                                     const baseCost = ing.currentCostPerBaseUnit || 0;
                                     if (!baseCost || baseCost === 0) {
@@ -402,8 +435,8 @@ const Inventory = () => {
                                     return `₹${isNaN(costPerDisplayUnit) ? "0.00" : costPerDisplayUnit.toFixed(2)} / ${ing.uom || ""}`;
                                   })()}
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">₹{stockValue.toFixed(2)}</td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">₹{stockValue.toFixed(2)}</td>
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span
                                     className={`px-2 py-1 rounded text-xs ${
                                       ing.isActive
@@ -429,43 +462,43 @@ const Inventory = () => {
 
         {/* Transactions Tab */}
         {activeTab === "transactions" && (
-          <div className="p-4">
-            <div className="overflow-x-auto">
+          <div className="p-3 sm:p-4">
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Allocated</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Date</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Item</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Category</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Type</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Quantity</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cost Allocated</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Reference</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {transactions.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan="8" className="px-3 sm:px-6 py-4 text-center text-gray-500 text-sm">
                         No transactions found
                       </td>
                     </tr>
                   ) : (
                     transactions.map((txn) => (
                       <tr key={txn._id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           {new Date(txn.date).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap font-medium">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap font-medium text-sm">
                           {txn.ingredientId?.name || "N/A"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
                             {txn.ingredientId?.category || "Other"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           <span
                             className={`px-2 py-1 rounded text-xs ${
                               txn.type === "IN"
@@ -482,16 +515,16 @@ const Inventory = () => {
                             {txn.type}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           {formatUnit(txn.qty, txn.uom)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           ₹{Number(txn.costAllocated || 0).toFixed(2)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
                           {txn.refType}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           {/* Actions column - can be used for future features */}
                         </td>
                       </tr>
@@ -506,9 +539,9 @@ const Inventory = () => {
 
       {/* Consume Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Consume Inventory</h2>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4">Consume Inventory</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Item *</label>
@@ -516,7 +549,7 @@ const Inventory = () => {
                   required
                   value={formData.ingredientId}
                   onChange={(e) => setFormData({ ...formData, ingredientId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg"
                 >
                   <option value="">Select Item</option>
                   {ingredients
@@ -528,7 +561,7 @@ const Inventory = () => {
                     ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
                   <input
@@ -596,10 +629,10 @@ const Inventory = () => {
 
       {/* Return Modal - Simple return unused ingredients */}
       {returnModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Return Unused Ingredients to Inventory</h2>
-            <p className="text-sm text-gray-600 mb-4">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4">Return Unused Ingredients to Inventory</h2>
+            <p className="text-xs sm:text-sm text-gray-600 mb-4">
               Return unused ingredients back to inventory stock. Items will be valued at current weighted average cost.
             </p>
             <form onSubmit={handleReturnSubmit} className="space-y-4">
@@ -616,7 +649,7 @@ const Inventory = () => {
                       uom: selectedIng?.uom || "kg"
                     });
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg"
                 >
                   <option value="">Select Ingredient</option>
                   {ingredients
@@ -630,7 +663,7 @@ const Inventory = () => {
                     ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Return Quantity *</label>
                   <input
@@ -679,7 +712,7 @@ const Inventory = () => {
                   <strong>How it works:</strong> The returned quantity will be added back to inventory stock and valued at the current weighted average cost. This does not recalculate the average cost.
                 </p>
               </div>
-              <div className="flex gap-2 justify-end">
+              <div className="flex flex-col sm:flex-row gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => {
@@ -693,13 +726,13 @@ const Inventory = () => {
                       notes: "",
                     });
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                  className="px-4 py-2 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
                 >
                   <FaUndo /> Return to Inventory
                 </button>

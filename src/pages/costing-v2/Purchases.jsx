@@ -34,7 +34,7 @@ const Purchases = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
+      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [purchasesRes, suppliersRes, ingredientsRes] = await Promise.all([
         getPurchases(params),
         getSuppliers(),
@@ -124,6 +124,15 @@ const Purchases = () => {
   const updateItem = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index] = { ...newItems[index], [field]: value };
+    
+    // When ingredient is selected, auto-set the UOM to match the ingredient's UOM
+    if (field === "ingredientId" && value) {
+      const selectedIngredient = ingredients.find(ing => ing._id === value);
+      if (selectedIngredient && selectedIngredient.uom) {
+        newItems[index].uom = selectedIngredient.uom;
+      }
+    }
+    
     setFormData({ ...formData, items: newItems });
   };
 

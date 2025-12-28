@@ -38,11 +38,13 @@ const customerBaseUrl = (
 // Warn in production if VITE_CUSTOMER_BASE_URL is not set or points to localhost
 if (import.meta.env.PROD) {
   if (!import.meta.env.VITE_CUSTOMER_BASE_URL || customerBaseUrl.includes("localhost")) {
-    console.error(
-      "⚠️ [Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
-      "Takeaway QR codes will not work in production.",
-      "Please set VITE_CUSTOMER_BASE_URL to your deployed frontend URL (e.g., https://your-frontend.vercel.app)"
-    );
+    if (import.meta.env.DEV) {
+      console.error(
+        "⚠️ [Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
+        "Takeaway QR codes will not work in production.",
+        "Please set VITE_CUSTOMER_BASE_URL to your deployed frontend URL (e.g., https://your-frontend.vercel.app)"
+      );
+    }
   }
 }
 
@@ -248,7 +250,9 @@ const Tables = () => {
       }
       setTables(tablesData);
     } catch (err) {
-      console.error(err);
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setError(err.response?.data?.message || "Failed to load tables");
       setTables([]); // Set empty array on error
     } finally {
@@ -267,7 +271,9 @@ const Tables = () => {
 
     const handleTableStatusUpdated = (payload) => {
       if (!payload?.id || !payload?.status) {
-        console.warn("[Tables] Received invalid table status update:", payload);
+        if (import.meta.env.DEV) {
+          console.warn("[Tables] Received invalid table status update:", payload);
+        }
         return;
       }
       console.log("[Tables] Received table:status:updated:", {

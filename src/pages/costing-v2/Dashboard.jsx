@@ -46,7 +46,7 @@ const Dashboard = () => {
         from: dateRange.from,
         to: dateRange.to,
       };
-      if (selectedOutlet) params.outletId = selectedOutlet;
+      if (selectedOutlet) params.cartId = selectedOutlet;
 
       if (user?.role === "super_admin" || user?.role === "franchise_admin") {
         // Super admin and franchise admin get hierarchical data
@@ -54,10 +54,13 @@ const Dashboard = () => {
         if (hierarchicalRes.data.success) {
           setHierarchicalData(hierarchicalRes.data.data);
           // Auto-expand all franchises/kiosks
-          const franchiseIds = hierarchicalRes.data.data.franchises.map((f) =>
-            f.franchiseId.toString()
-          );
-          setExpandedFranchises(new Set(franchiseIds));
+          const franchises = hierarchicalRes.data.data?.franchises || [];
+          if (Array.isArray(franchises) && franchises.length > 0) {
+            const franchiseIds = franchises.map((f) =>
+              f?.franchiseId?.toString()
+            ).filter(Boolean);
+            setExpandedFranchises(new Set(franchiseIds));
+          }
         }
       } else {
         // Other roles get regular dashboard data
@@ -226,7 +229,7 @@ const Dashboard = () => {
 
         {/* Franchise List (or Kiosk List for Franchise Admin) */}
         <div className="space-y-4">
-          {hierarchicalData.franchises.map((franchise) => {
+          {(hierarchicalData?.franchises || []).map((franchise) => {
             const isExpanded = expandedFranchises.has(
               franchise.franchiseId.toString()
             );
@@ -304,12 +307,12 @@ const Dashboard = () => {
 
                   {/* Kiosks List - Always visible for franchise admin */}
                   <div className="space-y-3">
-                    {franchise.kiosks.length === 0 ? (
+                    {(!franchise?.kiosks || franchise.kiosks.length === 0) ? (
                       <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
                         No kiosks found
                       </div>
                     ) : (
-                      franchise.kiosks.map((kiosk) => (
+                      (franchise.kiosks || []).map((kiosk) => (
                         <div
                           key={kiosk.kioskId}
                           className="bg-white rounded-lg shadow-lg p-3 sm:p-4 hover:shadow-xl transition-shadow"
@@ -498,12 +501,12 @@ const Dashboard = () => {
                 {/* Kiosks List */}
                 {isExpanded && (
                   <div className="divide-y divide-gray-200">
-                    {franchise.kiosks.length === 0 ? (
+                    {(!franchise?.kiosks || franchise.kiosks.length === 0) ? (
                       <div className="p-6 text-center text-gray-500">
                         No kiosks found
                       </div>
                     ) : (
-                      franchise.kiosks.map((kiosk) => (
+                      (franchise.kiosks || []).map((kiosk) => (
                         <div
                           key={kiosk.kioskId}
                           className="p-3 sm:p-4 hover:bg-gray-50 transition-colors"
@@ -605,7 +608,7 @@ const Dashboard = () => {
           })}
         </div>
 
-        {hierarchicalData.franchises.length === 0 && (
+        {(!hierarchicalData?.franchises || hierarchicalData.franchises.length === 0) && (
           <div className="bg-white rounded-lg shadow p-6 sm:p-8 md:p-12 text-center">
             <FaBuilding className="text-4xl sm:text-5xl md:text-6xl text-gray-300 mx-auto mb-3 sm:mb-4" />
             <p className="text-gray-600 text-sm sm:text-base md:text-lg px-2">
@@ -678,7 +681,7 @@ const Dashboard = () => {
       </div>
 
       {/* Low Stock Alert */}
-      {lowStock.length > 0 && (
+      {Array.isArray(lowStock) && lowStock.length > 0 && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 sm:p-4 mb-4 sm:mb-6 rounded">
           <div className="flex items-center">
             <FaExclamationTriangle className="text-yellow-400 mr-1.5 sm:mr-2 text-sm sm:text-base flex-shrink-0" />
@@ -688,7 +691,7 @@ const Dashboard = () => {
           </div>
           <div className="mt-2">
             <ul className="list-disc list-inside text-xs sm:text-sm text-yellow-700 space-y-1">
-              {lowStock.slice(0, 5).map((item) => (
+              {(lowStock || []).slice(0, 5).map((item) => (
                 <li key={item._id} className="break-words">
                   {item.name}: {item.baseUnit && item.baseUnit !== item.uom
                     ? formatUnit(convertUnit(item.qtyOnHand, item.baseUnit, item.uom), item.uom)

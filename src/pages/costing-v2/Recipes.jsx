@@ -114,8 +114,8 @@ const Recipes = () => {
       // Prevent multiple BOMs with the same name for the same outlet (only when creating, not editing)
       if (!editing) {
         // For cart admin, check against their own outletId
-        // For super admin, check against outletId: null (global BOMs)
-        const currentOutletId = isCartAdmin ? user._id : null;
+        // For super admin, check against cartId: null (global BOMs)
+        const currentCartId = isCartAdmin ? user._id : null;
         const duplicateRecipe = recipes.find(
           (r) =>
             r.name.trim().toLowerCase() ===
