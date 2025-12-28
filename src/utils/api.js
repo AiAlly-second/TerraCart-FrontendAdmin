@@ -92,11 +92,15 @@ api.interceptors.request.use(
         const retryToken = getToken();
         if (retryToken) {
           config.headers.Authorization = `Bearer ${retryToken}`;
-          console.log("[API] Token found on retry after login");
+          if (import.meta.env.DEV) {
+            console.log("[API] Token found on retry after login");
+          }
         } else {
-          console.warn(
-            "[API] No token found even after login - request will fail"
-          );
+          if (import.meta.env.DEV) {
+            console.warn(
+              "[API] No token found even after login - request will fail"
+            );
+          }
         }
       } else {
         if (import.meta.env.DEV) {
@@ -140,8 +144,8 @@ api.interceptors.response.use(
       data: error.response?.data,
     };
 
-    // Enhanced error logging
-    if (error.response) {
+    // Enhanced error logging (only in development)
+    if (error.response && import.meta.env.DEV) {
       console.error("[API Error]", errorDetails);
 
       // Log full response for debugging
@@ -159,7 +163,7 @@ api.interceptors.response.use(
         error.message?.includes("Network Error") ||
         error.message?.includes("ERR_CONNECTION_CLOSED");
 
-      if (isNetworkError && isRenderBackend) {
+      if (isNetworkError && isRenderBackend && import.meta.env.DEV) {
         // For Render.com, these errors are expected when server is sleeping
         // Log as warning instead of error to reduce console noise
         console.warn(
@@ -168,7 +172,7 @@ api.interceptors.response.use(
             `Render.com servers may be sleeping (free tier). Server will wake up automatically.\n` +
             `Please wait 30-60 seconds and try again.`
         );
-      } else {
+      } else if (import.meta.env.DEV) {
         console.error("[API Error - No Response]:", error.message);
       }
     }
@@ -224,10 +228,12 @@ api.interceptors.response.use(
       const errorData = error.response?.data || {};
       const errorCode = errorData.code;
 
-      console.warn("[401 Unauthorized]", {
-        code: errorCode,
-        message: errorData.message,
-      });
+      if (import.meta.env.DEV) {
+        console.warn("[401 Unauthorized]", {
+          code: errorCode,
+          message: errorData.message,
+        });
+      }
 
       // Check if we just logged in - don't logout if we just logged in
       let loginTimestamp = null;

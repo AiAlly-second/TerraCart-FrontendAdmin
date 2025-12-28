@@ -180,7 +180,7 @@ const Expenses = () => {
       const params = {
         from: dateRange.from,
         to: dateRange.to,
-        ...(selectedOutlet && { outletId: selectedOutlet }),
+        ...(selectedOutlet && { cartId: selectedOutlet }),
         ...(filters.category && { category: filters.category }),
         ...(filters.search && { search: filters.search }),
       };

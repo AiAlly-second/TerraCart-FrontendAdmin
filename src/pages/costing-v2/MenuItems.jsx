@@ -47,7 +47,7 @@ const MenuItems = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
+      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [menuItemsRes, recipesRes, defaultMenuRes] = await Promise.all([
         getMenuItems(params),
         getRecipes(),
@@ -93,7 +93,7 @@ const MenuItems = () => {
         ...formData,
         // For cart admin, backend derives outletId from the user.
         // For super/franchise admin, we send the selected outlet explicitly.
-        outletId: isCartAdmin ? undefined : selectedOutlet,
+        cartId: isCartAdmin ? undefined : selectedOutlet,
       };
 
       if (editing) {

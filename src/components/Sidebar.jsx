@@ -42,7 +42,9 @@ const Sidebar = ({ isOpen, onClose }) => {
             // The api.js interceptor already handles Render.com warnings
             // Only log here if it's not a network error or in dev mode
             if (import.meta.env.DEV) {
-              console.warn("Error fetching menu stats (non-critical):", error.message || error);
+              if (import.meta.env.DEV) {
+                console.warn("Error fetching menu stats (non-critical):", error.message || error);
+              }
             }
           }
           // Keep existing stats on error - don't reset to 0
@@ -62,7 +64,9 @@ const Sidebar = ({ isOpen, onClose }) => {
   }, [userRole]);
 
   const handleLogout = () => {
-    console.log("Logging out...");
+    if (import.meta.env.DEV) {
+      console.log("Logging out...");
+    }
     logout();
     navigate("/login");
   };

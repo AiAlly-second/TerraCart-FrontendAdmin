@@ -494,7 +494,9 @@ const downloadOrderInvoice = async (order) => {
 
     pdf.save(`${buildInvoiceId(order)}.pdf`);
   } catch (err) {
-    console.error("Failed to download invoice PDF", err);
+    if (import.meta.env.DEV) {
+      console.error("Failed to download invoice PDF", err);
+    }
     alert("Failed to generate PDF. Please try again.");
   } finally {
     if (document.body.contains(wrapper)) {
@@ -727,18 +729,22 @@ const TakeawayOrders = () => {
 
     // Listen for new Socket.IO events (room-based)
     const handleOrderCreated = (order) => {
-      console.log(
-        "[TakeawayOrders] Socket: order:created event received:",
-        order
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          "[TakeawayOrders] Socket: order:created event received:",
+          order
+        );
+      }
       upsertOrder(order, { prepend: true });
     };
 
     const handleOrderStatusUpdated = (order) => {
-      console.log(
-        "[TakeawayOrders] Socket: order:status:updated event received:",
-        order
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          "[TakeawayOrders] Socket: order:status:updated event received:",
+          order
+        );
+      }
       upsertOrder(order);
     };
 
@@ -875,7 +881,9 @@ const TakeawayOrders = () => {
       });
       upsertOrder(response.data);
     } catch (e) {
-      console.error("Status change failed:", e);
+      if (import.meta.env.DEV) {
+        console.error("Status change failed:", e);
+      }
       const errorMessage =
         e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);

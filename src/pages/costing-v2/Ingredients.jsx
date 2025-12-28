@@ -139,7 +139,7 @@ const Ingredients = () => {
     const name = ingredient?.name || "this ingredient";
 
     // Check if this is a shared ingredient and user is cart admin
-    if (userRole === "admin" && !ingredient?.outletId) {
+    if (userRole === "admin" && !ingredient?.cartId) {
       alert(
         "Cannot delete shared ingredients.\n\nShared ingredients are managed by super admins or franchise admins. Please contact your administrator if you need to remove this ingredient."
       );
@@ -548,12 +548,12 @@ const Ingredients = () => {
                     handleDelete(ing._id, ing.name);
                   }}
                   className={`p-2 rounded-lg transition-colors cursor-pointer ${
-                    userRole === "admin" && !ing.outletId
+                    userRole === "admin" && !ing.cartId
                       ? "text-gray-400 hover:bg-gray-50"
                       : "text-red-600 hover:bg-red-50"
                   }`}
                   title={
-                    userRole === "admin" && !ing.outletId
+                    userRole === "admin" && !ing.cartId
                       ? "Cannot delete shared ingredients (contact administrator)"
                       : "Delete"
                   }

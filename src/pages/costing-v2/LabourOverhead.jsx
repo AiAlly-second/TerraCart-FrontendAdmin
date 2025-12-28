@@ -33,7 +33,7 @@ const LabourOverhead = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
+      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [labourRes, overheadRes] = await Promise.all([
         getLabourCosts(params),
         getOverheads(params),

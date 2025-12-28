@@ -33,13 +33,21 @@ const Waste = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = selectedOutlet ? { outletId: selectedOutlet } : {};
+      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [wasteRes, ingredientsRes] = await Promise.all([
         getWaste(params),
         getIngredients(),
       ]);
-      if (wasteRes.data.success) setWasteRecords(wasteRes.data.data);
-      if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
+      if (wasteRes.data.success) {
+        setWasteRecords(Array.isArray(wasteRes.data.data) ? wasteRes.data.data : []);
+      } else {
+        setWasteRecords([]);
+      }
+      if (ingredientsRes.data.success) {
+        setIngredients(Array.isArray(ingredientsRes.data.data) ? ingredientsRes.data.data : []);
+      } else {
+        setIngredients([]);
+      }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error("Error fetching data:", error);
@@ -111,6 +119,11 @@ const Waste = () => {
     e.preventDefault();
     try {
       // Ensure qty is a number
+      if (!formData.ingredientId) {
+        alert("Please select an ingredient");
+        return;
+      }
+
       const submitData = {
         ...formData,
         qty: parseFloat(formData.qty) || 0,
@@ -119,6 +132,11 @@ const Waste = () => {
       if (submitData.qty <= 0) {
         alert("Please enter a valid quantity greater than 0");
         return;
+      }
+
+      // Add cartId if selected (for franchise/super admin)
+      if (selectedOutlet) {
+        submitData.cartId = selectedOutlet;
       }
 
       await recordWaste(submitData);
@@ -149,52 +167,69 @@ const Waste = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Waste Records</h1>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2"
-        >
-          <FaPlus /> Record Waste
-        </button>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Waste Records</h1>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <OutletFilter
+            selectedOutlet={selectedOutlet}
+            onOutletChange={setSelectedOutlet}
+          />
+          <button
+            onClick={() => setModalOpen(true)}
+            className="bg-[#d86d2a] text-white px-4 py-2 rounded-lg hover:bg-[#c75b1a] flex items-center gap-2 whitespace-nowrap"
+          >
+            <FaPlus /> Record Waste
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ingredient</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Allocated</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {wasteRecords.map((waste) => (
-              <tr key={waste._id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {new Date(waste.date).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {waste.ingredientId?.name || "N/A"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {formatUnit(waste.qty, waste.uom)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
-                    {waste.reason}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  ₹{Number(waste.costAllocated || 0).toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {!Array.isArray(wasteRecords) || wasteRecords.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-12 text-center">
+          <p className="text-gray-500 text-lg mb-2">No waste records found</p>
+          <p className="text-gray-400 text-sm">
+            {selectedOutlet ? "Try selecting a different kiosk or clear the filter." : "Start recording waste to track ingredient losses."}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ingredient</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Allocated</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {wasteRecords.map((waste) => (
+                  <tr key={waste._id} className="hover:bg-gray-50">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {waste.date ? new Date(waste.date).toLocaleDateString() : "N/A"}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {waste.ingredientId?.name || "N/A"}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {waste.qty && waste.uom ? formatUnit(waste.qty, waste.uom) : "N/A"}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800 capitalize">
+                        {waste.reason || "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ₹{Number(waste.costAllocated || 0).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Record Waste Modal */}
       {modalOpen && (
@@ -211,11 +246,15 @@ const Waste = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Select Ingredient</option>
-                  {ingredients.map((ing) => (
-                    <option key={ing._id} value={ing._id}>
-                      {ing.name} ({ing.uom || 'N/A'})
-                    </option>
-                  ))}
+                  {Array.isArray(ingredients) && ingredients.length > 0 ? (
+                    ingredients.map((ing) => (
+                      <option key={ing._id} value={ing._id}>
+                        {ing.name} ({ing.uom || 'N/A'})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No ingredients available</option>
+                  )}
                 </select>
                 {selectedIngredient && (
                   <p className="mt-1 text-xs text-gray-500">
