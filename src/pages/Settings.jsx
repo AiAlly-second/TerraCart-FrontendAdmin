@@ -314,34 +314,44 @@ const Settings = () => {
     setError('');
     setSuccess('');
     
+    // Validate required fields
+    if (!cartSettings.name || cartSettings.name.trim() === '') {
+      setError('Cart name is required');
+      return;
+    }
+    
     try {
       setSaving(true);
-      // Get user from all possible localStorage keys
-      let userData = null;
-      const superAdminUser = localStorage.getItem('superAdminUser');
-      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
-      const adminUser = localStorage.getItem('adminUser');
       
-      if (superAdminUser) {
-        userData = JSON.parse(superAdminUser);
-      } else if (franchiseAdminUser) {
-        userData = JSON.parse(franchiseAdminUser);
-      } else if (adminUser) {
-        userData = JSON.parse(adminUser);
-      }
+      const response = await api.put(`/carts/my-settings`, cartSettings);
       
-      if (!userData || !userData._id) {
-        setError('User ID is missing. Please log in again.');
-        setSaving(false);
-        return;
+      // Update cartSettings state with the response data
+      if (response.data && response.data.success && response.data.data) {
+        const updatedCart = response.data.data;
+        setCartSettings({
+          name: updatedCart.name || '',
+          pickupEnabled: updatedCart.pickupEnabled !== undefined ? updatedCart.pickupEnabled : true,
+          deliveryEnabled: updatedCart.deliveryEnabled !== undefined ? updatedCart.deliveryEnabled : false,
+          deliveryRadius: updatedCart.deliveryRadius || 5,
+          deliveryCharge: updatedCart.deliveryCharge || 0,
+          pinCode: updatedCart.pinCode || '',
+          address: updatedCart.address || cartSettings.address,
+          coordinates: updatedCart.coordinates || cartSettings.coordinates,
+        });
+        
+        if (import.meta.env.DEV) {
+          console.log('[Settings] Cart settings updated successfully:', updatedCart);
+        }
       }
-
-      await api.put(`/carts/my-settings`, cartSettings);
       
       setSuccess('Cart settings updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update cart settings');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to update cart settings';
+      setError(errorMessage);
+      if (import.meta.env.DEV) {
+        console.error('[Settings] Error updating cart settings:', err);
+      }
     } finally {
       setSaving(false);
     }
@@ -388,28 +398,56 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      const storedUser = localStorage.getItem('superAdminUser');
-      const userData = storedUser ? JSON.parse(storedUser) : {};
+      // Get user from all possible localStorage keys (same as other functions)
+      let userData = null;
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
       
-      if (!userData._id) {
+      if (superAdminUser) {
+        userData = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        userData = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        userData = JSON.parse(adminUser);
+      }
+      
+      if (!userData || !userData._id) {
         setError('User ID is missing. Please log in again.');
         setSaving(false);
         return;
       }
       
-      await api.put(`/users/${userData._id}`, {
+      const response = await api.put(`/users/${userData._id}`, {
         name: profile.name,
         email: profile.email,
       });
       
-      // Update localStorage
+      // Update localStorage with the correct key
       const updatedUser = { ...userData, name: profile.name, email: profile.email };
-      localStorage.setItem('superAdminUser', JSON.stringify(updatedUser));
+      if (superAdminUser) {
+        localStorage.setItem('superAdminUser', JSON.stringify(updatedUser));
+      } else if (franchiseAdminUser) {
+        localStorage.setItem('franchiseAdminUser', JSON.stringify(updatedUser));
+      } else if (adminUser) {
+        localStorage.setItem('adminUser', JSON.stringify(updatedUser));
+      }
+      
+      // Update profile state with response data if available
+      if (response.data && response.data.name) {
+        setProfile({
+          name: response.data.name,
+          email: response.data.email || profile.email,
+        });
+      }
       
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile');
+      if (import.meta.env.DEV) {
+        console.error('[Settings] Error updating profile:', err);
+      }
     } finally {
       setSaving(false);
     }
@@ -432,10 +470,21 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      const storedUser = localStorage.getItem('superAdminUser');
-      const userData = storedUser ? JSON.parse(storedUser) : {};
+      // Get user from all possible localStorage keys (same as other functions)
+      let userData = null;
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
       
-      if (!userData._id) {
+      if (superAdminUser) {
+        userData = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        userData = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        userData = JSON.parse(adminUser);
+      }
+      
+      if (!userData || !userData._id) {
         setError('User ID is missing. Please log in again.');
         setSaving(false);
         return;
@@ -450,6 +499,9 @@ const Settings = () => {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to change password');
+      if (import.meta.env.DEV) {
+        console.error('[Settings] Error changing password:', err);
+      }
     } finally {
       setSaving(false);
     }
