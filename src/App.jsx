@@ -54,7 +54,6 @@ import Ingredients from "./pages/costing-v2/Ingredients";
 import Suppliers from "./pages/costing-v2/Suppliers";
 import Purchases from "./pages/costing-v2/Purchases";
 import Recipes from "./pages/costing-v2/Recipes";
-import MenuItems from "./pages/costing-v2/MenuItems";
 import Inventory from "./pages/costing-v2/Inventory";
 import Waste from "./pages/costing-v2/Waste";
 import LabourOverhead from "./pages/costing-v2/LabourOverhead";
@@ -378,7 +377,6 @@ function App() {
                             <Route path="suppliers" element={<Suppliers />} />
                             <Route path="purchases" element={<Purchases />} />
                             <Route path="recipes" element={<Recipes />} />
-                            <Route path="menu-items" element={<MenuItems />} />
                             <Route path="inventory" element={<Inventory />} />
                             <Route path="waste" element={<Waste />} />
                             <Route

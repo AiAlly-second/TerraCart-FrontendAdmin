@@ -29,33 +29,13 @@ const Sidebar = ({ isOpen, onClose }) => {
             items: totalItems,
           });
         } catch (error) {
-          // Handle network errors gracefully - don't log expected Render.com sleeping errors
-          const isNetworkError =
-            error.code === "ERR_NETWORK" ||
-            error.code === "ERR_CONNECTION_CLOSED" ||
-            error.message?.includes("Network Error") ||
-            error.message?.includes("ERR_CONNECTION_CLOSED") ||
-            error.message?.includes("Failed to fetch");
-          
-          // Only log non-network errors or if in development mode
-          if (!isNetworkError || import.meta.env.DEV) {
-            // The api.js interceptor already handles Render.com warnings
-            // Only log here if it's not a network error or in dev mode
-            if (import.meta.env.DEV) {
-              if (import.meta.env.DEV) {
-                console.warn("Error fetching menu stats (non-critical):", error.message || error);
-              }
-            }
-          }
-          // Keep existing stats on error - don't reset to 0
-          // This prevents UI flicker when server is temporarily unavailable
+          console.error("Error fetching menu stats:", error);
         } finally {
           setMenuLoading(false);
         }
       };
 
       fetchMenuStats();
-      // Poll every 30 seconds, but increase interval if server is sleeping
       const interval = setInterval(fetchMenuStats, 30000);
       return () => clearInterval(interval);
     } else {
@@ -64,9 +44,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   }, [userRole]);
 
   const handleLogout = () => {
-    if (import.meta.env.DEV) {
-      console.log("Logging out...");
-    }
+    console.log("Logging out...");
     logout();
     navigate("/login");
   };
@@ -104,12 +82,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/reports", icon: "📈", label: "Reports" },
       ];
 
-      // Add Finances (Costing v2) dashboard only (no submenu) for super admin
+      // Add Costing dashboard only (no submenu) for super admin
       if (isCostingEnabled) {
         items.push({
           path: "/costing-v2/dashboard",
           icon: "💰",
-          label: "Finances",
+          label: "Costing",
         });
       }
 
@@ -126,12 +104,11 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
       ];
       if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "💰", label: "Finances" });
+        items.push({ path: "/costing-v2", icon: "💰", label: "Costing" });
       }
       items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
       return items;
     } else if (userRole === "admin") {
-      // Cart Admin: full finances management for their cart
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/orders", icon: "📦", label: "Orders" },
@@ -147,7 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/customers", icon: "👥", label: "Customers" },
       ];
       if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "💰", label: "Finances" });
+        items.push({ path: "/costing-v2", icon: "💰", label: "Costing" });
       }
       items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
       return items;
@@ -176,40 +153,39 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Logo Section */}
         <div
           className={`flex items-center justify-between ${
-            franchiseName ? "h-20 sm:h-24 md:h-28 p-2 sm:p-3" : "h-16 sm:h-18 md:h-20"
-          } border-b border-[#6b4423] bg-[#3d2418] px-2 sm:px-3 md:px-4 flex-shrink-0`}
+            franchiseName ? "flex-col h-20 sm:h-24 p-2 sm:p-3" : "h-16 sm:h-20"
+          } border-b border-[#6b4423] bg-[#3d2418] px-3 sm:px-4 flex-shrink-0`}
         >
-          <div className={`flex items-center flex-1 min-w-0 ${franchiseName ? "flex-col justify-center" : ""}`}>
-            <div className="flex items-center flex-1 min-w-0">
-              <img
-                src={Logo}
-                alt="Logo"
-                className={`${
-                  franchiseName
-                    ? "h-7 sm:h-9 md:h-11 w-auto object-contain"
-                    : "h-7 sm:h-9 md:h-11"
-                } bg-white rounded-full p-0.5 sm:p-1 flex-shrink-0`}
-              />
-              {!franchiseName && (
-                <h1 className="text-xs sm:text-sm md:text-base lg:text-lg font-bold ml-1.5 sm:ml-2 text-[#f5e3d5] truncate">
+          <div className="flex items-center flex-1 min-w-0">
+            <img
+              src={Logo}
+              alt="Logo"
+              className={`${
+                franchiseName ? "h-8 sm:h-10 md:h-12 w-auto object-contain mb-1 sm:mb-2" : "h-8 sm:h-10 md:h-12"
+              } bg-white rounded-full p-0.5 sm:p-1 flex-shrink-0`}
+            />
+            {franchiseName ? (
+              <>
+                <h1 className="text-[10px] sm:text-xs md:text-sm font-bold text-[#f5e3d5] text-center ml-1.5 sm:ml-2 truncate">
+                  {franchiseName}
+                </h1>
+              </>
+            ) : (
+              <>
+                <h1 className="text-sm sm:text-base md:text-lg font-bold ml-1.5 sm:ml-2 text-[#f5e3d5] truncate">
                   {portalTitle}
                 </h1>
-              )}
-            </div>
-            {franchiseName && (
-              <h1 className="text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-bold text-[#f5e3d5] text-center mt-1 sm:mt-1.5 truncate w-full px-1">
-                {franchiseName}
-              </h1>
+              </>
             )}
           </div>
           {/* Close button for mobile */}
           <button
             onClick={onClose}
-            className="lg:hidden text-white hover:text-[#d86d2a] transition-all duration-200 p-1 sm:p-1.5 md:p-2 flex-shrink-0 hover:bg-[#6b4423]/50 rounded ml-1 sm:ml-2"
+            className="lg:hidden text-white hover:text-[#d86d2a] transition-all duration-200 p-1.5 sm:p-2 flex-shrink-0 hover:bg-[#6b4423]/50 rounded"
             aria-label="Close menu"
           >
             <svg
-              className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"
+              className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -225,7 +201,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Nav Links */}
-        <nav className="flex-1 px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 lg:py-6 space-y-1 sm:space-y-1.5 md:space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-[#6b4423] scrollbar-track-[#3d2418]">
+        <nav className="flex-1 px-2 sm:px-3 md:px-4 py-3 sm:py-4 md:py-6 space-y-1 sm:space-y-1.5 md:space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-[#6b4423] scrollbar-track-[#3d2418]">
           {menuItems.map((item) => {
             // Regular menu items
             return (
@@ -236,7 +212,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 style={({ isActive }) =>
                   isActive ? activeLinkStyle : undefined
                 }
-                className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-2.5 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 rounded-lg hover:bg-[#6b4423] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base group min-h-[2.5rem] sm:min-h-[3rem]"
+                className="flex items-center justify-between px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 rounded-lg hover:bg-[#6b4423] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base group"
                 onClick={() => {
                   // Close sidebar on mobile when clicking a link
                   if (window.innerWidth < 1024) {
@@ -245,18 +221,14 @@ const Sidebar = ({ isOpen, onClose }) => {
                 }}
               >
                 <div className="flex items-center min-w-0 flex-1">
-                  <span className="text-base sm:text-lg md:text-xl flex-shrink-0 group-hover:scale-110 transition-transform">
-                    {item.icon}
-                  </span>
-                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">
-                    {item.label}
-                  </span>
+                  <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
+                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">{item.label}</span>
                 </div>
                 {item.showStats && !menuLoading && menuStats.categories > 0 && (
-                  <span className="ml-1 sm:ml-1.5 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs bg-[#d86d2a] text-white px-1 sm:px-1.5 md:px-2 py-0.5 sm:py-1 rounded-full flex-shrink-0 font-semibold shadow-sm whitespace-nowrap">
-                    <span className="hidden min-[360px]:inline">{menuStats.categories} cat{menuStats.categories !== 1 ? "s" : ""} • </span>
-                    {menuStats.items}
-                    <span className="hidden sm:inline"> items</span>
+                  <span className="ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs bg-[#d86d2a] text-white px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 rounded-full flex-shrink-0 whitespace-nowrap font-semibold shadow-sm">
+                    {menuStats.categories} cat
+                    {menuStats.categories !== 1 ? "s" : ""} • {menuStats.items}{" "}
+                    items
                   </span>
                 )}
               </NavLink>
@@ -265,14 +237,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         </nav>
 
         {/* Logout Button */}
-        <div className="px-2 sm:px-2.5 md:px-3 lg:px-4 py-2 sm:py-2.5 md:py-3 lg:py-4 border-t border-[#6b4423] flex-shrink-0 bg-[#3d2418]">
+        <div className="px-2.5 sm:px-3 md:px-4 py-2.5 sm:py-3 md:py-4 border-t border-[#6b4423] flex-shrink-0 bg-[#3d2418]">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-2 sm:px-2.5 md:px-3 lg:px-4 py-1.5 sm:py-2 rounded-lg text-left hover:bg-[#d86d2a] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base font-medium group min-h-[2.5rem] sm:min-h-[3rem]"
+            className="w-full flex items-center px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-left hover:bg-[#d86d2a] transition-all duration-200 text-[#f5e3d5] text-xs sm:text-sm md:text-base font-medium group"
           >
-            <span className="text-base sm:text-lg md:text-xl flex-shrink-0 group-hover:scale-110 transition-transform">
-              🚪
-            </span>
+            <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">🚪</span>
             <span className="ml-1.5 sm:ml-2 md:ml-3">Logout</span>
           </button>
         </div>

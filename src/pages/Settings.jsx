@@ -38,7 +38,6 @@ const Settings = () => {
   // Check if user is cart admin
   const [userRole, setUserRole] = useState(null);
   const [cartSettings, setCartSettings] = useState({
-    name: '',
     pickupEnabled: true,
     deliveryEnabled: false,
     deliveryRadius: 5,
@@ -79,34 +78,18 @@ const Settings = () => {
       
       if (storedUser) {
         setUserRole(storedUser.role);
-        if (import.meta.env.DEV) {
-          if (import.meta.env.DEV) {
-            console.log('[Settings] User role detected:', storedUser.role);
-          }
-        }
+        console.log('[Settings] User role detected:', storedUser.role);
         
         // If cart admin, fetch cart settings
         if (storedUser.role === 'admin' || storedUser.role === 'cart_admin') {
-          if (import.meta.env.DEV) {
-            if (import.meta.env.DEV) {
-              console.log('[Settings] Fetching cart settings for cart admin');
-            }
-          }
+          console.log('[Settings] Fetching cart settings for cart admin');
           fetchCartSettings();
         }
       } else {
-        if (import.meta.env.DEV) {
-          if (import.meta.env.DEV) {
-            console.log('[Settings] No user found in localStorage');
-          }
-        }
+        console.log('[Settings] No user found in localStorage');
       }
     } catch (err) {
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.error('Error parsing user data:', err);
-        }
-      }
+      console.error('Error parsing user data:', err);
     }
   }, []);
 
@@ -116,7 +99,6 @@ const Settings = () => {
       if (response.data.success && response.data.data) {
         const cart = response.data.data;
         setCartSettings({
-          name: cart.name || '',
           pickupEnabled: cart.pickupEnabled !== undefined ? cart.pickupEnabled : true,
           deliveryEnabled: cart.deliveryEnabled !== undefined ? cart.deliveryEnabled : false,
           deliveryRadius: cart.deliveryRadius || 5,
@@ -137,11 +119,7 @@ const Settings = () => {
         });
       }
     } catch (error) {
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.error('Error fetching cart settings:', error);
-        }
-      }
+      console.error('Error fetching cart settings:', error);
     }
   };
 
@@ -212,11 +190,7 @@ const Settings = () => {
         state: "",
       };
     } catch (error) {
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.error("Reverse geocoding error:", error);
-        }
-      }
+      console.error("Reverse geocoding error:", error);
       return null;
     }
   };
@@ -271,11 +245,7 @@ const Settings = () => {
             setTimeout(() => setSuccess(''), 3000);
           }
         } catch (error) {
-          if (import.meta.env.DEV) {
-            if (import.meta.env.DEV) {
-              console.error("Error reverse geocoding:", error);
-            }
-          }
+          console.error("Error reverse geocoding:", error);
           setSuccess('Coordinates captured successfully! Please enter the address manually.');
           setTimeout(() => setSuccess(''), 3000);
         }
@@ -314,44 +284,34 @@ const Settings = () => {
     setError('');
     setSuccess('');
     
-    // Validate required fields
-    if (!cartSettings.name || cartSettings.name.trim() === '') {
-      setError('Cart name is required');
-      return;
-    }
-    
     try {
       setSaving(true);
+      // Get user from all possible localStorage keys
+      let userData = null;
+      const superAdminUser = localStorage.getItem('superAdminUser');
+      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
+      const adminUser = localStorage.getItem('adminUser');
       
-      const response = await api.put(`/carts/my-settings`, cartSettings);
-      
-      // Update cartSettings state with the response data
-      if (response.data && response.data.success && response.data.data) {
-        const updatedCart = response.data.data;
-        setCartSettings({
-          name: updatedCart.name || '',
-          pickupEnabled: updatedCart.pickupEnabled !== undefined ? updatedCart.pickupEnabled : true,
-          deliveryEnabled: updatedCart.deliveryEnabled !== undefined ? updatedCart.deliveryEnabled : false,
-          deliveryRadius: updatedCart.deliveryRadius || 5,
-          deliveryCharge: updatedCart.deliveryCharge || 0,
-          pinCode: updatedCart.pinCode || '',
-          address: updatedCart.address || cartSettings.address,
-          coordinates: updatedCart.coordinates || cartSettings.coordinates,
-        });
-        
-        if (import.meta.env.DEV) {
-          console.log('[Settings] Cart settings updated successfully:', updatedCart);
-        }
+      if (superAdminUser) {
+        userData = JSON.parse(superAdminUser);
+      } else if (franchiseAdminUser) {
+        userData = JSON.parse(franchiseAdminUser);
+      } else if (adminUser) {
+        userData = JSON.parse(adminUser);
       }
+      
+      if (!userData || !userData._id) {
+        setError('User ID is missing. Please log in again.');
+        setSaving(false);
+        return;
+      }
+
+      await api.put(`/carts/my-settings`, cartSettings);
       
       setSuccess('Cart settings updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to update cart settings';
-      setError(errorMessage);
-      if (import.meta.env.DEV) {
-        console.error('[Settings] Error updating cart settings:', err);
-      }
+      setError(err.response?.data?.message || 'Failed to update cart settings');
     } finally {
       setSaving(false);
     }
@@ -381,11 +341,7 @@ const Settings = () => {
         });
       }
     } catch (err) {
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.error('Error fetching user data:', err);
-        }
-      }
+      console.error('Error fetching user data:', err);
     } finally {
       setLoading(false);
     }
@@ -398,56 +354,28 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      // Get user from all possible localStorage keys (same as other functions)
-      let userData = null;
-      const superAdminUser = localStorage.getItem('superAdminUser');
-      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
-      const adminUser = localStorage.getItem('adminUser');
+      const storedUser = localStorage.getItem('superAdminUser');
+      const userData = storedUser ? JSON.parse(storedUser) : {};
       
-      if (superAdminUser) {
-        userData = JSON.parse(superAdminUser);
-      } else if (franchiseAdminUser) {
-        userData = JSON.parse(franchiseAdminUser);
-      } else if (adminUser) {
-        userData = JSON.parse(adminUser);
-      }
-      
-      if (!userData || !userData._id) {
+      if (!userData._id) {
         setError('User ID is missing. Please log in again.');
         setSaving(false);
         return;
       }
       
-      const response = await api.put(`/users/${userData._id}`, {
+      await api.put(`/users/${userData._id}`, {
         name: profile.name,
         email: profile.email,
       });
       
-      // Update localStorage with the correct key
+      // Update localStorage
       const updatedUser = { ...userData, name: profile.name, email: profile.email };
-      if (superAdminUser) {
-        localStorage.setItem('superAdminUser', JSON.stringify(updatedUser));
-      } else if (franchiseAdminUser) {
-        localStorage.setItem('franchiseAdminUser', JSON.stringify(updatedUser));
-      } else if (adminUser) {
-        localStorage.setItem('adminUser', JSON.stringify(updatedUser));
-      }
-      
-      // Update profile state with response data if available
-      if (response.data && response.data.name) {
-        setProfile({
-          name: response.data.name,
-          email: response.data.email || profile.email,
-        });
-      }
+      localStorage.setItem('superAdminUser', JSON.stringify(updatedUser));
       
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile');
-      if (import.meta.env.DEV) {
-        console.error('[Settings] Error updating profile:', err);
-      }
     } finally {
       setSaving(false);
     }
@@ -470,21 +398,10 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      // Get user from all possible localStorage keys (same as other functions)
-      let userData = null;
-      const superAdminUser = localStorage.getItem('superAdminUser');
-      const franchiseAdminUser = localStorage.getItem('franchiseAdminUser');
-      const adminUser = localStorage.getItem('adminUser');
+      const storedUser = localStorage.getItem('superAdminUser');
+      const userData = storedUser ? JSON.parse(storedUser) : {};
       
-      if (superAdminUser) {
-        userData = JSON.parse(superAdminUser);
-      } else if (franchiseAdminUser) {
-        userData = JSON.parse(franchiseAdminUser);
-      } else if (adminUser) {
-        userData = JSON.parse(adminUser);
-      }
-      
-      if (!userData || !userData._id) {
+      if (!userData._id) {
         setError('User ID is missing. Please log in again.');
         setSaving(false);
         return;
@@ -499,9 +416,6 @@ const Settings = () => {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to change password');
-      if (import.meta.env.DEV) {
-        console.error('[Settings] Error changing password:', err);
-      }
     } finally {
       setSaving(false);
     }
@@ -736,26 +650,8 @@ const Settings = () => {
               {/* Cart Settings Tab - Only for Cart Admins */}
               {activeTab === 'cart' && (userRole === 'admin' || userRole === 'cart_admin') && (
                 <form onSubmit={handleCartSettingsUpdate} className="max-w-2xl space-y-6">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Cart Settings</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Pickup & Delivery Settings</h2>
                   
-                  {/* Cart Name */}
-                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <div>
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
-                        Cart Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={cartSettings.name || ''}
-                        onChange={(e) => setCartSettings({ ...cartSettings, name: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        placeholder="Enter your cart name"
-                        required
-                      />
-                      <p className="text-xs text-gray-500 mt-1">This is the name that customers will see for your cart</p>
-                    </div>
-                  </div>
-
                   {/* Pickup Settings */}
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center justify-between mb-4">
