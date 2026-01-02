@@ -48,7 +48,6 @@ const CostingV2Layout = () => {
         label: "BOM (Bill of Material)",
         icon: "📝",
       }, // BOM
-      { path: "/costing-v2/menu-items", label: "Menu Items", icon: "🍽️" },
       { path: "/costing-v2/inventory", label: "Inventory", icon: "📦" },
       { path: "/costing-v2/waste", label: "Waste", icon: "🗑️" },
       {

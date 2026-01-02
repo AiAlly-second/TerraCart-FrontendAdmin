@@ -39,7 +39,6 @@ const MenuItems = () => {
     defaultMenuCategoryName: "",
     defaultMenuItemName: "",
   });
-  const [selectedDefaultMenuItemIndex, setSelectedDefaultMenuItemIndex] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -128,7 +127,6 @@ const MenuItems = () => {
       defaultMenuCategoryName: "",
       defaultMenuItemName: "",
     });
-    setSelectedDefaultMenuItemIndex("");
   };
 
   const stats = {
@@ -151,7 +149,6 @@ const MenuItems = () => {
       defaultMenuCategoryName: item.defaultMenuCategoryName || "",
       defaultMenuItemName: item.defaultMenuItemName || "",
     });
-    setSelectedDefaultMenuItemIndex("");
     setModalOpen(true);
   };
 
@@ -211,7 +208,6 @@ const MenuItems = () => {
               onClick={async () => {
                 setEditing(null);
                 resetForm();
-                setSelectedDefaultMenuItemIndex("");
                 // Refresh recipes list before opening modal
                 try {
                   const recipesRes = await getRecipes();
@@ -422,29 +418,31 @@ const MenuItems = () => {
                   </label>
                   <select
                     required={!editing}
-                    value={selectedDefaultMenuItemIndex}
+                    value={(() => {
+                      if (!formData.name) return "";
+                      const idx = defaultMenuItems.findIndex(
+                        (item) => item.name === formData.name && item.category === formData.category
+                      );
+                      return idx >= 0 ? idx.toString() : "";
+                    })()}
                     onChange={(e) => {
-                      const selectedIndex = e.target.value;
-                      setSelectedDefaultMenuItemIndex(selectedIndex);
-                      if (selectedIndex) {
-                        const item = defaultMenuItems[parseInt(selectedIndex)];
-                        if (item) {
-                          setFormData({
-                            name: item.name,
-                            category: item.category,
-                            sellingPrice: item.price,
-                            recipeId: formData.recipeId || "",
-                            isActive: true,
-                            defaultMenuFranchiseId: item.franchiseId,
-                            defaultMenuCategoryName: item.category,
-                            defaultMenuItemName: item.name,
-                          });
-                        }
+                      if (e.target.value) {
+                        const item = defaultMenuItems[parseInt(e.target.value)];
+                        setFormData({
+                          name: item.name,
+                          category: item.category,
+                          sellingPrice: item.price,
+                          recipeId: formData.recipeId || "",
+                          isActive: true,
+                          defaultMenuFranchiseId: item.franchiseId,
+                          defaultMenuCategoryName: item.category,
+                          defaultMenuItemName: item.name,
+                        });
                       } else {
                         resetForm();
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">-- Select from your menu --</option>
                     {defaultMenuItems.map((item, idx) => (
