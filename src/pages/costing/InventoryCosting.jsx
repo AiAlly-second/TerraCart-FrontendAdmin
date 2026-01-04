@@ -13,7 +13,7 @@ const InventoryCosting = () => {
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [deletePurchaseModal, setDeletePurchaseModal] = useState({ isOpen: false, id: null });
   const [purchaseFormData, setPurchaseFormData] = useState({
-    outletId: '',
+    cartId: '',
     franchiseId: '',
     ingredientId: '',
     qtyPurchased: '',
@@ -238,7 +238,7 @@ const InventoryCosting = () => {
             <button
               onClick={() => {
                 setPurchaseFormData({
-                  outletId: '',
+                  cartId: '',
                   franchiseId: '',
                   ingredientId: '',
                   qtyPurchased: '',
@@ -696,7 +696,7 @@ const InventoryCosting = () => {
                           <button
                             onClick={() => {
                               setPurchaseFormData({
-                                outletId: purchase.outletId?._id || '',
+                                cartId: purchase.cartId?._id || '',
                                 franchiseId: purchase.franchiseId?._id || '',
                                 ingredientId: purchase.ingredientId?._id || '',
                                 qtyPurchased: purchase.qtyPurchased,
@@ -742,7 +742,7 @@ const InventoryCosting = () => {
                   ...purchaseFormData,
                   qtyPurchased: parseFloat(purchaseFormData.qtyPurchased),
                   totalCost: parseFloat(purchaseFormData.totalCost),
-                  outletId: purchaseFormData.outletId || null,
+                  cartId: purchaseFormData.cartId || null,
                   franchiseId: purchaseFormData.franchiseId || null,
                 };
                 await costingApi.createIngredientPurchase(data, purchaseInvoiceFile);
@@ -760,8 +760,8 @@ const InventoryCosting = () => {
                   <input
                     type="text"
                     required
-                    value={purchaseFormData.outletId}
-                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, outletId: e.target.value })}
+                    value={purchaseFormData.cartId}
+                    onChange={(e) => setPurchaseFormData({ ...purchaseFormData, cartId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
                   />
                 </div>

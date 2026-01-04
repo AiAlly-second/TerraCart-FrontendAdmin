@@ -6,6 +6,7 @@ import {
   deleteIngredient,
   getFIFOLayers,
   pushToCartAdmins,
+  getOutlets,
 } from "../../services/costingV2Api";
 import {
   FaPlus,
@@ -15,7 +16,6 @@ import {
   FaBox,
   FaWarehouse,
   FaExclamationTriangle,
-  FaArrowDown,
 } from "react-icons/fa";
 import { formatUnit, convertUnit } from "../../utils/unitConverter";
 import { confirm } from "../../utils/confirm";
@@ -26,6 +26,14 @@ const Ingredients = () => {
   const userRole = user?.role;
   const isSuperAdmin = userRole === "super_admin";
 
+  // Helper function to determine baseUnit from uom (matching backend logic)
+  const getBaseUnitFromUom = (uom) => {
+    if (['kg', 'g'].includes(uom)) return 'g';
+    if (['l', 'ml'].includes(uom)) return 'ml';
+    if (['pcs', 'pack', 'box', 'bottle', 'dozen'].includes(uom)) return 'pcs';
+    return 'pcs'; // Default fallback
+  };
+
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,7 +43,7 @@ const Ingredients = () => {
     category: "Other",
     storageLocation: "Dry Storage",
     uom: "kg",
-    baseUnit: "kg",
+    baseUnit: "g", // kg maps to g as base unit
     reorderLevel: 0,
     shelfTimeDays: 7,
     qtyOnHand: 0,
@@ -47,23 +55,75 @@ const Ingredients = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [pushing, setPushing] = useState(false);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const [outlets, setOutlets] = useState([]);
+  const [selectedOutlets, setSelectedOutlets] = useState([]);
+  const [loadingOutlets, setLoadingOutlets] = useState(false);
 
   useEffect(() => {
     fetchIngredients();
-  }, []);
+    if (isSuperAdmin) {
+      fetchOutlets();
+    }
+  }, [isSuperAdmin]);
+
+  const fetchOutlets = async () => {
+    try {
+      setLoadingOutlets(true);
+      const res = await getOutlets();
+      if (res.data.success) {
+        setOutlets(res.data.data);
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Error fetching outlets:", error);
+      }
+    } finally {
+      setLoadingOutlets(false);
+    }
+  };
 
   const fetchIngredients = async () => {
     try {
       setLoading(true);
       const res = await getIngredients();
+      
+      // Enhanced logging for debugging
+      if (import.meta.env.DEV) {
+        console.log(`[FRONTEND] fetchIngredients response:`, {
+          success: res.data.success,
+          count: res.data.count,
+          dataLength: res.data.data?.length || 0,
+          message: res.data.message
+        });
+        if (res.data.data && res.data.data.length > 0) {
+          console.log(`[FRONTEND] Sample ingredients:`, res.data.data.slice(0, 3).map(ing => ({
+            name: ing.name,
+            cartId: ing.cartId || 'null',
+            isActive: ing.isActive,
+            category: ing.category
+          })));
+        } else {
+          console.warn(`[FRONTEND] ⚠️ No ingredients received!`);
+        }
+      }
+      
       if (res.data.success) {
-        setIngredients(res.data.data);
+        const ingredientsData = res.data.data || [];
+        setIngredients(ingredientsData);
+        
+        if (ingredientsData.length === 0 && import.meta.env.DEV) {
+          console.warn(`[FRONTEND] ⚠️ Ingredients array is empty!`);
+          console.warn(`[FRONTEND] Response:`, res.data);
+        }
+      } else {
+        console.error(`[FRONTEND] API returned success: false`, res.data);
+        alert(res.data.message || "Failed to fetch ingredients");
       }
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error("Error fetching ingredients:", error);
-      }
-      alert("Failed to fetch ingredients");
+      console.error("[FRONTEND] Error fetching ingredients:", error);
+      console.error("[FRONTEND] Error response:", error.response?.data);
+      alert(`Failed to fetch ingredients: ${error.response?.data?.message || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -72,14 +132,21 @@ const Ingredients = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Ensure baseUnit is valid and matches the uom
+      const validBaseUnit = getBaseUnitFromUom(formData.uom);
+      const submitData = {
+        ...formData,
+        baseUnit: validBaseUnit,
+      };
+
       // Prevent duplicate global ingredients (by name) for super admin
       if (
         isSuperAdmin &&
         !editing &&
-        formData.name &&
+        submitData.name &&
         ingredients.some(
           (ing) =>
-            ing.name.trim().toLowerCase() === formData.name.trim().toLowerCase()
+            ing.name.trim().toLowerCase() === submitData.name.trim().toLowerCase()
         )
       ) {
         alert(
@@ -89,11 +156,16 @@ const Ingredients = () => {
       }
 
       if (editing) {
-        await updateIngredient(editing._id, formData);
+        await updateIngredient(editing._id, submitData);
         alert("Ingredient updated successfully!");
       } else {
-        await createIngredient(formData);
-        alert("Ingredient created successfully!");
+        const response = await createIngredient(submitData);
+        // Check if it's a warning (existing ingredient)
+        if (response.data.warning === 'INGREDIENT_ALREADY_EXISTS' || response.data.isExisting) {
+          alert(`⚠️ ${response.data.message || 'Ingredient already exists. Returning existing ingredient.'}`);
+        } else {
+          alert("Ingredient created successfully!");
+        }
       }
       setModalOpen(false);
       setEditing(null);
@@ -102,12 +174,13 @@ const Ingredients = () => {
         category: "Other",
         storageLocation: "Dry Storage",
         uom: "kg",
-        baseUnit: "kg",
+        baseUnit: "g", // kg maps to g as base unit
         reorderLevel: 0,
         shelfTimeDays: 7,
         qtyOnHand: 0,
         isActive: true,
       });
+      // Always refresh ingredients list to show the ingredient (new or existing)
       fetchIngredients();
     } catch (error) {
       alert(
@@ -188,7 +261,7 @@ const Ingredients = () => {
     }
   };
 
-  const handlePushToCartAdmins = async () => {
+  const handlePushToAllCartAdmins = async () => {
     if (!isSuperAdmin) return;
 
     const confirmed = await confirm(
@@ -196,7 +269,7 @@ const Ingredients = () => {
         "Existing cart admin data will be updated with your master data, but their inventory quantities and costs will be preserved.\n\n" +
         "Do you want to continue?",
       {
-        title: "Push to Cart Admins",
+        title: "Push to All Cart Admins",
         confirmText: "Push",
         cancelText: "Cancel",
         danger: false,
@@ -219,6 +292,142 @@ const Ingredients = () => {
       } else {
         alert(res.data.message || "Failed to push data");
       }
+    } catch (error) {
+      alert(
+        `Failed to push data: ${error.response?.data?.message || error.message}`
+      );
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const handleOpenPushModal = () => {
+    setSelectedOutlets([]);
+    setPushModalOpen(true);
+  };
+
+  const handleToggleOutlet = (cartId) => {
+    setSelectedOutlets((prev) =>
+      prev.includes(cartId)
+        ? prev.filter((id) => id !== cartId)
+        : [...prev, cartId]
+    );
+  };
+
+  const handleSelectAllOutlets = () => {
+    if (selectedOutlets.length === outlets.length) {
+      setSelectedOutlets([]);
+    } else {
+      setSelectedOutlets(outlets.map((outlet) => outlet._id));
+    }
+  };
+
+  const handlePushToSelectedCarts = async () => {
+    if (selectedOutlets.length === 0) {
+      alert("Please select at least one cart to push ingredients to.");
+      return;
+    }
+
+    const confirmed = await confirm(
+      `This will push all your ingredients and BOMs to ${selectedOutlets.length} selected cart(s).\n\n` +
+        "Existing cart admin data will be updated with your master data, but their inventory quantities and costs will be preserved.\n\n" +
+        "Do you want to continue?",
+      {
+        title: "Push to Selected Carts",
+        confirmText: "Push",
+        cancelText: "Cancel",
+        danger: false,
+        requireInput: false,
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setPushing(true);
+      setPushModalOpen(false);
+
+      // Push to each selected outlet
+      const results = {
+        total: selectedOutlets.length,
+        success: 0,
+        failed: 0,
+        details: [],
+      };
+
+      for (const cartId of selectedOutlets) {
+        try {
+          const res = await pushToCartAdmins({ outletId: cartId }); // Backward compatibility - API still accepts outletId
+          if (res.data.success) {
+            results.success++;
+            results.details.push({
+              cartId,
+              success: true,
+              data: res.data.data,
+            });
+          } else {
+            results.failed++;
+            results.details.push({
+              cartId,
+              success: false,
+              message: res.data.message,
+            });
+          }
+        } catch (error) {
+          results.failed++;
+          results.details.push({
+            cartId,
+            success: false,
+            message: error.response?.data?.message || error.message,
+          });
+        }
+      }
+
+      // Show summary
+      const outletNames = outlets
+        .filter((o) => selectedOutlets.includes(o._id))
+        .map((o) => o.cafeName || o.name)
+        .join(", ");
+
+      let message = `Push completed!\n\n`;
+      message += `Total: ${results.total} cart(s)\n`;
+      message += `Success: ${results.success}\n`;
+      message += `Failed: ${results.failed}\n\n`;
+
+      if (results.success > 0) {
+        const totalCreated = results.details
+          .filter((d) => d.success)
+          .reduce(
+            (sum, d) =>
+              sum +
+              (d.data?.ingredients?.created || 0) +
+              (d.data?.recipes?.created || 0),
+            0
+          );
+        const totalUpdated = results.details
+          .filter((d) => d.success)
+          .reduce(
+            (sum, d) =>
+              sum +
+              (d.data?.ingredients?.updated || 0) +
+              (d.data?.recipes?.updated || 0),
+            0
+          );
+        message += `Ingredients: ${totalCreated} created, ${totalUpdated} updated\n`;
+      }
+
+      if (results.failed > 0) {
+        message += `\nFailed carts:\n`;
+        results.details
+          .filter((d) => !d.success)
+          .forEach((d) => {
+            const outlet = outlets.find((o) => o._id === d.cartId);
+            message += `- ${outlet?.cafeName || outlet?.name || d.cartId}: ${d.message}\n`;
+          });
+      }
+
+      alert(message);
+      setSelectedOutlets([]);
     } catch (error) {
       alert(
         `Failed to push data: ${error.response?.data?.message || error.message}`
@@ -267,16 +476,6 @@ const Ingredients = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            {isSuperAdmin && (
-              <button
-                onClick={handlePushToCartAdmins}
-                disabled={pushing}
-                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 text-sm sm:text-base font-medium w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FaArrowDown className="text-sm sm:text-base" />
-                {pushing ? "Pushing..." : "Push to Cart Admins"}
-              </button>
-            )}
             <button
               onClick={() => {
                 setEditing(null);
@@ -456,10 +655,12 @@ const Ingredients = () => {
                 {!isSuperAdmin && (
                   <div className="flex items-center justify-between border-t pt-3">
                     <span className="text-xs sm:text-sm text-gray-600">
-                      Cost/Unit ({ing.uom})
+                      Weighted Avg Cost/Unit ({ing.uom})
                     </span>
                     <span className="text-sm sm:text-base font-bold text-[#d86d2a]">
                       {(() => {
+                        // WEIGHTED AVERAGE: currentCostPerBaseUnit contains weighted average cost
+                        // Formula: (Existing Stock Qty × Existing Avg Cost + New Purchase Qty × New Purchase Cost) / (Existing Stock Qty + New Purchase Qty)
                         const baseCost = ing.currentCostPerBaseUnit || 0;
                         if (!baseCost || baseCost === 0) {
                           return "₹0.00";
@@ -467,9 +668,9 @@ const Ingredients = () => {
                         
                         if (ing.baseUnit && ing.baseUnit !== ing.uom) {
                           try {
-                            // Convert cost from base unit to display unit
-                            // Formula: cost per display unit = cost per base unit × (base units per display unit)
-                            // Example: If cost is ₹0.22/g (base) and uom is kg, we need ₹220/kg
+                            // Convert weighted average cost from base unit to display unit
+                            // Formula: cost per display unit = weighted avg cost per base unit × (base units per display unit)
+                            // Example: If weighted avg cost is ₹0.22/g (base) and uom is kg, we need ₹220/kg
                             // convertUnit(1, "kg", "g") = 1000 (how many grams in 1 kg)
                             // So: 0.22 × 1000 = 220
                             const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
@@ -682,13 +883,15 @@ const Ingredients = () => {
                   <select
                     required
                     value={formData.uom}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const selectedUom = e.target.value;
+                      const baseUnit = getBaseUnitFromUom(selectedUom);
                       setFormData({
                         ...formData,
-                        uom: e.target.value,
-                        baseUnit: e.target.value,
-                      })
-                    }
+                        uom: selectedUom,
+                        baseUnit: baseUnit,
+                      });
+                    }}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   >
                     <option value="kg">kg</option>
@@ -842,6 +1045,106 @@ const Ingredients = () => {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Push to Selected Carts Modal */}
+      {pushModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 sm:p-6 rounded-t-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold">
+                Push Ingredients to Selected Carts
+              </h2>
+              <p className="text-sm mt-2 opacity-90">
+                Select the carts you want to push ingredients and BOMs to
+              </p>
+            </div>
+            <div className="p-4 sm:p-6">
+              {loadingOutlets ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                  <p className="mt-4 text-gray-600">Loading carts...</p>
+                </div>
+              ) : outlets.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No carts available</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedOutlets.length === outlets.length &&
+                          outlets.length > 0
+                        }
+                        onChange={handleSelectAllOutlets}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Select All ({selectedOutlets.length} selected)
+                    </label>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+                    <div className="divide-y divide-gray-200">
+                      {outlets.map((outlet) => (
+                        <label
+                          key={outlet._id}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOutlets.includes(outlet._id)}
+                            onChange={() => handleToggleOutlet(outlet._id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">
+                              {outlet.cafeName || outlet.name}
+                            </p>
+                            {outlet.email && (
+                              <p className="text-sm text-gray-500">
+                                {outlet.email}
+                              </p>
+                            )}
+                            {outlet.cartCode && (
+                              <p className="text-xs text-gray-400">
+                                Code: {outlet.cartCode}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 px-4 sm:px-6 py-4 border-t flex gap-3 justify-end rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setPushModalOpen(false);
+                  setSelectedOutlets([]);
+                }}
+                className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 font-medium transition-colors"
+                disabled={pushing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePushToSelectedCarts}
+                disabled={
+                  pushing || selectedOutlets.length === 0 || loadingOutlets
+                }
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:shadow-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pushing ? "Pushing..." : `Push to ${selectedOutlets.length} Cart(s)`}
+              </button>
             </div>
           </div>
         </div>
