@@ -22,13 +22,13 @@ import TakeawayOrders from "./pages/TakeawayOrders";
 import Invoices from "./pages/Invoices";
 import Tables from "./pages/Tables";
 import MenuManager from "./pages/MenuManager";
-import Payments from "./pages/Payments";
 import Staff from "./pages/Staff";
 import EmployeeManagement from "./pages/EmployeeManagement";
 import TableDashboard from "./pages/TableDashboard";
-// Lazy load AttendanceManagement to avoid circular dependency issues
+// Lazy load AttendanceManagement and Payments to avoid circular dependency issues
 import { lazy } from "react";
 const AttendanceManagement = lazy(() => import("./pages/AttendanceManagement"));
+const Payments = lazy(() => import("./pages/Payments"));
 import FeedbackManagement from "./pages/FeedbackManagement";
 import CustomerManagement from "./pages/CustomerManagement";
 import InventoryManagement from "./pages/InventoryManagement";
@@ -170,7 +170,15 @@ function App() {
                     path="/payments"
                     element={
                       <ProtectedRoute allowedRoles={["admin"]}>
-                        <Payments />
+                        <Suspense
+                          fallback={
+                            <div className="flex items-center justify-center min-h-screen">
+                              <div className="text-lg">Loading...</div>
+                            </div>
+                          }
+                        >
+                          <Payments />
+                        </Suspense>
                       </ProtectedRoute>
                     }
                   />
