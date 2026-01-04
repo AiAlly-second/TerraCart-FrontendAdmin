@@ -49,7 +49,25 @@ const Inventory = () => {
         getIngredients(params),
       ]);
       if (transactionsRes.data.success) setTransactions(transactionsRes.data.data);
-      if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
+      if (ingredientsRes.data.success) {
+        // DEBUG: Log what we received
+        if (import.meta.env.DEV) {
+          console.log(`[FRONTEND] Received ${ingredientsRes.data.data.length} ingredients`);
+          if (ingredientsRes.data.data.length > 0) {
+            const sampleIng = ingredientsRes.data.data[0];
+            console.log(`[FRONTEND] Sample ingredient:`, {
+              name: sampleIng.name,
+              qtyOnHand: sampleIng.qtyOnHand,
+              currentCostPerBaseUnit: sampleIng.currentCostPerBaseUnit,
+              lastPurchaseUnitPrice: sampleIng.lastPurchaseUnitPrice,
+              lastPurchaseUom: sampleIng.lastPurchaseUom,
+              baseUnit: sampleIng.baseUnit,
+              uom: sampleIng.uom
+            });
+          }
+        }
+        setIngredients(ingredientsRes.data.data);
+      }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error("Error fetching data:", error);
@@ -151,83 +169,28 @@ const Inventory = () => {
   const totalItems = ingredients.length;
   const lowStockItems = ingredients.filter((ing) => ing.qtyOnHand <= ing.reorderLevel).length;
   
-  // IMPORTANT: Calculate total value using the SAME filteredIngredients array that's displayed
-  // This ensures the total matches the sum of individual stock values
-  // Calculate total value - handle null/undefined values and ensure we use valid numbers
-  // Only include ingredients with stock > 0 for accurate total value
-  // IMPORTANT: This must match the individual stockValue calculation EXACTLY
+  // WEIGHTED AVERAGE: Calculate total value using weighted average costs
+  // Formula: totalValue = sum of (qty in base unit × weighted avg cost per base unit) for each ingredient
+  // Uses weighted average cost stored in currentCostPerBaseUnit
   const totalValue = filteredIngredients.reduce((sum, ing) => {
-    // Use EXACT same calculation as individual stockValue (lines 393-430)
-    const qty = Math.abs(Number(ing.qtyOnHand) || 0);
-    let cost = Math.abs(Number(ing.currentCostPerBaseUnit) || 0);
+    const qty = Number(ing.qtyOnHand) || 0;
+    const cost = Number(ing.currentCostPerBaseUnit) || 0;
     
-    // CRITICAL: Apply same cost correction logic as individual stockValue
-    // Detect if cost is stored incorrectly (per display unit instead of per base unit)
-    if (cost > 0 && ing.baseUnit && ing.uom && ing.baseUnit !== ing.uom) {
-      try {
-        const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
-        
-        // If cost is very high (> 100) and baseUnit is g/ml, it's likely stored per display unit
-        if (cost > 100 && (ing.baseUnit === 'g' || ing.baseUnit === 'ml')) {
-          const correctedCost = cost / baseUnitsPerDisplayUnit;
-          if (correctedCost > 0.01 && correctedCost < 1000) {
-            // Cost is likely stored per display unit - correct it
-            if (import.meta.env.DEV) {
-              console.warn(`[Total Value] ${ing.name}: Cost correction - ${cost}/${ing.uom} → ${correctedCost.toFixed(4)}/${ing.baseUnit}`);
-            }
-            cost = correctedCost;
-          }
-        }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error(`[Total Value] Cost correction error for ${ing.name}:`, error);
-        }
-      }
-    }
-    
-    // CRITICAL: Skip items with no stock - use same threshold as stockValue (0.0001)
-    if (qty < 0.0001) {
-      // Debug logging if cost is still > 0 when stock is 0 (this should not happen)
-      if (import.meta.env.DEV && cost > 0) {
-        console.warn(`[Total Value Bug] ${ing.name}: qty=${qty}, cost=${cost} - skipping from total value`);
-      }
-      return sum; // Skip items with no stock
-    }
-    
-    // Only calculate if stock > 0 AND cost > 0 (matches stockValue logic)
-    if (cost <= 0) {
-      return sum; // Skip items with no cost
-    }
-    
-    // Calculate item value: qty (base unit) × cost (per base unit)
-    // This matches the individual stockValue calculation exactly
-    let itemValue = qty * cost;
-    
-    // Additional safety check: ensure itemValue is valid and positive
-    if (isNaN(itemValue) || itemValue <= 0) {
-      if (import.meta.env.DEV) {
-        console.warn(`[Total Value] Invalid value for ${ing.name}: qty=${qty}, cost=${cost}, itemValue=${itemValue}`);
-      }
+    // Skip items with no stock or no cost
+    if (qty <= 0 || cost <= 0) {
       return sum;
     }
     
-    // Debug logging in development - show all calculations
-    if (import.meta.env.DEV) {
-      console.log(`[Total Value] ${ing.name}: ${qty.toFixed(4)} ${ing.baseUnit || 'base'} × ₹${cost.toFixed(4)}/${ing.baseUnit || 'base'} = ₹${itemValue.toFixed(2)}`);
+    // Calculate item value: qty (base unit) × cost (per base unit)
+    const itemValue = qty * cost;
+    
+    // Safety check: ensure itemValue is valid and positive
+    if (isNaN(itemValue) || itemValue <= 0) {
+      return sum;
     }
     
     return sum + itemValue;
   }, 0);
-  
-  // Debug: Log summary
-  if (import.meta.env.DEV) {
-    const itemsWithStock = filteredIngredients.filter(ing => {
-      const qty = Math.abs(Number(ing.qtyOnHand) || 0);
-      const cost = Math.abs(Number(ing.currentCostPerBaseUnit) || 0);
-      return qty >= 0.0001 && cost > 0;
-    }).length;
-    console.log(`[Total Value Summary] Total: ₹${totalValue.toFixed(2)}, Items with stock: ${itemsWithStock}/${filteredIngredients.length}`);
-  }
 
   if (loading) {
     return (
@@ -278,7 +241,7 @@ const Inventory = () => {
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-sm text-gray-600">Total Inventory Value</div>
-          <div className="text-2xl font-bold text-gray-800">₹{totalValue.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-gray-800">₹{Math.round(totalValue)}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-sm text-gray-600">Active Items</div>
@@ -397,7 +360,7 @@ const Inventory = () => {
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">UOM</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Stock</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Reorder Level</th>
-                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Unit Cost</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Weighted Avg Cost</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Total Value</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Status</th>
                           </tr>
@@ -409,77 +372,22 @@ const Inventory = () => {
                               ? convertUnit(ing.reorderLevel, ing.uom, ing.baseUnit)
                               : ing.reorderLevel;
                             const isLowStock = ing.qtyOnHand <= reorderLevelInBaseUnit;
-                            // Calculate stock value - handle null/undefined values
-                            // CRITICAL: Use absolute value and strict comparison to catch edge cases
-                            // IMPORTANT: qtyOnHand is ALWAYS in base unit (g, ml, or pcs)
-                            // currentCostPerBaseUnit should be per base unit, but might be stored incorrectly
-                            // So: stockValue = qtyOnHand (base) × currentCostPerBaseUnit (per base)
-                            const qty = Math.abs(Number(ing.qtyOnHand) || 0);
-                            let cost = Math.abs(Number(ing.currentCostPerBaseUnit) || 0);
+                            // WEIGHTED AVERAGE: Calculate stock value using weighted average cost from backend
+                            // qtyOnHand is ALWAYS in base unit (g, ml, or pcs)
+                            // currentCostPerBaseUnit is the weighted average cost per base unit
+                            // stockValue = qtyOnHand (base) × currentCostPerBaseUnit (weighted avg per base)
+                            const qty = Number(ing.qtyOnHand) || 0;
+                            const cost = Number(ing.currentCostPerBaseUnit) || 0;
                             
-                            // CRITICAL: Detect and correct if cost is stored per display unit instead of per base unit
-                            // This happens when cost is stored incorrectly in the database
-                            // Example: Cost stored as ₹608.26 per gram (should be ₹0.60826 per gram)
-                            if (cost > 0 && ing.baseUnit && ing.uom && ing.baseUnit !== ing.uom) {
-                              try {
-                                const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
-                                
-                                // If cost is very high (> 100) and baseUnit is g/ml, it's likely stored per display unit
-                                // Also check if uom is kg/l - this confirms the mismatch
-                                if (cost > 100 && (ing.baseUnit === 'g' || ing.baseUnit === 'ml') && (ing.uom === 'kg' || ing.uom === 'l')) {
-                                  const correctedCost = cost / baseUnitsPerDisplayUnit;
-                                  if (correctedCost > 0.01 && correctedCost < 1000) {
-                                    // Cost is likely stored per display unit - correct it
-                                    if (import.meta.env.DEV) {
-                                      console.warn(`[Stock Value] ${ing.name}: Cost correction - ${cost.toFixed(6)}/${ing.uom} → ${correctedCost.toFixed(6)}/${ing.baseUnit}`);
-                                    }
-                                    cost = correctedCost;
-                                  } else if (import.meta.env.DEV) {
-                                    console.warn(`[Stock Value] ${ing.name}: Cost correction skipped - correctedCost=${correctedCost.toFixed(6)} (outside range 0.01-1000)`);
-                                  }
-                                } else if (import.meta.env.DEV && cost > 100 && (ing.baseUnit === 'g' || ing.baseUnit === 'ml')) {
-                                  console.warn(`[Stock Value] ${ing.name}: Cost correction skipped - cost=${cost}, baseUnit=${ing.baseUnit}, uom=${ing.uom}, condition not met`);
-                                }
-                              } catch (error) {
-                                if (import.meta.env.DEV) {
-                                  console.error(`[Stock Value] Cost correction error for ${ing.name}:`, error);
-                                }
-                              }
-                            }
-                            
-                            // CRITICAL: If stock is 0 or very close to 0, value MUST be 0
-                            // This is the absolute rule - check stock FIRST
+                            // SIMPLE: Calculate value - stock × cost
+                            // If stock is 0 or cost is 0, value is 0
                             let stockValue = 0;
-                            
-                            // Only calculate value if stock > 0 AND cost > 0
-                            if (qty >= 0.0001 && cost > 0) {
+                            if (qty > 0 && cost > 0) {
                               stockValue = qty * cost;
-                              
-                              // Safety check: ensure calculated value is valid
+                              // Safety check
                               if (isNaN(stockValue) || stockValue < 0) {
                                 stockValue = 0;
                               }
-                              
-                              // Debug: Log calculation details for verification
-                              if (import.meta.env.DEV) {
-                                console.log(`[Stock Value] ${ing.name}: ${qty.toFixed(4)} ${ing.baseUnit || 'base'} × ₹${cost.toFixed(6)}/${ing.baseUnit || 'base'} = ₹${stockValue.toFixed(2)}`);
-                              }
-                            }
-                            
-                            // Final safety check - ensure value is 0 if stock is essentially 0
-                            // This overrides any previous calculation
-                            if (qty < 0.0001) {
-                              stockValue = 0;
-                            }
-                            
-                            // Additional check - if cost is 0, value must be 0
-                            if (cost <= 0) {
-                              stockValue = 0;
-                            }
-                            
-                            // Debug logging for problematic values
-                            if (import.meta.env.DEV && qty <= 0 && cost > 0) {
-                              console.warn(`[Stock Value Bug] ${ing.name}: qty=${qty}, cost=${cost}, calculated value=${stockValue}`);
                             }
                             return (
                               <tr key={ing._id} className={isLowStock ? "bg-red-50" : ""}>
@@ -507,15 +415,19 @@ const Inventory = () => {
                                         if (ing.baseUnit !== ing.uom) {
                                           // Convert from base unit to display unit (uom)
                                           const convertedQty = convertUnit(ing.qtyOnHand, ing.baseUnit, ing.uom);
+                                          // Round to zero decimals as requested
+                                          const roundedQty = Math.round(convertedQty);
                                           // Format with the ingredient's uom (no auto-conversion, respect the uom setting)
-                                          return formatUnit(convertedQty, ing.uom, { autoConvert: false });
+                                          return formatUnit(roundedQty, ing.uom, { autoConvert: false });
                                         } else {
-                                          // Same unit, just format it
-                                          return formatUnit(ing.qtyOnHand, ing.uom, { autoConvert: false });
+                                          // Same unit, round to zero decimals and format it
+                                          const roundedQty = Math.round(ing.qtyOnHand || 0);
+                                          return formatUnit(roundedQty, ing.uom, { autoConvert: false });
                                         }
                                       }
-                                      // Fallback
-                                      return formatUnit(ing.qtyOnHand || 0, ing.uom || "pcs", { autoConvert: false });
+                                      // Fallback - round to zero decimals
+                                      const roundedQty = Math.round(ing.qtyOnHand || 0);
+                                      return formatUnit(roundedQty, ing.uom || "pcs", { autoConvert: false });
                                     })()}
                                   </span>
                                 </td>
@@ -524,81 +436,40 @@ const Inventory = () => {
                                 </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   {(() => {
+                                    // WEIGHTED AVERAGE: Use weighted average cost from currentCostPerBaseUnit
                                     const qty = Number(ing.qtyOnHand) || 0;
-                                    const baseCost = Number(ing.currentCostPerBaseUnit) || 0;
                                     
                                     // CRITICAL: If stock is 0, cost MUST be 0 (no exceptions)
-                                    // This is the absolute rule - check stock FIRST
                                     if (qty <= 0) {
-                                      return `₹0.00 / ${ing.uom || ""}`;
+                                      return `₹0 / ${ing.uom || ""}`;
                                     }
                                     
-                                    // Stock > 0, but check if cost is valid
-                                    if (!baseCost || baseCost <= 0) {
-                                      return `₹0.00 / ${ing.uom || ""}`;
-                                    }
+                                    // Use weighted average cost (stored in currentCostPerBaseUnit)
+                                    // This is calculated as: (Existing Stock Qty × Existing Avg Cost + New Purchase Qty × New Purchase Cost) / (Existing Stock Qty + New Purchase Qty)
+                                    const baseCost = Number(ing.currentCostPerBaseUnit) || 0;
+                                    let unitPrice = 0;
+                                    let displayUom = ing.uom || "";
                                     
-                                    // IMPORTANT: currentCostPerBaseUnit should be per base unit, but might be stored incorrectly
-                                    // If cost is stored per display unit (kg/l) instead of per base unit (g/ml), we need to correct it
-                                    // Example: If cost is stored as ₹608.26 per gram (should be ₹0.60826 per gram)
-                                    let correctedBaseCost = baseCost;
-                                    
-                                    // CRITICAL: Apply SAME cost correction logic as stock value and total value
-                                    // Detect if cost is stored incorrectly (per display unit instead of per base unit)
-                                    if (baseCost > 0 && ing.baseUnit && ing.uom && ing.baseUnit !== ing.uom) {
+                                    if (baseCost > 0 && ing.baseUnit && ing.uom) {
                                       try {
+                                        // Convert weighted average cost from base unit to display unit
+                                        // Formula: cost per display unit = cost per base unit × (base units per display unit)
+                                        // Example: If weighted avg cost is ₹0.22/g (base) and uom is kg, we need ₹220/kg
+                                        // convertUnit(1, "kg", "g") = 1000 (how many grams in 1 kg)
+                                        // So: 0.22 × 1000 = 220
                                         const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
-                                        
-                                        // If cost is very high (> 100) and baseUnit is g/ml, it's likely stored per display unit
-                                        if (baseCost > 100 && (ing.baseUnit === 'g' || ing.baseUnit === 'ml')) {
-                                          const correctedCost = baseCost / baseUnitsPerDisplayUnit;
-                                          if (correctedCost > 0.01 && correctedCost < 1000) {
-                                            // Cost is likely stored per display unit - correct it
-                                            if (import.meta.env.DEV) {
-                                              console.warn(`[Unit Cost Display] ${ing.name}: Cost correction - ${baseCost.toFixed(6)}/${ing.uom} → ${correctedCost.toFixed(6)}/${ing.baseUnit}`);
-                                            }
-                                            correctedBaseCost = correctedCost;
-                                          }
-                                        }
+                                        unitPrice = baseCost * baseUnitsPerDisplayUnit;
+                                        displayUom = ing.uom;
                                       } catch (error) {
-                                        if (import.meta.env.DEV) {
-                                          console.error(`[Unit Cost Display] Cost correction error for ${ing.name}:`, error);
-                                        }
+                                        unitPrice = 0;
                                       }
                                     }
                                     
-                                    // Now convert the corrected base cost to display unit
-                                    // costPerDisplayUnit = costPerBaseUnit × (baseUnitsPerDisplayUnit)
-                                    // Example: If corrected cost is ₹0.60826/g and uom is kg:
-                                    //   baseUnitsPerDisplayUnit = convertUnit(1, "kg", "g") = 1000
-                                    //   costPerDisplayUnit = 0.60826 × 1000 = ₹608.26/kg ✓
-                                    let costPerDisplayUnit = correctedBaseCost;
-                                    
-                                    if (ing.baseUnit && ing.uom && ing.baseUnit !== ing.uom) {
-                                      try {
-                                        // Get conversion factor: how many base units in 1 display unit
-                                        const baseUnitsPerDisplayUnit = convertUnit(1, ing.uom, ing.baseUnit);
-                                        
-                                        // Convert cost from base unit to display unit
-                                        costPerDisplayUnit = correctedBaseCost * baseUnitsPerDisplayUnit;
-                                        
-                                        // Debug logging
-                                        if (import.meta.env.DEV) {
-                                          console.log(`[Unit Cost Display] ${ing.name}: correctedBaseCost=₹${correctedBaseCost.toFixed(6)}/${ing.baseUnit}, conversionFactor=${baseUnitsPerDisplayUnit}, costPerDisplayUnit=₹${costPerDisplayUnit.toFixed(2)}/${ing.uom}`);
-                                        }
-                                      } catch (error) {
-                                        if (import.meta.env.DEV) {
-                                          console.error(`[Unit Cost Display] Conversion error for ${ing.name}:`, error);
-                                        }
-                                        // Fallback: use corrected base cost directly
-                                        costPerDisplayUnit = correctedBaseCost;
-                                      }
-                                    }
-                                    
-                                    return `₹${isNaN(costPerDisplayUnit) ? "0.00" : costPerDisplayUnit.toFixed(2)} / ${ing.uom || ""}`;
+                                    // Round to 2 decimals for better precision (weighted average can have decimals)
+                                    return `₹${isNaN(unitPrice) ? "0.00" : unitPrice.toFixed(2)} / ${displayUom}`;
                                   })()}
                                 </td>
-                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">₹{stockValue.toFixed(2)}</td>
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">₹{Math.round(stockValue)}</td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span
                                     className={`px-2 py-1 rounded text-xs ${

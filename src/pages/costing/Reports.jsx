@@ -242,7 +242,7 @@ const Reports = () => {
                   }
                   try {
                     setLoading(true);
-                    const response = await costingApi.getCostPerDishReport({ ...filters, outletId: filters.kioskId });
+                    const response = await costingApi.getCostPerDishReport({ ...filters, cartId: filters.kioskId });
                     setCostPerDishData(response.data.data);
                   } catch (error) {
                     console.error('Failed to fetch cost per dish report:', error);

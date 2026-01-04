@@ -80,15 +80,45 @@ const Recipes = () => {
         getIngredients(),
         getDefaultMenuItems(),
       ]);
-      if (recipesRes.data.success) setRecipes(recipesRes.data.data);
-      if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data);
-      if (defaultMenuRes.data.success)
-        setDefaultMenuItems(defaultMenuRes.data.data);
-    } catch (error) {
+      
+      // Enhanced logging for debugging
       if (import.meta.env.DEV) {
-        console.error("Error fetching data:", error);
+        console.log(`[FRONTEND] fetchData response:`, {
+          recipes: {
+            success: recipesRes.data.success,
+            count: recipesRes.data.data?.length || 0
+          },
+          ingredients: {
+            success: ingredientsRes.data.success,
+            count: ingredientsRes.data.data?.length || 0
+          },
+          menuItems: {
+            success: defaultMenuRes.data.success,
+            count: defaultMenuRes.data.data?.length || 0
+          }
+        });
+        
+        if (recipesRes.data.success && recipesRes.data.data) {
+          if (recipesRes.data.data.length > 0) {
+            console.log(`[FRONTEND] Sample recipes:`, recipesRes.data.data.slice(0, 3).map(rec => ({
+              name: rec.name,
+              cartId: rec.cartId || 'null',
+              isActive: rec.isActive
+            })));
+          } else {
+            console.warn(`[FRONTEND] ⚠️ No recipes received!`);
+          }
+        }
       }
-      alert("Failed to fetch data");
+      
+      if (recipesRes.data.success) setRecipes(recipesRes.data.data || []);
+      if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data || []);
+      if (defaultMenuRes.data.success)
+        setDefaultMenuItems(defaultMenuRes.data.data || []);
+    } catch (error) {
+      console.error("[FRONTEND] Error fetching data:", error);
+      console.error("[FRONTEND] Error response:", error.response?.data);
+      alert(`Failed to fetch data: ${error.response?.data?.message || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -116,7 +146,7 @@ const Recipes = () => {
 
       // Prevent multiple BOMs with the same name for the same outlet (only when creating, not editing)
       if (!editing) {
-        // For cart admin, check against their own outletId
+        // For cart admin, check against their own cartId
         // For super admin, check against cartId: null (global BOMs)
         const currentCartId = isCartAdmin ? user._id : null;
         const duplicateRecipe = recipes.find(
@@ -124,8 +154,8 @@ const Recipes = () => {
             r.name.trim().toLowerCase() ===
               submitData.name.trim().toLowerCase() &&
             ((isCartAdmin &&
-              r.outletId?.toString() === currentOutletId?.toString()) ||
-              (isSuperAdmin && !r.outletId))
+              r.cartId?.toString() === currentCartId?.toString()) ||
+              (isSuperAdmin && !r.cartId))
         );
 
         if (duplicateRecipe) {

@@ -91,8 +91,8 @@ const MenuItems = () => {
 
       const payload = {
         ...formData,
-        // For cart admin, backend derives outletId from the user.
-        // For super/franchise admin, we send the selected outlet explicitly.
+        // For cart admin, backend derives cartId from the user.
+        // For super/franchise admin, we send the selected cart explicitly.
         cartId: isCartAdmin ? undefined : selectedOutlet,
       };
 
