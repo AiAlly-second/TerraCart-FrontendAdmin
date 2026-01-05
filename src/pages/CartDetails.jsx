@@ -232,7 +232,7 @@ const CartDetails = () => {
     return (
       <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
         <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
-          Loading cart details...
+          Loading cart details..
         </div>
       </div>
     );
