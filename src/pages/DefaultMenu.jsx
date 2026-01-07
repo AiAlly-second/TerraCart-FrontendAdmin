@@ -138,8 +138,10 @@ const DefaultMenu = () => {
 
   useEffect(() => {
     fetchDefaultMenu();
-    fetchFranchises();
-  }, []);
+    if (userRole) {
+      fetchFranchises();
+    }
+  }, [userRole]);
 
   const fetchDefaultMenu = async () => {
     try {
@@ -166,12 +168,22 @@ const DefaultMenu = () => {
   const fetchFranchises = async () => {
     try {
       const response = await api.get("/users");
-      const franchiseUsers = (response.data || []).filter(
-        (u) => u.role === "franchise_admin"
-      );
-      setFranchises(franchiseUsers);
+      
+      // Super Admin: Fetch franchise admins to push menu to franchises
+      // Franchise Admin: Fetch cart admins under their franchise to push menu to carts
+      if (userRole === "super_admin") {
+        const franchiseUsers = (response.data || []).filter(
+          (u) => u.role === "franchise_admin"
+        );
+        setFranchises(franchiseUsers);
+      } else if (userRole === "franchise_admin") {
+        const cartUsers = (response.data || []).filter(
+          (u) => u.role === "admin" && u.franchiseId?.toString() === user._id?.toString()
+        );
+        setFranchises(cartUsers);
+      }
     } catch (error) {
-      console.error("Error fetching franchises:", error);
+      console.error("Error fetching franchises/carts:", error);
     }
   };
 
@@ -235,25 +247,30 @@ const DefaultMenu = () => {
 
   const handlePushToFranchises = async () => {
     if (selectedFranchises.size === 0) {
-      alert("Please select at least one franchise.");
+      alert(`Please select at least one ${userRole === "super_admin" ? "franchise" : "cart"}.`);
       return;
     }
 
     const selectedList = Array.from(selectedFranchises);
-    const franchiseNames = selectedList
+    const targetNames = selectedList
       .map((id) => {
         const f = franchises.find((fr) => fr._id === id);
-        return f?.name || "Unknown";
+        return f?.name || f?.cartName || "Unknown";
       })
       .join(", ");
 
+    const targetType = userRole === "super_admin" ? "franchise" : "cart";
+    const targetTypePlural = userRole === "super_admin" ? "franchises" : "carts";
+
     // CRITICAL: window.confirm is now async, must await it
     const confirmed = await window.confirm(
-      `Push default menu to ${selectedFranchises.size} franchise(s)?\n\n` +
-        `Franchises: ${franchiseNames}\n\n` +
+      `Push default menu to ${selectedFranchises.size} ${targetType}(s)?\n\n` +
+        `${userRole === "super_admin" ? "Franchises" : "Carts"}: ${targetNames}\n\n` +
         `This will:\n` +
-        `? Replace the default menu for each selected franchise\n` +
-        `? The franchise menu will then automatically sync to all their carts\n\n` +
+        `${userRole === "super_admin" 
+          ? `• Replace the default menu for each selected franchise\n• The franchise menu will then automatically sync to all their carts` 
+          : `• Replace the menu for each selected cart`
+        }\n\n` +
         `Continue?`
     );
     if (!confirmed) {
@@ -263,25 +280,28 @@ const DefaultMenu = () => {
     setPushing(true);
     const results = [];
 
-    for (const franchiseId of selectedList) {
-      const franchise = franchises.find((f) => f._id === franchiseId);
+    // Super Admin pushes to franchises, Franchise Admin pushes to carts
+    const endpoint = userRole === "super_admin" ? "franchise" : "cafe";
+
+    for (const targetId of selectedList) {
+      const target = franchises.find((f) => f._id === targetId);
       try {
         const response = await api.post(
-          `/default-menu/push/franchise/${franchiseId}`
+          `/default-menu/push/${endpoint}/${targetId}`
         );
         results.push({
-          franchiseId,
-          franchiseName: franchise?.name || "Unknown",
+          franchiseId: targetId,
+          franchiseName: target?.name || target?.cartName || "Unknown",
           success: true,
-          message: `Updated ${
-            response.data.cartsUpdated || response.data.cafesUpdated || 0
-          } carts`,
+          message: userRole === "super_admin" 
+            ? `Updated ${response.data.cafesUpdated || 0} carts`
+            : `Menu pushed successfully`,
           data: response.data,
         });
       } catch (error) {
         results.push({
-          franchiseId,
-          franchiseName: franchise?.name || "Unknown",
+          franchiseId: targetId,
+          franchiseName: target?.name || target?.cartName || "Unknown",
           success: false,
           message: error.response?.data?.message || error.message,
         });
@@ -581,7 +601,9 @@ const DefaultMenu = () => {
             className="flex items-center px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm sm:text-base flex-1 sm:flex-initial justify-center"
           >
             <FaSync className="mr-1.5 sm:mr-2" />
-            <span className="whitespace-nowrap">Push to Franchises</span>
+            <span className="whitespace-nowrap">
+              Push to {userRole === "super_admin" ? "Franchises" : "Carts"}
+            </span>
           </button>
         </div>
       </div>
@@ -607,7 +629,7 @@ const DefaultMenu = () => {
               2
             </span>
             <span className="whitespace-nowrap truncate">
-              Push to Franchises
+              {userRole === "super_admin" ? "Push to Franchises" : "Push to Carts"}
             </span>
           </div>
           <span className="hidden sm:inline text-blue-500">→</span>
@@ -617,7 +639,7 @@ const DefaultMenu = () => {
               3
             </span>
             <span className="whitespace-nowrap truncate">
-              Franchise pushes to Carts
+              {userRole === "super_admin" ? "Franchise pushes to Carts" : "Cart Admin toggles availability"}
             </span>
           </div>
           <span className="hidden sm:inline text-blue-500">→</span>
@@ -917,14 +939,16 @@ const DefaultMenu = () => {
         )}
       </div>
 
-      {/* Push to Franchises Modal */}
+      {/* Push to Carts Modal */}
       {showPushModal && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6 overflow-y-auto">
           <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl my-auto mx-2 sm:mx-4">
             <div className="flex justify-between items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
               <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                 <FaBuilding className="text-purple-600 flex-shrink-0 text-sm sm:text-base md:text-lg" />
-                <span className="truncate">Push Menu to Franchises</span>
+                <span className="truncate">
+                  Push Menu to {userRole === "super_admin" ? "Franchises" : "Carts"}
+                </span>
               </h2>
               <button
                 onClick={() => {
@@ -989,9 +1013,10 @@ const DefaultMenu = () => {
               // Show franchise selection
               <div className="space-y-3 sm:space-y-4">
                 <p className="text-gray-600 text-xs sm:text-sm">
-                  Select the franchises you want to push the default menu to.
-                  Each franchise will receive a copy of this menu, which they
-                  can then customize and push to their carts.
+                  {userRole === "super_admin" 
+                    ? "Select the franchises you want to push the default menu to. Each franchise will receive a copy of this menu, which they can then customize and push to their carts."
+                    : "Select the carts you want to push the default menu to. Each cart will receive a copy of this menu."
+                  }
                 </p>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 border-b pb-2">
@@ -1006,7 +1031,7 @@ const DefaultMenu = () => {
                       className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                     />
                     <span className="font-medium text-xs sm:text-sm md:text-base">
-                      Select All ({franchises.length} franchises)
+                      Select All ({franchises.length} {userRole === "super_admin" ? "franchises" : "carts"})
                     </span>
                   </label>
                   <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
@@ -1055,7 +1080,9 @@ const DefaultMenu = () => {
                   ) : (
                     <div className="text-center py-6 sm:py-8 text-gray-500">
                       <FaBuilding className="mx-auto text-2xl sm:text-3xl mb-2" />
-                      <p className="text-xs sm:text-sm">No franchises found</p>
+                      <p className="text-xs sm:text-sm">
+                        No {userRole === "super_admin" ? "franchises" : "carts"} found
+                      </p>
                     </div>
                   )}
                 </div>
