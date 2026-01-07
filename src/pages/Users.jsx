@@ -413,27 +413,30 @@ const Users = () => {
             Manage all system users
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditingUser(null);
-            setFormData({
-              name: "",
-              email: "",
-              password: "",
-              role: "super_admin", // Default role for super admin user creation
-              franchiseId: "",
-              cartName: "",
-              location: "",
-              phone: "",
-              address: "",
-            });
-            setShowModal(true);
-          }}
-          className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto justify-center"
-        >
-          <FaPlus className="mr-1.5 sm:mr-2" />
-          <span className="whitespace-nowrap">Add New User</span>
-        </button>
+        {/* Hide Add New User button for Super Admin */}
+        {!isSuperAdmin && (
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              setFormData({
+                name: "",
+                email: "",
+                password: "",
+                role: "super_admin", // Default role for super admin user creation
+                franchiseId: "",
+                cartName: "",
+                location: "",
+                phone: "",
+                address: "",
+              });
+              setShowModal(true);
+            }}
+            className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto justify-center"
+          >
+            <FaPlus className="mr-1.5 sm:mr-2" />
+            <span className="whitespace-nowrap">Add New User</span>
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
