@@ -431,7 +431,7 @@ const Recipes = () => {
           </div>
           <p className="text-2xl sm:text-3xl font-bold">{stats.inactive}</p>
         </div>
-        {!isSuperAdmin && (
+        {!isSuperAdmin && !isCartAdmin && (
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs sm:text-sm opacity-90">Avg Cost/Portion</p>

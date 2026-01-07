@@ -772,13 +772,16 @@ const MenuManager = () => {
                             >
                               <FaEdit size={11} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(e) => item && handleDeleteItem(e, item)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded"
-                            >
-                              <FaTrash size={11} />
-                            </button>
+                            {/* Only show delete button for franchise_admin and super_admin, not cart admin */}
+                            {userRole !== "admin" && (
+                              <button
+                                type="button"
+                                onClick={(e) => item && handleDeleteItem(e, item)}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              >
+                                <FaTrash size={11} />
+                              </button>
+                            )}
                           </div>
 
                           {/* Define BOM / Recipe shortcut into Finances for Franchise Admin */}
