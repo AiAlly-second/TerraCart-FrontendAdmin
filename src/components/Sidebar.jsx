@@ -166,13 +166,13 @@ const Sidebar = ({ isOpen, onClose }) => {
             />
             {franchiseName ? (
               <>
-                <h1 className="text-[10px] sm:text-xs md:text-sm font-bold text-[#f5e3d5] text-center ml-1.5 sm:ml-2 truncate">
+                <h1 className="text-[10px] sm:text-xs md:text-sm font-bold text-[#f5e3d5] text-center ml-1.5 sm:ml-2 whitespace-normal leading-tight">
                   {franchiseName}
                 </h1>
               </>
             ) : (
               <>
-                <h1 className="text-sm sm:text-base md:text-lg font-bold ml-1.5 sm:ml-2 text-[#f5e3d5] truncate">
+                <h1 className="text-sm sm:text-base md:text-lg font-bold ml-1.5 sm:ml-2 text-[#f5e3d5] whitespace-normal leading-tight">
                   {portalTitle}
                 </h1>
               </>
@@ -222,7 +222,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               >
                 <div className="flex items-center min-w-0 flex-1">
                   <span className="text-sm sm:text-base md:text-lg flex-shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
-                  <span className="ml-1.5 sm:ml-2 md:ml-3 truncate font-medium">{item.label}</span>
+                  <span className="ml-1.5 sm:ml-2 md:ml-3 font-medium whitespace-normal leading-tight">{item.label}</span>
                 </div>
                 {item.showStats && !menuLoading && menuStats.categories > 0 && (
                   <span className="ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs bg-[#d86d2a] text-white px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 rounded-full flex-shrink-0 whitespace-nowrap font-semibold shadow-sm">
