@@ -781,9 +781,10 @@ const Orders = () => {
                         key="accept"
                         type="button"
                         onClick={() => tryAccept(order)}
+                        title="Accept Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                       >
-                        ✅ <span className="hidden xs:inline">Accept</span>
+                        ✅ <span className="hidden sm:inline">Accept</span>
                       </button>
                     );
                   }
@@ -795,6 +796,7 @@ const Orders = () => {
                         key="next"
                         type="button"
                         onClick={() => changeStatus(order._id, nextStatus)}
+                        title={`Move to ${nextStatus}`}
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50 truncate max-w-[80px] sm:max-w-none"
                       >
                         {nextStatus}
@@ -808,9 +810,10 @@ const Orders = () => {
                         key="return"
                         type="button"
                         onClick={() => changeStatus(order._id, "Returned")}
+                        title="Return Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                       >
-                        ↩️ <span className="hidden xs:inline">Return</span>
+                        ↩️ <span className="hidden sm:inline">Return</span>
                       </button>
                     );
                   } else if (canCancel(order.status)) {
@@ -819,9 +822,10 @@ const Orders = () => {
                         key="cancel"
                         type="button"
                         onClick={() => changeStatus(order._id, "Cancelled")}
+                        title="Cancel Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                       >
-                        ❌ <span className="hidden xs:inline">Cancel</span>
+                        ❌ <span className="hidden sm:inline">Cancel</span>
                       </button>
                     );
                   }
