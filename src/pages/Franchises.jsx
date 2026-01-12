@@ -21,6 +21,7 @@ import {
   FaEye,
   FaTimes,
   FaUsers,
+  FaFilter,
 } from "react-icons/fa";
 import api from "../utils/api";
 import { confirmFranchiseDelete, confirm } from "../utils/confirm";
@@ -83,6 +84,14 @@ const Franchises = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all"); // "all", "active", "inactive"
   const [viewMode, setViewMode] = useState("list"); // "list", "tile"
+  
+  // Sorting state
+  const [sortField, setSortField] = useState("name"); // "name", "email", "createdAt", "status", "carts"
+  const [sortDirection, setSortDirection] = useState("asc"); // "asc", "desc"
+  
+  // Bulk selection state
+  const [selectedFranchises, setSelectedFranchises] = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
     fetchFranchises();
@@ -952,83 +961,96 @@ const Franchises = () => {
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button
-          onClick={() => setFilterStatus("all")}
-          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
-            filterStatus === "all"
-              ? "border-blue-500 ring-2 ring-blue-200"
-              : "border-gray-200"
-          }`}
-        >
+      {/* Stats Cards - Display Only */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500 font-medium">Total</p>
-              <p className="text-xl font-bold text-gray-800">
-                {totalFranchises}
-              </p>
+              <p className="text-sm text-gray-600 font-medium mb-1">Total Franchises</p>
+              <p className="text-2xl font-bold text-gray-900">{totalFranchises}</p>
             </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FaBuilding className="text-blue-600" />
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <FaBuilding className="text-blue-600" size={20} />
             </div>
           </div>
-        </button>
-        <button
-          onClick={() => setFilterStatus("active")}
-          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
-            filterStatus === "active"
-              ? "border-green-500 ring-2 ring-green-200"
-              : "border-green-200"
-          }`}
-        >
+        </div>
+        
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-green-600 font-medium">Active</p>
-              <p className="text-xl font-bold text-green-700">
-                {activeFranchises}
-              </p>
+              <p className="text-sm text-emerald-600 font-medium mb-1">Active</p>
+              <p className="text-2xl font-bold text-emerald-700">{activeFranchises}</p>
             </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <FaCheckCircle className="text-green-600" />
+            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <FaCheckCircle className="text-emerald-600" size={20} />
             </div>
           </div>
-        </button>
-        <button
-          onClick={() => setFilterStatus("inactive")}
-          className={`bg-white rounded-lg border p-3 shadow-sm transition-all hover:shadow-md cursor-pointer text-left ${
-            filterStatus === "inactive"
-              ? "border-red-500 ring-2 ring-red-200"
-              : "border-red-200"
-          }`}
-        >
+        </div>
+        
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-red-600 font-medium">Inactive</p>
-              <p className="text-xl font-bold text-red-700">
-                {inactiveFranchises}
-              </p>
+              <p className="text-sm text-rose-600 font-medium mb-1">Inactive</p>
+              <p className="text-2xl font-bold text-rose-700">{inactiveFranchises}</p>
             </div>
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-              <FaTimesCircle className="text-red-600" />
+            <div className="w-12 h-12 bg-rose-100 rounded-lg flex items-center justify-center">
+              <FaTimesCircle className="text-rose-600" size={20} />
             </div>
           </div>
-        </button>
-        <div className="bg-white rounded-lg border border-purple-200 p-3 shadow-sm">
+        </div>
+        
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-purple-600 font-medium">Total Carts</p>
-              <p className="text-xl font-bold text-purple-700">{totalCarts}</p>
+              <p className="text-sm text-purple-600 font-medium mb-1">Total Carts</p>
+              <p className="text-2xl font-bold text-purple-700">{totalCarts}</p>
             </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <FaStore className="text-purple-600" />
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <FaStore className="text-purple-600" size={20} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search & Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+      {/* Filters & Search */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+        {/* Filter Buttons */}
+        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+          <FaFilter className="text-gray-400" size={14} />
+          <span className="text-sm font-medium text-gray-700 mr-2">Filter:</span>
+          <button
+            onClick={() => setFilterStatus("all")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              filterStatus === "all"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            All Franchises
+          </button>
+          <button
+            onClick={() => setFilterStatus("active")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              filterStatus === "active"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            Active Only
+          </button>
+          <button
+            onClick={() => setFilterStatus("inactive")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              filterStatus === "inactive"
+                ? "bg-rose-600 text-white shadow-sm"
+                : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+            }`}
+          >
+            Inactive Only
+          </button>
+        </div>
+        
+        {/* Search & View Toggle */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <FaSearch
@@ -1037,35 +1059,33 @@ const Franchises = () => {
             />
             <input
               type="text"
-              placeholder="Search by name or email..."
+              placeholder="Search by name, email, or code..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           {/* View Mode Toggle */}
           <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
             <button
               onClick={() => setViewMode("list")}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                 viewMode === "list"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-gray-600 hover:text-gray-800"
               }`}
-              title="List View"
             >
-              List
+              List View
             </button>
             <button
               onClick={() => setViewMode("tile")}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                 viewMode === "tile"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-gray-600 hover:text-gray-800"
               }`}
-              title="Tile View"
             >
-              Tile
+              Card View
             </button>
           </div>
         </div>
@@ -1173,43 +1193,43 @@ const Franchises = () => {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1 pt-2 border-t border-gray-100">
+                      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
                         <button
                           onClick={() => setViewDetails(franchise)}
-                          className="flex-1 px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="flex-1 px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
                           title="View Details"
                         >
-                          <FaEye size={12} className="inline mr-1" />
+                          <FaEye size={14} className="inline mr-1.5" />
                           View
                         </button>
                         <button
                           onClick={() => handleToggleStatus(franchise._id)}
-                          className={`px-2 py-1.5 text-xs rounded transition-colors ${
+                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                             isActive
-                              ? "text-green-600 hover:bg-green-50"
+                              ? "text-emerald-600 hover:bg-emerald-50"
                               : "text-gray-400 hover:bg-gray-100"
                           }`}
                           title={isActive ? "Deactivate" : "Activate"}
                         >
                           {isActive ? (
-                            <FaToggleOn size={14} />
+                            <FaToggleOn size={18} />
                           ) : (
-                            <FaToggleOff size={14} />
+                            <FaToggleOff size={18} />
                           )}
                         </button>
                         <button
                           onClick={() => handleEdit(franchise)}
-                          className="px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit"
                         >
-                          <FaEdit size={12} />
+                          <FaEdit size={14} />
                         </button>
                         <button
                           onClick={() => handleDelete(franchise._id)}
-                          className="px-2 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="px-3 py-2 text-sm text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Delete"
                         >
-                          <FaTrash size={12} />
+                          <FaTrash size={14} />
                         </button>
                       </div>
                     </div>
@@ -1233,8 +1253,8 @@ const Franchises = () => {
                   className={`${!isActive && "bg-gray-50"}`}
                 >
                   {/* Franchise Row */}
-                  <div className="p-2 sm:p-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-4 hover:bg-gray-50 transition-colors border-b last:border-b-0">
+                    <div className="flex items-center gap-3">
                       {/* Expand Button */}
                       <button
                         onClick={() => toggleFranchiseExpand(franchise._id)}
@@ -1333,42 +1353,42 @@ const Franchises = () => {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                           onClick={() => setViewDetails(franchise)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="View Details"
                         >
-                          <FaEye size={14} />
+                          <FaEye size={18} />
                         </button>
                         <button
                           onClick={() => handleToggleStatus(franchise._id)}
-                          className={`p-1.5 rounded transition-colors ${
+                          className={`p-2 rounded-lg transition-colors ${
                             isActive
-                              ? "text-green-500 hover:bg-green-50"
+                              ? "text-emerald-600 hover:bg-emerald-50"
                               : "text-gray-400 hover:bg-gray-100"
                           }`}
                           title={isActive ? "Deactivate" : "Activate"}
                         >
                           {isActive ? (
-                            <FaToggleOn size={16} />
+                            <FaToggleOn size={20} />
                           ) : (
-                            <FaToggleOff size={16} />
+                            <FaToggleOff size={20} />
                           )}
                         </button>
                         <button
                           onClick={() => handleEdit(franchise)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit"
                         >
-                          <FaEdit size={14} />
+                          <FaEdit size={18} />
                         </button>
                         <button
                           onClick={() => handleDelete(franchise._id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Delete"
                         >
-                          <FaTrash size={14} />
+                          <FaTrash size={18} />
                         </button>
                       </div>
                     </div>

@@ -123,6 +123,9 @@ const Dashboard = () => {
         setOrders(activeOrders);
         // Recalculate total revenue from active franchises only
         updateRevenue(activeOrders);
+
+        // Fetch dashboard data to update recent users and stats
+        fetchDashboardData();
       } catch (err) {
         // Silently fail polling - don't spam console
         if (import.meta.env.DEV) {

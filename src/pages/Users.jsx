@@ -69,6 +69,10 @@ const Users = () => {
   };
 
   useEffect(() => {
+    // Default to tile view on mobile/tablet for better responsiveness
+    if (window.innerWidth < 768) {
+      setViewMode("tile");
+    }
     fetchUsers();
     fetchFranchises();
   }, []);
@@ -258,16 +262,8 @@ const Users = () => {
       return;
     }
 
-    // Prevent deleting manager, cook, waiter, and captain roles
-    const protectedRoles = ["manager", "cook", "waiter", "captain"];
-    if (userToDelete && protectedRoles.includes(userToDelete.role)) {
-      alert(
-        `${getRoleLabel(
-          userToDelete.role
-        )} users cannot be deleted. Please deactivate them instead if needed.`
-      );
-      return;
-    }
+    // Role check removed to allow cleaning up orphaned users
+
 
     const userName = userToDelete?.name || "this user";
     const confirmed = await confirm(
@@ -618,10 +614,7 @@ const Users = () => {
                         )}
                       </button>
                     )}
-                    {user.role !== "super_admin" &&
-                      !["manager", "cook", "waiter", "captain"].includes(
-                        user.role
-                      ) && (
+                    {user.role !== "super_admin" && (
                         <button
                           onClick={(e) => handleDelete(e, user._id)}
                           className="px-2 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -766,12 +759,8 @@ const Users = () => {
                           >
                             <FaEdit className="text-sm sm:text-base" />
                           </button>
-                          {/* Hide delete button for protected roles: super_admin, manager, cook, waiter, captain */}
-                          {user.role !== "super_admin" &&
-                            user.role !== "manager" &&
-                            user.role !== "cook" &&
-                            user.role !== "waiter" &&
-                            user.role !== "captain" && (
+                          {/* Only hide delete for super_admin */}
+                          {user.role !== "super_admin" && (
                               <button
                                 type="button"
                                 onClick={(e) => handleDelete(e, user._id)}

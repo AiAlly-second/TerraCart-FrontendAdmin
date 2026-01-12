@@ -24,6 +24,8 @@ const AttendanceManagement = () => {
   const [attendance, setAttendance] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [carts, setCarts] = useState([]);
+  const [selectedCart, setSelectedCart] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [startDate, setStartDate] = useState(
@@ -51,6 +53,7 @@ const AttendanceManagement = () => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for dependencies to load
 
     fetchEmployees();
+    fetchCarts();
     fetchTodayAttendance();
 
     // Set up HTTP polling for real-time updates (replaces Socket.IO)
@@ -97,6 +100,23 @@ const AttendanceManagement = () => {
       setEmployees([]);
     }
   };
+
+  const fetchCarts = async () => {
+    if (!apiRef.current) return;
+    try {
+      const response = await apiRef.current.get("/users");
+      const allUsers = response.data || [];
+      
+      // Filter for cart admins (role: "admin")  
+      const cartAdmins = allUsers.filter((u) => u.role === "admin");
+      
+      setCarts(cartAdmins);
+    } catch (error) {
+      console.error("Error fetching carts:", error);
+      setCarts([]);
+    }
+  };
+
 
   const fetchTodayAttendance = async () => {
     if (!apiRef.current) return;

@@ -1,0 +1,108 @@
+// Sorting and Bulk Operations Functions for Franchises.jsx
+// Add these after the handleDelete function (around line 893)
+
+  // Sorting handler
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Toggle direction if clicking same field
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field with ascending direction
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Bulk selection handlers
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedFranchises(new Set());
+      setSelectAll(false);
+    } else {
+      const allIds = new Set(filteredFranchises.map(f => f._id));
+      setSelectedFranchises(allIds);
+      setSelectAll(true);
+    }
+  };
+
+  const handleSelectFranchise = (franchiseId) => {
+    const newSelected = new Set(selectedFranchises);
+    if (newSelected.has(franchiseId)) {
+      newSelected.delete(franchiseId);
+    } else {
+      newSelected.add(franchiseId);
+    }
+    setSelectedFranchises(newSelected);
+  };
+
+  // Bulk operations
+  const handleBulkActivate = async () => {
+    if (selectedFranchises.size === 0) {
+      alert("Please select franchises to activate");
+      return;
+    }
+
+    const confirmed = await confirm(
+      `Activate ${selectedFranchises.size} selected franchise(s)?`,
+      {
+        title: "Bulk Activate",
+        confirmText: "Activate",
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const promises = Array.from(selectedFranchises).map(id => {
+        const franchise = franchises.find(f => f._id === id);
+        if (franchise && franchise.isActive === false) {
+          return api.patch(`/users/${id}/toggle-status`);
+        }
+        return Promise.resolve();
+      });
+
+      await Promise.all(promises);
+      alert("Franchises activated successfully");
+      setSelectedFranchises(new Set());
+      setSelectAll(false);
+      fetchFranchises();
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to activate franchises");
+    }
+  };
+
+  const handleBulkDeactivate = async () => {
+    if (selectedFranchises.size === 0) {
+      alert("Please select franchises to deactivate");
+      return;
+    }
+
+    const confirmed = await confirm(
+      `Deactivate ${selectedFranchises.size} selected franchise(s)? All associated carts will also be deactivated.`,
+      {
+        title: "Bulk Deactivate",
+        confirmText: "Deactivate",
+        danger: true,
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const promises = Array.from(selectedFranchises).map(id => {
+        const franchise = franchises.find(f => f._id === id);
+        if (franchise && franchise.isActive !== false) {
+          return api.patch(`/users/${id}/toggle-status`);
+        }
+        return Promise.resolve();
+      });
+
+      await Promise.all(promises);
+      alert("Franchises deactivated successfully");
+      setSelectedFranchises(new Set());
+      setSelectAll(false);
+      fetchFranchises();
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to deactivate franchises");
+    }
+  };
