@@ -701,9 +701,12 @@ const Orders = () => {
           }`}
         >
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
+            <div className="font-mono text-[9px] text-gray-400 mb-1 select-all" title="Order ID">
+              {order._id}
+            </div>
             <button
               onClick={() => toggleExpand(order._id)}
-              className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 md:gap-2 w-full sm:w-auto"
+              className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 md:gap-2 w-full sm:w-auto text-left"
             >
               <span className="font-mono text-[9px] sm:text-[10px] md:text-xs text-gray-500 truncate">
                 {buildInvoiceId(order)}
@@ -1842,17 +1845,18 @@ const Orders = () => {
   }, []);
 
   return (
-    <div className="p-2 sm:p-3 md:p-4 lg:p-6">
-      <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+    <div className="p-4 md:p-6">
+      {/* Header Section */}
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 truncate">
+            <h1 className="text-2xl font-bold text-gray-900">
               {filterCafeId && cafeInfo
                 ? `Orders - ${cafeInfo.cafeName || cafeInfo.name}`
                 : "Orders"}
             </h1>
             {filterCafeId && (
-              <p className="text-[10px] sm:text-xs md:text-sm text-gray-600 mt-0.5 sm:mt-1 truncate">
+              <p className="text-sm text-gray-500 mt-1">
                 Filtered by specific cart
               </p>
             )}
@@ -1860,78 +1864,79 @@ const Orders = () => {
           {filterCafeId && (
             <button
               onClick={() => (window.location.href = "/orders")}
-              className="px-2 sm:px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-xs sm:text-sm whitespace-nowrap w-full sm:w-auto"
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm whitespace-nowrap"
             >
               View All Carts
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
+
+        {/* Search Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <input
             type="text"
-            placeholder="Order ID / token"
+            placeholder="Order ID / Token"
             value={searchOrderId}
             onChange={(e) => setSearchOrderId(e.target.value)}
-            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
+            className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <input
             type="text"
             placeholder="Table number"
             value={searchTable}
             onChange={(e) => setSearchTable(e.target.value)}
-            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
+            className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <input
             type="text"
             placeholder="Invoice ID"
             value={searchInvoice}
             onChange={(e) => setSearchInvoice(e.target.value)}
-            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
+            className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
+            className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             title="Filter by order date"
           />
           <button
             onClick={handleAdd}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1.5 sm:py-2 px-2 sm:px-3 md:px-4 rounded-lg shadow text-xs sm:text-sm md:text-base whitespace-nowrap w-full"
+            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 transition-colors"
           >
-            + Add Order
+            <span className="text-lg">+</span>
+            Add Order
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
-        {/* Clickable Status Summary Tiles to filter orders */}
-        {/* All tile */}
+      {/* Status Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        {/* All Dine-In tile */}
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-            filterStatus === "all" ? "ring-2 ring-blue-400" : ""
+          className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
+            filterStatus === "all" ? "border-blue-500 shadow-md" : "border-gray-200"
           }`}
         >
-          <div className="flex items-center justify-between gap-1 sm:gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
-                {orders.filter((o) => o.serviceType === "DINE_IN").length}
-              </div>
-              <div className="text-[10px] sm:text-xs md:text-sm truncate">
-                All Dine-In
-              </div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-3xl font-bold text-gray-900">
+              {orders.filter((o) => o.serviceType === "DINE_IN").length}
             </div>
-            <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-xl">
               📦
             </div>
+          </div>
+          <div className="text-sm text-gray-600 font-medium">
+            All Dine-In
           </div>
         </button>
 
         {Object.entries(
           orders
-            .filter((order) => order.serviceType === "DINE_IN") // Only count DINE_IN orders in status summary
+            .filter((order) => order.serviceType === "DINE_IN")
             .reduce((acc, order) => {
               acc[order.status] = (acc[order.status] || 0) + 1;
               return acc;
@@ -1941,24 +1946,20 @@ const Orders = () => {
             type="button"
             key={status}
             onClick={() => setFilterStatus(status)}
-            className={`p-2 sm:p-3 md:p-4 rounded-lg border ${getStatusClass(
-              status
-            )} shadow-sm text-left transition outline-none hover:shadow-md ${
-              filterStatus === status ? "ring-2 ring-blue-400" : ""
-            }`}
+            className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
+              filterStatus === status ? "border-blue-500 shadow-md" : "border-gray-200"
+            } ${getStatusClass(status)}`}
           >
-            <div className="flex items-center justify-between gap-1 sm:gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
-                  {count}
-                </div>
-                <div className="text-[10px] sm:text-xs md:text-sm truncate">
-                  {status}
-                </div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl font-bold text-gray-900">
+                {count}
               </div>
-              <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-xl">
                 {getStatusIcon(status)}
               </div>
+            </div>
+            <div className="text-sm text-gray-600 font-medium">
+              {status}
             </div>
           </button>
         ))}

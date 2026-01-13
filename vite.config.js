@@ -56,17 +56,17 @@ export default defineConfig({
     proxy: {
       // Proxy Socket.IO requests to avoid CORS issues in development
       "/socket.io": {
-        target: "https://terracart-backendmain-2.onrender.com",
+        target: "http://localhost:5001",
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying
-        secure: true,
+        secure: false,
         rewrite: (path) => path, // Don't rewrite the path
       },
       // Proxy API requests
       "/api": {
-        target: "https://terracart-backendmain-2.onrender.com",
+        target: "http://localhost:5001",
         changeOrigin: true,
-        secure: true,
+        secure: false,
         rewrite: (path) => path,
       },
     },

@@ -31,6 +31,7 @@ const RevenueHistory = () => {
     startDate: "",
     endDate: "",
   });
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -94,98 +95,101 @@ const RevenueHistory = () => {
     return ((part / total) * 100).toFixed(1);
   };
 
-  const exportHistory = () => {
+  const exportHistory = async () => {
     try {
-      const workbook = XLSX.utils.book_new();
+      setExporting(true);
       const dateStr = new Date().toISOString().split("T")[0];
+      
+      // Fetch detailed data from new endpoint
+      // We export ALL data by default as requested, or we could pass date range filters from state if set
+      let url = '/revenue/export';
+      if (dateRange.startDate && dateRange.endDate) {
+        url += `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
+      }
+      
+      const response = await api.get(url);
+      const detailedData = response.data?.data || {};
+      const { orders = [], items = [] } = detailedData;
 
-      // Sheet 1: Summary/Overview
+      const workbook = XLSX.utils.book_new();
+
+      // Sheet 1: Summary/Overview (using current view data)
       const summaryData = [
-        ["REVENUE HISTORY REPORT"],
+        ["REVENUE HISTORY - DETAILED REPORT"],
         ["Generated At:", new Date().toLocaleString("en-IN")],
-        ["Period Type:", "Daily"],
-        [],
-        ["GLOBAL REVENUE SUMMARY"],
         ["Total Revenue", formatCurrency(currentRevenue?.totalRevenue || 0)],
-        ["Total Orders", currentRevenue?.totalOrders || 0],
+        ["Total Orders (Active)", currentRevenue?.totalOrders || 0],
         ["Active Franchises", currentRevenue?.franchiseRevenue?.length || 0],
         ["Active Carts", currentRevenue?.cartRevenue?.length || 0],
         [],
-        [
-          "Last Calculated:",
-          currentRevenue?.calculatedAt
-            ? new Date(currentRevenue.calculatedAt).toLocaleString("en-IN")
-            : "N/A",
-        ],
+        ["NOTE:", "This report includes detailed breakdowns of all paid orders and line items."],
       ];
 
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       summarySheet["!cols"] = [{ wch: 25 }, { wch: 30 }];
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
 
-      // Sheet 2: Franchise Revenue Breakdown
-      if (
-        currentRevenue?.franchiseRevenue &&
-        currentRevenue.franchiseRevenue.length > 0
-      ) {
-        const franchiseHeaders = [
-          "#",
-          "Franchise Name",
-          "Revenue",
-          "Orders",
-          "Carts",
-          "% of Total",
+      // Sheet 2: All Orders (Detailed)
+      if (orders.length > 0) {
+        const ordersSheet = XLSX.utils.json_to_sheet(orders);
+        ordersSheet["!cols"] = [
+           { wch: 22 }, // OrderID
+           { wch: 20 }, // InvoiceNo
+           { wch: 12 }, // Date
+           { wch: 10 }, // Time
+           { wch: 20 }, // Franchise
+           { wch: 20 }, // Cart
+           { wch: 12 }, // ServiceType
+           { wch: 12 }, // OrderType
+           { wch: 20 }, // CustomerName
+           { wch: 15 }, // Mobile
+           { wch: 15 }, // Payment
+           { wch: 10 }, // Subtotal
+           { wch: 10 }, // GST
+           { wch: 12 }, // Total
         ];
+        XLSX.utils.book_append_sheet(workbook, ordersSheet, "All Orders");
+      }
+
+      // Sheet 3: Line Items (Detailed)
+      if (items.length > 0) {
+        const itemsSheet = XLSX.utils.json_to_sheet(items);
+        itemsSheet["!cols"] = [
+           { wch: 22 }, // OrderID
+           { wch: 25 }, // ItemName
+           { wch: 10 }, // Quantity
+           { wch: 12 }, // UnitPrice
+           { wch: 12 }, // TotalPrice
+           { wch: 10 }, // IsReturned
+           { wch: 10 }, // IsTakeaway
+           { wch: 20 }, // Franchise
+           { wch: 20 }, // Cart
+        ];
+        XLSX.utils.book_append_sheet(workbook, itemsSheet, "Line Items");
+      }
+
+      // Sheet 4: Franchise Revenue Breakdown (Aggregated)
+      if (currentRevenue?.franchiseRevenue?.length > 0) {
+        const franchiseHeaders = ["#", "Franchise Name", "Revenue", "Orders", "Carts", "% of Total"];
         const franchiseRows = currentRevenue.franchiseRevenue
           .sort((a, b) => b.revenue - a.revenue)
           .map((franchise, index) => [
             index + 1,
             franchise.franchiseName || "Unknown",
             franchise.revenue || 0,
-            getCafesForFranchise(franchise.franchiseId).reduce(
-              (sum, c) => sum + (c.orderCount || 0),
-              0
-            ),
-            franchise.cartCount ||
-              getCafesForFranchise(franchise.franchiseId).length,
-            `${calculatePercentage(
-              franchise.revenue,
-              currentRevenue.totalRevenue
-            )}%`,
+            getCafesForFranchise(franchise.franchiseId).reduce((sum, c) => sum + (c.orderCount || 0), 0),
+            franchise.cartCount || getCafesForFranchise(franchise.franchiseId).length,
+            currentRevenue.totalRevenue ? ((franchise.revenue / currentRevenue.totalRevenue) * 100).toFixed(2) + "%" : "0%"
           ]);
-
-        const franchiseData = [franchiseHeaders, ...franchiseRows];
-        const franchiseSheet = XLSX.utils.aoa_to_sheet(franchiseData);
-
-        franchiseSheet["!cols"] = [
-          { wch: 5 }, // #
-          { wch: 30 }, // Franchise Name
-          { wch: 18 }, // Revenue
-          { wch: 10 }, // Orders
-          { wch: 10 }, // Carts
-          { wch: 12 }, // % of Total
-        ];
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          franchiseSheet,
-          "Franchise Revenue"
-        );
+        
+        const franchiseSheet = XLSX.utils.aoa_to_sheet([franchiseHeaders, ...franchiseRows]);
+        franchiseSheet["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(workbook, franchiseSheet, "Franchise Summary");
       }
 
-      // Sheet 3: Cart Revenue Breakdown
-      if (
-        currentRevenue?.cartRevenue &&
-        currentRevenue.cartRevenue.length > 0
-      ) {
-        const cartHeaders = [
-          "#",
-          "Cart Name",
-          "Franchise Name",
-          "Revenue",
-          "Orders",
-          "% of Total",
-        ];
+      // Sheet 5: Cart Revenue Breakdown (Aggregated)
+      if (currentRevenue?.cartRevenue?.length > 0) {
+        const cartHeaders = ["#", "Cart Name", "Franchise Name", "Revenue", "Orders", "% of Total"];
         const cartRows = currentRevenue.cartRevenue
           .sort((a, b) => b.revenue - a.revenue)
           .map((cart, index) => [
@@ -194,151 +198,22 @@ const RevenueHistory = () => {
             cart.franchiseName || "Unknown",
             cart.revenue || 0,
             cart.orderCount || 0,
-            `${calculatePercentage(
-              cart.revenue,
-              currentRevenue.totalRevenue
-            )}%`,
+             currentRevenue.totalRevenue ? ((cart.revenue / currentRevenue.totalRevenue) * 100).toFixed(2) + "%" : "0%"
           ]);
 
-        const cartData = [cartHeaders, ...cartRows];
-        const cartSheet = XLSX.utils.aoa_to_sheet(cartData);
-
-        cartSheet["!cols"] = [
-          { wch: 5 }, // #
-          { wch: 30 }, // Cart Name
-          { wch: 30 }, // Franchise Name
-          { wch: 18 }, // Revenue
-          { wch: 10 }, // Orders
-          { wch: 12 }, // % of Total
-        ];
-
-        XLSX.utils.book_append_sheet(workbook, cartSheet, "Cart Revenue");
-      }
-
-      // Sheet 4: Historical Data
-      if (history && history.length > 0) {
-        const historyHeaders = [
-          "Date",
-          "Total Revenue",
-          "Orders",
-          "Franchises",
-          "Carts",
-          "Avg Order Value",
-        ];
-        const historyRows = history.map((record) => {
-          const avgOrderValue =
-            record.totalOrders > 0
-              ? record.totalRevenue / record.totalOrders
-              : 0;
-          return [
-            new Date(record.date).toLocaleDateString("en-IN"),
-            record.totalRevenue || 0,
-            record.totalOrders || 0,
-            record.franchiseRevenue?.length || 0,
-            record.cartRevenue?.length || record.cafeRevenue?.length || 0,
-            avgOrderValue,
-          ];
-        });
-
-        const historyData = [historyHeaders, ...historyRows];
-        const historySheet = XLSX.utils.aoa_to_sheet(historyData);
-
-        historySheet["!cols"] = [
-          { wch: 15 }, // Date
-          { wch: 18 }, // Total Revenue
-          { wch: 10 }, // Orders
-          { wch: 12 }, // Franchises
-          { wch: 10 }, // Carts
-          { wch: 18 }, // Avg Order Value
-        ];
-
-        XLSX.utils.book_append_sheet(workbook, historySheet, "Historical Data");
-      }
-
-      // Sheet 5: Detailed Franchise-Cart Hierarchy
-      if (
-        currentRevenue?.franchiseRevenue &&
-        currentRevenue.franchiseRevenue.length > 0
-      ) {
-        const hierarchyHeaders = [
-          "Level",
-          "Type",
-          "Name",
-          "Parent Franchise",
-          "Orders",
-          "Revenue",
-          "% of Total",
-        ];
-        const hierarchyRows = [];
-
-        currentRevenue.franchiseRevenue
-          .sort((a, b) => b.revenue - a.revenue)
-          .forEach((franchise, fIndex) => {
-            const cafes = getCafesForFranchise(franchise.franchiseId);
-            const franchiseOrders = cafes.reduce(
-              (sum, c) => sum + (c.orderCount || 0),
-              0
-            );
-
-            // Add franchise row
-            hierarchyRows.push([
-              "Level 2",
-              "Franchise",
-              franchise.franchiseName || "Unknown",
-              "—",
-              franchiseOrders,
-              franchise.revenue || 0,
-              `${calculatePercentage(
-                franchise.revenue,
-                currentRevenue.totalRevenue
-              )}%`,
-            ]);
-
-            // Add cart rows under this franchise
-            cafes
-              .sort((a, b) => b.revenue - a.revenue)
-              .forEach((cafe, cIndex) => {
-                hierarchyRows.push([
-                  "Level 3",
-                  "Cart",
-                  cafe.cartName || cafe.cafeName || "Unknown",
-                  franchise.franchiseName || "Unknown",
-                  cafe.orderCount || 0,
-                  cafe.revenue || 0,
-                  `${calculatePercentage(
-                    cafe.revenue,
-                    currentRevenue.totalRevenue
-                  )}%`,
-                ]);
-              });
-          });
-
-        const hierarchyData = [hierarchyHeaders, ...hierarchyRows];
-        const hierarchySheet = XLSX.utils.aoa_to_sheet(hierarchyData);
-
-        hierarchySheet["!cols"] = [
-          { wch: 10 }, // Level
-          { wch: 12 }, // Type
-          { wch: 30 }, // Name
-          { wch: 30 }, // Parent Franchise
-          { wch: 10 }, // Orders
-          { wch: 18 }, // Revenue
-          { wch: 12 }, // % of Total
-        ];
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          hierarchySheet,
-          "Hierarchy View"
-        );
+        const cartSheet = XLSX.utils.aoa_to_sheet([cartHeaders, ...cartRows]);
+        cartSheet["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(workbook, cartSheet, "Cart Summary");
       }
 
       // Generate Excel file
-      const fileName = `revenue-history-daily-${dateStr}.xlsx`;
+      const fileName = `revenue-detailed-${dateStr}.xlsx`;
       XLSX.writeFile(workbook, fileName);
     } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      alert("Failed to export Excel file. Please try again.");
+      console.error("Error exporting detailed report:", error);
+      alert("Failed to export detailed report. Please try again.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -362,160 +237,166 @@ const RevenueHistory = () => {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#4a2e1f] flex items-center flex-wrap">
-            <FaChartLine className="mr-2 sm:mr-3 text-[#d86d2a] flex-shrink-0" />
-            <span className="break-words">Revenue History</span>
+    <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <FaChartLine className="text-[#d86d2a]" />
+            </div>
+            Revenue History
           </h1>
-          <p className="text-[#6b4423] mt-1 sm:mt-2 text-xs sm:text-sm md:text-base">
-            Hierarchical revenue tracking: Global → Franchise → Cart
+          <p className="text-gray-500 mt-1 text-sm">
+            Track global, franchise, and cart revenue performance over time
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:gap-3">
+        <div className="flex gap-3">
           <button
             onClick={fetchData}
-            className="flex items-center justify-center px-3 sm:px-4 py-2 text-sm sm:text-base bg-white text-[#4a2e1f] rounded-lg hover:bg-[#fef4ec] border border-[#e2c1ac] transition-colors shadow-sm whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm"
           >
-            <FaSync className="mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="hidden sm:inline">Refresh</span>
-            <span className="sm:hidden">Refresh</span>
+            <FaSync className={`text-gray-400 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </button>
           <button
             onClick={exportHistory}
-            className="flex items-center justify-center px-3 sm:px-4 py-2 text-sm sm:text-base bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors shadow-md whitespace-nowrap"
+            disabled={exporting}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#d86d2a] rounded-lg hover:bg-[#c75b1a] transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed`}
           >
-            <FaDownload className="mr-1 sm:mr-2 flex-shrink-0" />
-            <span className="hidden sm:inline">Export</span>
-            <span className="sm:hidden">Export</span>
+            {exporting ? <FaSpinner className="animate-spin" /> : <FaDownload />}
+            {exporting ? "Exporting..." : "Export In-Depth Report"}
           </button>
         </div>
       </div>
 
-      {/* Period Type Toggle */}
-      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex gap-2 sm:gap-3">
-            <button
-              onClick={() => setPeriodType("daily")}
-              className="px-3 sm:px-4 md:px-6 py-2 text-xs sm:text-sm md:text-base rounded-lg font-medium transition-colors bg-[#d86d2a] text-white shadow-md whitespace-nowrap"
-            >
-              Daily Revenue
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setViewMode("hierarchy")}
-              className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                viewMode === "hierarchy"
-                  ? "bg-[#4a2e1f] text-white shadow-md"
-                  : "bg-[#fef4ec] text-[#4a2e1f] hover:bg-[#f5e3d5] border border-[#e2c1ac]"
-              }`}
-            >
-              Hierarchy View
-            </button>
-            <button
-              onClick={() => setViewMode("table")}
-              className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                viewMode === "table"
-                  ? "bg-[#4a2e1f] text-white shadow-md"
-                  : "bg-[#fef4ec] text-[#4a2e1f] hover:bg-[#f5e3d5] border border-[#e2c1ac]"
-              }`}
-            >
-              Table View
-            </button>
-          </div>
+      {/* Control Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex p-1 bg-gray-100 rounded-lg">
+          <button
+            onClick={() => setPeriodType("daily")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              periodType === "daily"
+                ? "bg-white text-[#d86d2a] shadow-sm"
+                : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            Daily Revenue
+          </button>
+          {/* Add more period types here if needed in future */}
+        </div>
+        
+        <div className="flex items-center gap-2">
+           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">View Mode</span>
+           <div className="flex p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setViewMode("hierarchy")}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  viewMode === "hierarchy"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                <FaBuilding className="text-xs" /> Hierarchy
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  viewMode === "table"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                <FaChartBar className="text-xs" /> Table
+              </button>
+           </div>
         </div>
       </div>
 
-      {/* ==================== LEVEL 1: GLOBAL REVENUE ==================== */}
-      <div className="bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] rounded-xl shadow-lg border border-[#e2c1ac] p-4 md:p-6 text-white">
-        <div className="flex items-center mb-4">
-          <FaGlobe className="text-2xl md:text-3xl mr-3 opacity-90" />
-          <div>
-            <h2 className="text-lg md:text-xl font-bold">
-              LEVEL 1: GLOBAL REVENUE
-            </h2>
-            <p className="text-white/80 text-xs md:text-sm">
-              Total revenue across all active franchises
-            </p>
+      {/* Level 1: Global Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <FaGlobe className="text-6xl text-blue-500" />
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-6 mt-4 md:mt-6">
-          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
-              Total Revenue
-            </p>
-            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold break-words">
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Revenue</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {formatCurrency(currentRevenue?.totalRevenue)}
-            </p>
+            </h3>
           </div>
-          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
-              Total Orders
-            </p>
-            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
-              {currentRevenue?.totalOrders || 0}
-            </p>
-          </div>
-          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
-              Active Franchises
-            </p>
-            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
-              {currentRevenue?.franchiseRevenue?.length || 0}
-            </p>
-          </div>
-          <div className="bg-white/15 rounded-lg p-2 sm:p-3 md:p-4 backdrop-blur border border-white/20">
-            <p className="text-white/80 text-[10px] sm:text-xs md:text-sm mb-1 truncate">
-              Active Carts
-            </p>
-            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold">
-              {currentRevenue?.cartRevenue?.length || 0}
-            </p>
-          </div>
+          <p className="text-xs text-green-600 mt-2 flex items-center font-medium">
+             <FaArrowUp className="mr-1" /> Live Updates
+          </p>
         </div>
 
-        {/* Preserved Data Info */}
-        {currentRevenue?.preservedData?.deletedFranchiseOrdersCount > 0 && (
-          <div className="mt-4 bg-yellow-500/20 rounded-lg p-3 text-sm border border-yellow-400/30">
-            <p className="text-yellow-100">
-              ℹ️ {currentRevenue.preservedData.deletedFranchiseOrdersCount}{" "}
-              orders (
-              {formatCurrency(
-                currentRevenue.preservedData.deletedFranchiseRevenue
-              )}
-              ) from inactive/deleted franchises are preserved but excluded from
-              active revenue.
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <FaChartBar className="text-6xl text-purple-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Orders</p>
+          <div className="mt-2">
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">
+               {currentRevenue?.totalOrders || 0}
+            </h3>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Across all locations</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <FaBuilding className="text-6xl text-[#d86d2a]" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Franchises</p>
+          <div className="mt-2">
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">
+               {currentRevenue?.franchiseRevenue?.length || 0}
+            </h3>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Contributing revenue</p>
+        </div>
+
+         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <FaStore className="text-6xl text-teal-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Carts</p>
+          <div className="mt-2">
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">
+               {currentRevenue?.cartRevenue?.length || 0}
+            </h3>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Currently active</p>
+        </div>
+      </div>
+
+      {/* Preserved Data Notification */}
+      {currentRevenue?.preservedData?.deletedFranchiseOrdersCount > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3 text-sm text-amber-800">
+            <span className="text-lg">ℹ️</span>
+            <p>
+              <strong>Historical Data Note:</strong> {currentRevenue.preservedData.deletedFranchiseOrdersCount} orders 
+              ({formatCurrency(currentRevenue.preservedData.deletedFranchiseRevenue)}) are from franchises/carts that are no longer active, but are preserved here for accurate totals.
             </p>
           </div>
-        )}
-
-        <p className="text-white/70 text-xs mt-4">
-          Last calculated:{" "}
-          {currentRevenue?.calculatedAt
-            ? new Date(currentRevenue.calculatedAt).toLocaleString("en-IN")
-            : "N/A"}
-        </p>
+      )}
+      
+      <div className="text-xs text-right text-gray-400 -mt-2">
+          Calculated: {currentRevenue?.calculatedAt ? new Date(currentRevenue.calculatedAt).toLocaleString("en-IN") : "N/A"}
       </div>
 
       {/* ==================== TABLE VIEW ==================== */}
       {viewMode === "table" && (
         <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] overflow-hidden">
-          <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-4 text-white">
-            <div className="flex items-center">
-              <FaChartBar className="text-xl md:text-2xl mr-3 opacity-90" />
-              <div>
-                <h2 className="text-base md:text-lg font-bold">
-                  COMPLETE REVENUE TABLE
-                </h2>
-                <p className="text-white/80 text-xs md:text-sm">
-                  All franchises and carts in table format
-                </p>
-              </div>
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-2">
+               <div className="p-1.5 bg-purple-100 rounded-md">
+                 <FaChartBar className="text-purple-600" />
+               </div>
+               <div>
+                  <h2 className="text-lg font-bold text-gray-900">Complete Revenue Table</h2>
+                  <p className="text-xs text-gray-500">Detailed breakdown of all franchises and carts</p>
+               </div>
             </div>
           </div>
 
@@ -724,33 +605,29 @@ const RevenueHistory = () => {
       {/* ==================== LEVEL 2: FRANCHISE REVENUE (Hierarchy View) ==================== */}
       {viewMode === "hierarchy" && (
         <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] overflow-hidden">
-          <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-4 text-white">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="flex items-center">
-                <FaBuilding className="text-xl md:text-2xl mr-3 opacity-90" />
-                <div>
-                  <h2 className="text-base md:text-lg font-bold">
-                    LEVEL 2: FRANCHISE REVENUE
-                  </h2>
-                  <p className="text-white/80 text-xs md:text-sm">
-                    Revenue breakdown by franchise
-                  </p>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-orange-100 rounded-md">
+                  <FaBuilding className="text-[#d86d2a]" />
                 </div>
-              </div>
-              <div className="flex gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Franchise Revenue Hierarchy</h2>
+                  <p className="text-xs text-gray-500">Interactive breakdown by franchise</p>
+                </div>
+            </div>
+            <div className="flex gap-2">
                 <button
                   onClick={expandAll}
-                  className="px-3 py-1 bg-white/20 rounded text-xs md:text-sm hover:bg-white/30 transition-colors border border-white/30"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm"
                 >
                   Expand All
                 </button>
                 <button
                   onClick={collapseAll}
-                  className="px-3 py-1 bg-white/20 rounded text-xs md:text-sm hover:bg-white/30 transition-colors border border-white/30"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm"
                 >
                   Collapse All
                 </button>
-              </div>
             </div>
           </div>
 
@@ -924,153 +801,94 @@ const RevenueHistory = () => {
       )}
 
       {/* ==================== HISTORICAL DATA TABLE ==================== */}
-      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] overflow-hidden">
-        <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-4 text-white">
-          <div className="flex items-center">
-            <FaCalendarAlt className="text-xl md:text-2xl mr-3 opacity-90" />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 rounded-md">
+               <FaCalendarAlt className="text-blue-600" />
+            </div>
             <div>
-              <h2 className="text-base md:text-lg font-bold">
-                HISTORICAL REVENUE DATA
-              </h2>
-              <p className="text-white/80 text-xs md:text-sm">
-                Daily revenue records (Last 30 entries)
-              </p>
+              <h2 className="text-lg font-bold text-gray-900">Historical Revenue Data</h2>
+              <p className="text-xs text-gray-500">Daily revenue records (Last 30 days)</p>
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <div className="inline-block min-w-full align-middle">
-            <table className="w-full min-w-[640px]">
-              <thead className="bg-[#fef4ec]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider">Total Revenue</th>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider">Orders</th>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider">Active Units</th>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider">Avg Order Value</th>
+                <th className="px-6 py-3 font-medium uppercase tracking-wider"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {history.length === 0 ? (
                 <tr>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Date
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Total Revenue
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Orders
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Franchises
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Carts
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Avg Order Value
-                  </th>
-                  <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-[#4a2e1f] uppercase tracking-wider whitespace-nowrap">
-                    Actions
-                  </th>
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-400 flex flex-col items-center">
+                    <FaChartBar className="text-4xl mb-3 opacity-20" />
+                    <p>No historical data available yet</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e2c1ac]">
-                {history.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan="7"
-                      className="px-6 py-12 text-center text-[#6b4423]"
-                    >
-                      <FaChartBar className="mx-auto text-4xl mb-4 opacity-50" />
-                      <p>No historical data available</p>
-                      <p className="text-sm mt-2">
-                        Click "Calculate Daily" to generate records
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  history.map((record, index) => {
-                    const avgOrderValue =
-                      record.totalOrders > 0
-                        ? record.totalRevenue / record.totalOrders
-                        : 0;
-                    const prevRecord = history[index + 1];
-                    const revenueChange = prevRecord
-                      ? (
-                          ((record.totalRevenue - prevRecord.totalRevenue) /
-                            prevRecord.totalRevenue) *
-                          100
-                        ).toFixed(1)
-                      : null;
+              ) : (
+                history.map((record, index) => {
+                  const avgOrderValue = record.totalOrders > 0
+                    ? record.totalRevenue / record.totalOrders
+                    : 0;
+                  const prevRecord = history[index + 1];
+                  const revenueChange = prevRecord
+                    ? (((record.totalRevenue - prevRecord.totalRevenue) / prevRecord.totalRevenue) * 100).toFixed(1)
+                    : null;
 
-                    return (
-                      <tr
-                        key={record._id}
-                        className="hover:bg-[#fef4ec] transition-colors"
-                      >
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <FaCalendarAlt className="mr-1 sm:mr-2 text-[#6b4423] text-xs sm:text-sm flex-shrink-0" />
-                            <span className="text-xs sm:text-sm font-medium text-[#4a2e1f]">
-                              {new Date(record.date).toLocaleDateString(
-                                "en-IN",
-                                {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                }
-                              )}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                            <span className="text-xs sm:text-sm font-bold text-[#4a2e1f]">
-                              {formatCurrency(record.totalRevenue)}
-                            </span>
+                  return (
+                    <tr key={record._id} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">
+                        {new Date(record.date).toLocaleDateString("en-IN", {
+                          year: "numeric", month: "short", day: "numeric"
+                        })}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                            <span className="font-bold text-gray-900">{formatCurrency(record.totalRevenue)}</span>
                             {revenueChange !== null && (
-                              <span
-                                className={`text-[10px] sm:text-xs flex items-center whitespace-nowrap ${
-                                  parseFloat(revenueChange) >= 0
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                {parseFloat(revenueChange) >= 0 ? (
-                                  <FaArrowUp className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />
-                                ) : (
-                                  <FaArrowDown className="mr-0.5 sm:mr-1 text-[10px] sm:text-xs" />
-                                )}
+                              <span className={`text-xs flex items-center ${parseFloat(revenueChange) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                {parseFloat(revenueChange) >= 0 ? <FaArrowUp className="mr-1 text-[10px]" /> : <FaArrowDown className="mr-1 text-[10px]" />}
                                 {Math.abs(parseFloat(revenueChange))}%
                               </span>
                             )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                        {record.totalOrders || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <span title="Franchises" className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold">{record.franchiseRevenue?.length || 0} F</span>
+                            <span className="text-gray-300">|</span>
+                            <span title="Carts" className="px-2 py-0.5 rounded bg-gray-100 text-xs font-semibold">{record.cartRevenue?.length || record.cafeRevenue?.length || 0} C</span>
                           </div>
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
-                          {record.totalOrders || 0}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
-                          {record.franchiseRevenue?.length || 0}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
-                          {record.cartRevenue?.length ||
-                            record.cafeRevenue?.length ||
-                            0}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-[#4a2e1f]">
-                          {formatCurrency(avgOrderValue)}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              console.log("Selected period data:", record);
-                              setSelectedPeriod(record);
-                            }}
-                            className="text-[#d86d2a] hover:text-[#c75b1a] text-xs sm:text-sm font-medium hover:underline whitespace-nowrap"
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                        {formatCurrency(avgOrderValue)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => setSelectedPeriod(record)}
+                          className="text-[#d86d2a] hover:text-[#c75b1a] text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#d86d2a]/30 hover:bg-[#d86d2a]/5 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          View Report
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
