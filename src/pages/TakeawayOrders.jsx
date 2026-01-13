@@ -1361,7 +1361,7 @@ const TakeawayOrders = () => {
               <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                 Date & Time
               </th>
-              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">
                 Table / Customer
               </th>
               <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
@@ -1403,9 +1403,12 @@ const TakeawayOrders = () => {
                     }`}
                   >
                     <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
+                      <div className="font-mono text-[9px] text-gray-400 mb-1 select-all" title="Order ID">
+                        {order._id}
+                      </div>
                       <button
                         onClick={() => toggleExpand(order._id)}
-                        className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 md:gap-2 w-full sm:w-auto"
+                        className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 md:gap-2 w-full sm:w-auto text-left"
                       >
                         <span className="font-mono text-[9px] sm:text-[10px] md:text-xs text-gray-500 truncate">
                           {buildInvoiceId(order)}
@@ -1413,6 +1416,12 @@ const TakeawayOrders = () => {
                         <span className="text-gray-900 font-medium text-[10px] sm:text-xs md:text-sm">
                           {formattedTime}
                         </span>
+                        {/* Mobile-only customer name */}
+                        {order.customerName && (
+                          <span className="sm:hidden text-[10px] text-blue-600 font-medium truncate block max-w-[100px]">
+                            {order.customerName}
+                          </span>
+                        )}
                       </button>
                       {expanded[order._id] && (
                         <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
@@ -1557,7 +1566,7 @@ const TakeawayOrders = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3">
+                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 hidden sm:table-cell">
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                           <span className="text-lg sm:text-xl md:text-2xl flex-shrink-0">

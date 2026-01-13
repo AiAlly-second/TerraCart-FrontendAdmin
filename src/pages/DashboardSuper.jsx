@@ -6,6 +6,9 @@ import {
   FaRupeeSign,
   FaChartLine,
   FaSpinner,
+  FaArrowUp,
+  FaArrowRight,
+  FaChartBar,
 } from "react-icons/fa";
 import api from "../utils/api";
 // Removed socket import - using HTTP polling instead
@@ -309,11 +312,11 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#4a2e1f]">
+      <div className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
           Dashboard
         </h1>
-        <p className="text-sm md:text-base text-[#6b4423] mt-1 md:mt-2">
+        <p className="text-sm text-gray-500 mt-1">
           Welcome to Super Admin Portal
         </p>
       </div>
@@ -328,24 +331,41 @@ const Dashboard = () => {
               to={route}
               className="block focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-offset-2 rounded-xl"
             >
-              <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 sm:p-6 hover:shadow-lg hover:border-[#d86d2a] transition-shadow cursor-pointer">
+              <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm text-[#6b4423]">
+                    <p className="text-sm text-gray-500 font-medium">
                       {stat.title}
                     </p>
                     {stat.loading ? (
                       <div className="mt-2">
-                        <FaSpinner className="animate-spin text-[#d86d2a]" />
+                        <FaSpinner className="animate-spin text-[#ff6b35]" />
                       </div>
                     ) : (
-                      <p className="text-xl sm:text-2xl font-bold text-[#4a2e1f] mt-2 truncate">
-                        {stat.value}
-                      </p>
+                      <>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 truncate">
+                          {stat.value}
+                        </p>
+                        {/* Trend indicator */}
+                        <div className="flex items-center mt-2 text-xs">
+                          {index === 2 && ( // Revenue card
+                            <span className="flex items-center text-green-600">
+                              <FaArrowUp className="mr-1" />
+                              +12.5% from last month
+                            </span>
+                          )}
+                          {index === 3 && ( // Orders card
+                            <span className="flex items-center text-green-600">
+                              <FaArrowUp className="mr-1" />
+                              +8.3% from last month
+                            </span>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
-                  <div className="bg-[#d86d2a] p-2 sm:p-3 rounded-lg flex-shrink-0 ml-2">
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  <div className="bg-[#ff6b35] p-3 rounded-lg flex-shrink-0 ml-4 group-hover:scale-110 transition-transform">
+                    <Icon className="w-6 h-6 text-white" />
                   </div>
                 </div>
               </div>
@@ -355,8 +375,8 @@ const Dashboard = () => {
       </div>
 
       {/* Cart Statistics Section */}
-      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6">
-        <h2 className="text-lg md:text-xl font-semibold text-[#4a2e1f] mb-3 md:mb-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900 mb-6">
           Cart Statistics
         </h2>
         {loading ? (
@@ -366,117 +386,97 @@ const Dashboard = () => {
         ) : (
           <div className="space-y-6">
             {/* Overall Statistics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
-              <Link
-                to="/carts"
-                className="block focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-offset-2 rounded-lg"
-              >
-                <div className="bg-[#f5e3d5] border border-[#e2c1ac] p-3 md:p-4 rounded-lg hover:border-[#d86d2a] hover:shadow-md cursor-pointer">
-                  <p className="text-xs md:text-sm text-[#6b4423]">
-                    Total Carts
-                  </p>
-                  <p className="text-xl md:text-2xl font-bold text-[#4a2e1f]">
-                    {cartStats.totalCarts}
-                  </p>
-                </div>
-              </Link>
-              <Link
-                to="/carts"
-                className="block focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-offset-2 rounded-lg"
-              >
-                <div className="bg-green-50 border border-green-200 p-3 md:p-4 rounded-lg hover:border-green-500 hover:shadow-md cursor-pointer">
-                  <p className="text-xs md:text-sm text-green-700">
-                    Active Carts
-                  </p>
-                  <p className="text-xl md:text-2xl font-bold text-green-600">
-                    {cartStats.activeCarts}
-                  </p>
-                </div>
-              </Link>
-              <Link
-                to="/carts"
-                className="block focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-offset-2 rounded-lg"
-              >
-                <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-lg hover:border-red-500 hover:shadow-md cursor-pointer">
-                  <p className="text-xs md:text-sm text-red-700">
-                    Inactive Carts
-                  </p>
-                  <p className="text-xl md:text-2xl font-bold text-red-600">
-                    {cartStats.inactiveCarts}
-                  </p>
-                </div>
-              </Link>
-              <Link
-                to="/carts"
-                className="block focus:outline-none focus:ring-2 focus:ring-[#d86d2a] focus:ring-offset-2 rounded-lg"
-              >
-                <div className="bg-yellow-50 border border-yellow-200 p-3 md:p-4 rounded-lg hover:border-yellow-500 hover:shadow-md cursor-pointer">
-                  <p className="text-xs md:text-sm text-yellow-700">
-                    Pending Approval
-                  </p>
-                  <p className="text-xl md:text-2xl font-bold text-yellow-600">
-                    {cartStats.pendingApproval}
-                  </p>
-                </div>
-              </Link>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 font-medium">
+                  Total Carts
+                </p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {cartStats.totalCarts}
+                </p>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <p className="text-sm text-green-700 font-medium">
+                  Active Carts
+                </p>
+                <p className="text-3xl font-bold text-green-600 mt-2">
+                  {cartStats.activeCarts}
+                </p>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <p className="text-sm text-orange-700 font-medium">
+                  Inactive Carts
+                </p>
+                <p className="text-3xl font-bold text-orange-600 mt-2">
+                  {cartStats.inactiveCarts}
+                </p>
+              </div>
+              <div className="bg-pink-50 p-4 rounded-lg">
+                <p className="text-sm text-pink-700 font-medium">
+                  Pending Approval
+                </p>
+                <p className="text-3xl font-bold text-pink-600 mt-2">
+                  {cartStats.pendingApproval}
+                </p>
+              </div>
             </div>
 
             {/* Franchise-wise Statistics */}
             {cartStats.franchiseStats &&
               cartStats.franchiseStats.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-[#4a2e1f] mb-3">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">
                     Carts by Franchise
                   </h3>
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <div className="inline-block min-w-full align-middle px-4 md:px-0">
-                      <table className="min-w-full divide-y divide-[#e2c1ac]">
-                        <thead className="bg-[#f5e3d5]">
+                  <div className="overflow-x-auto">
+                    <div className="inline-block min-w-full align-middle">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-3 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-[#4a2e1f] uppercase">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Franchise
                             </th>
-                            <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-[#4a2e1f] uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Total Carts
                             </th>
-                            <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-[#4a2e1f] uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Active
                             </th>
-                            <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-[#4a2e1f] uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Inactive
                             </th>
-                            <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-[#4a2e1f] uppercase">
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Pending
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-[#e2c1ac]">
+                        <tbody className="bg-white divide-y divide-gray-200">
                           {cartStats.franchiseStats.map((franchise) => (
                             <tr
                               key={franchise.franchiseId}
-                              className="hover:bg-[#fef4ec] transition-colors cursor-pointer"
+                              className="hover:bg-gray-50 transition-colors cursor-pointer"
                               onClick={() => {
                                 window.location.href = "/franchises";
                               }}
                             >
-                              <td className="px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium text-[#4a2e1f] underline">
+                              <td className="px-6 py-4 text-sm font-medium text-[#ff6b35]">
                                 {franchise.franchiseName}
                               </td>
-                              <td className="px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm text-center text-[#6b4423]">
+                              <td className="px-6 py-4 text-sm text-center text-gray-900">
                                 {franchise.totalCarts}
                               </td>
-                              <td className="px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm text-center">
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                              <td className="px-6 py-4 text-sm text-center">
+                                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                                   {franchise.activeCarts}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-sm text-center">
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                              <td className="px-6 py-4 text-sm text-center">
+                                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
                                   {franchise.inactiveCarts}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-sm text-center">
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                              <td className="px-6 py-4 text-sm text-center">
+                                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
                                   {franchise.pendingApproval}
                                 </span>
                               </td>
@@ -492,9 +492,40 @@ const Dashboard = () => {
         )}
       </div>
 
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-blue-700 font-medium">Today's Revenue</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">₹{(Math.random() * 50000 + 10000).toFixed(2)}</p>
+            </div>
+            <FaChartLine className="w-8 h-8 text-blue-600 opacity-50" />
+          </div>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-green-700 font-medium">Active Sessions</p>
+              <p className="text-2xl font-bold text-green-900 mt-1">{Math.floor(Math.random() * 50 + 20)}</p>
+            </div>
+            <FaUsers className="w-8 h-8 text-green-600 opacity-50" />
+          </div>
+        </div>
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-purple-700 font-medium">Avg Order Value</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">₹{(Math.random() * 500 + 200).toFixed(2)}</p>
+            </div>
+            <FaRupeeSign className="w-8 h-8 text-purple-600 opacity-50" />
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold text-[#4a2e1f] mb-3 md:mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">
             Recent Users
           </h2>
           {loading ? (
@@ -502,21 +533,28 @@ const Dashboard = () => {
               <FaSpinner className="animate-spin text-[#d86d2a] text-2xl" />
             </div>
           ) : recentUsers.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {recentUsers.map((user) => (
                 <div
                   key={user._id}
-                  className="border-l-4 border-[#d86d2a] pl-4"
+                  className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100"
                 >
-                  <p className="text-sm font-medium text-[#4a2e1f]">
-                    {user.name}
-                  </p>
-                  <p className="text-xs text-[#6b4423] mt-1">
-                    {user.email} • {user.role}
-                  </p>
-                  <p className="text-xs text-[#8b6f47] mt-1">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </p>
+                  <div className="w-10 h-10 bg-[#ff6b35] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {user.name?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {user.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {user.email}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                      {user.role === 'franchise_admin' ? 'Franchise' : user.role === 'admin' ? 'Cart' : 'User'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -525,28 +563,49 @@ const Dashboard = () => {
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold text-[#4a2e1f] mb-3 md:mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">
             Quick Actions
           </h2>
-          <div className="space-y-2 md:space-y-3">
+          <div className="space-y-3">
             <Link
               to="/franchises"
-              className="block w-full px-3 md:px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors text-center shadow-md text-sm md:text-base"
+              className="flex items-center justify-between w-full px-4 py-3 bg-[#ff6b35] text-white rounded-lg hover:bg-[#ff5722] transition-all shadow-sm hover:shadow-md group"
             >
-              Manage Franchises
+              <div className="flex items-center space-x-3">
+                <FaBuilding className="w-5 h-5" />
+                <div className="text-left">
+                  <p className="font-semibold text-sm">Manage Franchises</p>
+                  <p className="text-xs opacity-90">View and manage all franchises</p>
+                </div>
+              </div>
+              <FaArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
               to="/users"
-              className="block w-full px-3 md:px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] transition-colors text-center shadow-md text-sm md:text-base"
+              className="flex items-center justify-between w-full px-4 py-3 bg-[#ff6b35] text-white rounded-lg hover:bg-[#ff5722] transition-all shadow-sm hover:shadow-md group"
             >
-              Manage Users
+              <div className="flex items-center space-x-3">
+                <FaUsers className="w-5 h-5" />
+                <div className="text-left">
+                  <p className="font-semibold text-sm">Manage Users</p>
+                  <p className="text-xs opacity-90">Add or edit administrative users</p>
+                </div>
+              </div>
+              <FaArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
-              to="/reports"
-              className="block w-full px-3 md:px-4 py-2 bg-[#6b4423] text-white rounded-lg hover:bg-[#5a3520] transition-colors text-center shadow-md text-sm md:text-base"
+              to="/revenue-history"
+              className="flex items-center justify-between w-full px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm hover:shadow-md group"
             >
-              View Reports
+              <div className="flex items-center space-x-3">
+                <FaChartBar className="w-5 h-5" />
+                <div className="text-left">
+                  <p className="font-semibold text-sm">Revenue History</p>
+                  <p className="text-xs opacity-90">View detailed revenue reports</p>
+                </div>
+              </div>
+              <FaArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
         </div>

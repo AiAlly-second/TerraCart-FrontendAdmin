@@ -39,6 +39,42 @@ const AttendanceManagement = () => {
   const [currentTime, setCurrentTime] = useState(new Date()); // For real-time timer updates
   const pollingIntervalRef = useRef(null); // For HTTP polling interval
   const [processingAction, setProcessingAction] = useState(null); // Track which action is being processed
+  
+  // Use auth context
+  // We need to import useAuth dynamically or assume it's available via context if we can't import easily
+  // But wait, we can't easy dynamic import hooks.
+  // Let's assume passed via props or context.
+  // Since we can't change imports easily in this file without full re-write, we will try to use local state for role if possible or just rely on the API response structure.
+  // Actually, we can check localStorage for role as a fallback since we are in a component
+  
+  const [userRole, setUserRole] = useState("");
+  const [isMultiCartAdmin, setIsMultiCartAdmin] = useState(false);
+
+  useEffect(() => {
+    // Get user role from local storage or cached user object
+    try {
+        const superAdminUser = localStorage.getItem("superAdminUser");
+        if (superAdminUser) {
+            setUserRole("super_admin");
+            setIsMultiCartAdmin(true);
+            return;
+        }
+        const franchiseAdminUser = localStorage.getItem("franchiseAdminUser");
+        if (franchiseAdminUser) {
+            setUserRole("franchise_admin");
+            setIsMultiCartAdmin(true);
+            return;
+        }
+        const adminUser = localStorage.getItem("adminUser");
+        if (adminUser) {
+            setUserRole("admin");
+            setIsMultiCartAdmin(false);
+            return;
+        }
+    } catch (e) {
+        console.error("Error reading user role", e);
+    }
+  }, []);
 
   // Real-time timer that updates every second
   useEffect(() => {
@@ -1165,3 +1201,4 @@ End Break
 };
 
 export default AttendanceManagement;
+

@@ -257,6 +257,8 @@ const Invoices = () => {
   const [paymentsByOrder, setPaymentsByOrder] = useState({});
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(""); // Search query for Order ID
+
   const printRef = useRef(null);
 
   const selectedInvoiceItems = useMemo(
@@ -343,6 +345,17 @@ const Invoices = () => {
     }
   }, [selected, loadFranchiseAndCartData]);
 
+  const getInvoiceNumber = (order) => {
+    const date = new Date(order.createdAt || Date.now())
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
+    const tail = (order._id || "").toString().slice(-6).toUpperCase();
+    return `INV-${date}-${tail}`;
+  };
+
+  const getInvoiceNumberMemoized = useCallback(getInvoiceNumber, []);
+
   const paidOrders = useMemo(() => {
     let filtered = orders.filter(
       (o) => (o.status || "").toString().toLowerCase() === "paid"
@@ -357,8 +370,20 @@ const Invoices = () => {
       });
     }
 
+    // Filter by Search Query (Order ID or Invoice Number)
+    if (searchQuery) {
+      const query = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter((o) => {
+        const idMatch = (o._id || "").toString().toLowerCase().includes(query);
+        const invoiceNum = getInvoiceNumber(o).toLowerCase();
+        const invoiceMatch = invoiceNum.includes(query);
+        return idMatch || invoiceMatch;
+      });
+    }
+
     return filtered;
-  }, [orders, filterDate]);
+  }, [orders, filterDate, searchQuery]);
+
   const selectedPayments = useMemo(
     () => (selected ? paymentsByOrder[selected._id] || [] : []),
     [selected, paymentsByOrder]
@@ -371,15 +396,6 @@ const Invoices = () => {
     const paid = selectedPayments.find((p) => p.status === "PAID");
     return (paid || selectedPayments[0]).method || null;
   }, [selectedPayments]);
-
-  const getInvoiceNumber = (order) => {
-    const date = new Date(order.createdAt || Date.now())
-      .toISOString()
-      .slice(0, 10)
-      .replace(/-/g, "");
-    const tail = (order._id || "").toString().slice(-6).toUpperCase();
-    return `INV-${date}-${tail}`;
-  };
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -504,6 +520,13 @@ const Invoices = () => {
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
+            placeholder="Search Order ID"
+          />
+          <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
@@ -536,7 +559,7 @@ const Invoices = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <div className="lg:col-span-1 space-y-2 sm:space-y-3">
             {paidOrders.length === 0 && (
-              <div className="text-sm text-gray-500">No paid orders yet.</div>
+              <div className="text-sm text-gray-500">No paid orders match your criteria.</div>
             )}
             {paidOrders.map((order) => (
               <button

@@ -105,7 +105,7 @@ function App() {
         <ConfirmProvider>
           <AlertInitializer />
           <ConfirmInitializer />
-          <div className="bg-[#f5e3d5] min-h-screen font-sans">
+          <div className="bg-white min-h-screen font-sans">
             {showLayout && (
               <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
             )}
@@ -113,12 +113,12 @@ function App() {
             <div
               className={
                 showLayout
-                  ? "flex flex-col min-h-screen transition-all duration-300 lg:ml-64 xl:ml-72"
+                  ? "flex flex-col min-h-screen transition-all duration-300 lg:ml-64"
                   : "flex flex-col min-h-screen"
               }
             >
               {showLayout && <Navbar onMenuToggle={toggleSidebar} />}
-              <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-6 xl:p-8 bg-[#fef4ec] overflow-x-hidden min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)]">
+              <main className="flex-1 p-4 md:p-6 bg-[#f8f9fa] overflow-x-hidden min-h-[calc(100vh-4rem)]">
                 <Routes>
                   <Route path="/" element={<Login />} />
                   <Route path="/login" element={<Login />} />

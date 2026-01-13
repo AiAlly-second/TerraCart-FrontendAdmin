@@ -354,8 +354,22 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      const storedUser = localStorage.getItem('superAdminUser');
-      const userData = storedUser ? JSON.parse(storedUser) : {};
+      
+      let storedUserStr = null;
+      let storageKey = null;
+
+      if (localStorage.getItem('superAdminUser')) {
+          storedUserStr = localStorage.getItem('superAdminUser');
+          storageKey = 'superAdminUser';
+      } else if (localStorage.getItem('franchiseAdminUser')) {
+          storedUserStr = localStorage.getItem('franchiseAdminUser');
+          storageKey = 'franchiseAdminUser';
+      } else if (localStorage.getItem('adminUser')) {
+          storedUserStr = localStorage.getItem('adminUser');
+          storageKey = 'adminUser';
+      }
+
+      const userData = storedUserStr ? JSON.parse(storedUserStr) : {};
       
       if (!userData._id) {
         setError('User ID is missing. Please log in again.');
@@ -370,7 +384,9 @@ const Settings = () => {
       
       // Update localStorage
       const updatedUser = { ...userData, name: profile.name, email: profile.email };
-      localStorage.setItem('superAdminUser', JSON.stringify(updatedUser));
+      if (storageKey) {
+          localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+      }
       
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
@@ -398,8 +414,19 @@ const Settings = () => {
     
     try {
       setSaving(true);
-      const storedUser = localStorage.getItem('superAdminUser');
-      const userData = storedUser ? JSON.parse(storedUser) : {};
+      
+      let storedUserStr = null;
+      // We don't need storageKey here since we don't update localStorage for password changes
+      // But we still need to find the user
+      if (localStorage.getItem('superAdminUser')) {
+          storedUserStr = localStorage.getItem('superAdminUser');
+      } else if (localStorage.getItem('franchiseAdminUser')) {
+          storedUserStr = localStorage.getItem('franchiseAdminUser');
+      } else if (localStorage.getItem('adminUser')) {
+          storedUserStr = localStorage.getItem('adminUser');
+      }
+      
+      const userData = storedUserStr ? JSON.parse(storedUserStr) : {};
       
       if (!userData._id) {
         setError('User ID is missing. Please log in again.');
