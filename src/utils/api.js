@@ -1,17 +1,88 @@
 import axios from "axios";
 import { alert } from "./alert";
 
+// Primary backend (AWS EC2)
+const PRIMARY_API_URL = import.meta.env.VITE_PRIMARY_API_URL || import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+
+// Fallback backend (Render.com)
+const FALLBACK_API_URL = import.meta.env.VITE_FALLBACK_API_URL || "";
+
 // Ensure URL has protocol (http:// or https://)
-const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-  // If URL doesn't start with http:// or https://, add http://
-  if (envUrl && !envUrl.match(/^https?:\/\//)) {
-    return `http://${envUrl}`;
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  if (url && !url.match(/^https?:\/\//)) {
+    return `http://${url}`;
   }
-  return envUrl;
+  return url;
 };
 
-const nodeApiBase = getApiUrl();
+const primaryUrl = normalizeUrl(PRIMARY_API_URL);
+const fallbackUrl = normalizeUrl(FALLBACK_API_URL);
+
+// Current active backend
+let activeBackend = primaryUrl;
+let usingFallback = false;
+
+// Health check function
+const checkBackendHealth = async (url) => {
+  if (!url) return false;
+  try {
+    const response = await axios.get(`${url}/api/health`, {
+      timeout: 3000,
+    });
+    return response.status === 200;
+  } catch (error) {
+    console.warn(`Backend health check failed for ${url}:`, error.message);
+    return false;
+  }
+};
+
+// Select best available backend
+const selectBackend = async () => {
+  // Try primary first
+  const primaryHealthy = await checkBackendHealth(primaryUrl);
+  
+  if (primaryHealthy) {
+    if (usingFallback) {
+      console.log('🔄 Switching back to PRIMARY backend (AWS):', primaryUrl);
+      usingFallback = false;
+    }
+    activeBackend = primaryUrl;
+    return primaryUrl;
+  }
+
+  // Try fallback if available
+  if (fallbackUrl) {
+    console.warn('⚠️ PRIMARY backend unavailable, trying FALLBACK...');
+    const fallbackHealthy = await checkBackendHealth(fallbackUrl);
+    
+    if (fallbackHealthy) {
+      console.log('✅ Using FALLBACK backend (Render):', fallbackUrl);
+      usingFallback = true;
+      activeBackend = fallbackUrl;
+      return fallbackUrl;
+    }
+  }
+
+  // Both failed - use primary anyway
+  console.error('❌ Both backends unavailable! Using primary as last resort.');
+  activeBackend = primaryUrl;
+  return primaryUrl;
+};
+
+// Initialize backend selection
+selectBackend();
+
+// Periodic health check every 30 seconds
+setInterval(async () => {
+  const newBackend = await selectBackend();
+  if (newBackend !== activeBackend) {
+    console.log(`🔄 Backend switched from ${activeBackend} to ${newBackend}`);
+    activeBackend = newBackend;
+  }
+}, 30000);
+
+const nodeApiBase = activeBackend;
 
 // Check if connecting to Render.com (which can be slow to wake up)
 const isRenderBackend = nodeApiBase.includes("onrender.com");
