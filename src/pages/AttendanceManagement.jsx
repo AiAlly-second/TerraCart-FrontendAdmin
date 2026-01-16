@@ -29,10 +29,10 @@ const AttendanceManagement = () => {
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [startDate, setStartDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toLocaleDateString('en-CA') // Local YYYY-MM-DD
   );
   const [endDate, setEndDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toLocaleDateString('en-CA') // Local YYYY-MM-DD
   );
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'stats'
@@ -106,7 +106,7 @@ const AttendanceManagement = () => {
         pollingIntervalRef.current = null;
       }
     };
-  }, [activeTab, dependenciesLoaded]);
+  }, [activeTab, dependenciesLoaded, selectedCart]);
 
   useEffect(() => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for api to load
@@ -115,7 +115,7 @@ const AttendanceManagement = () => {
     } else if (activeTab === "stats") {
       fetchStats();
     }
-  }, [activeTab, selectedEmployee, startDate, endDate, dependenciesLoaded]);
+  }, [activeTab, selectedEmployee, startDate, endDate, dependenciesLoaded, selectedCart]);
 
   const fetchEmployees = async () => {
     if (!apiRef.current) return;
@@ -147,6 +147,9 @@ const AttendanceManagement = () => {
       const cartAdmins = allUsers.filter((u) => u.role === "admin");
       
       setCarts(cartAdmins);
+      
+      // If there's only one cart (or we are editing the existing list), maybe auto-select?
+      // But usually user selects manually.
     } catch (error) {
       console.error("Error fetching carts:", error);
       setCarts([]);
@@ -158,7 +161,10 @@ const AttendanceManagement = () => {
     if (!apiRef.current) return;
     try {
       setLoading(true);
-      const response = await apiRef.current.get("/attendance/today");
+      const params = {};
+      if (selectedCart) params.cartId = selectedCart;
+      
+      const response = await apiRef.current.get("/attendance/today", { params });
       // Ensure todayAttendance is always an array
       let attendanceData = [];
       if (Array.isArray(response.data)) {
@@ -193,6 +199,7 @@ const AttendanceManagement = () => {
       if (selectedEmployee) params.employeeId = selectedEmployee;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (selectedCart) params.cartId = selectedCart;
 
       const response = await apiRef.current.get("/attendance", { params });
       // Ensure attendance is always an array
@@ -222,6 +229,7 @@ const AttendanceManagement = () => {
       if (selectedEmployee) params.employeeId = selectedEmployee;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (selectedCart) params.cartId = selectedCart;
 
       const response = await apiRef.current.get("/attendance/stats", {
         params,
@@ -642,10 +650,33 @@ const AttendanceManagement = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
           Attendance Management
         </h1>
+        
+        {/* Cart Selector for Multi-Cart Admins */}
+        {isMultiCartAdmin && carts.length > 0 && (
+          <div className="w-full sm:w-64">
+             <select
+              value={selectedCart}
+              onChange={(e) => {
+                  setSelectedCart(e.target.value);
+                  // Refresh data when cart changes
+                  // We rely on the useEffect dependency or manual refresh
+                  // To be safe, we can manually trigger refresh logic via useEffect dependency on activeTab
+              }}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">All Carts</option>
+              {carts.map((cart) => (
+                <option key={cart._id} value={cart._id}>
+                  {cart.cartName || cart.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
