@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaCog, FaUser, FaBell, FaLock, FaSave, FaSpinner, FaCheck, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaCog, FaUser, FaBell, FaLock, FaSave, FaSpinner, FaCheck, FaEye, FaEyeSlash, FaPrint } from 'react-icons/fa';
 import api from '../utils/api';
 
 const Settings = () => {
@@ -57,6 +57,13 @@ const Settings = () => {
     },
   });
   const [fetchingLocation, setFetchingLocation] = useState(false);
+
+  // Printer Settings
+  const [printerSettings, setPrinterSettings] = useState({
+    ip: '192.168.1.151',
+    port: 9100,
+    enabled: true
+  });
 
   useEffect(() => {
     fetchUserData();
@@ -339,11 +346,59 @@ const Settings = () => {
           name: storedUser.name || '',
           email: storedUser.email || '',
         });
+        
+        // Fetch fresh data from API to get printer settings
+        if (storedUser._id) {
+            try {
+                const res = await api.get(`/users/${storedUser._id}`);
+                if (res.data) {
+                    const freshUser = res.data;
+                    if (freshUser.printerSettings) {
+                        setPrinterSettings({
+                            ip: freshUser.printerSettings.ip || '192.168.1.151',
+                            port: freshUser.printerSettings.port || 9100,
+                            enabled: freshUser.printerSettings.enabled !== false
+                        });
+                    }
+                }
+            } catch (apiErr) {
+                console.warn("Could not fetch fresh user data", apiErr);
+            }
+        }
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrinterSettingsUpdate = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    
+    try {
+      setSaving(true);
+      
+      let storedUserStr = localStorage.getItem('adminUser') || localStorage.getItem('franchiseAdminUser') || localStorage.getItem('superAdminUser');
+      const userData = storedUserStr ? JSON.parse(storedUserStr) : {};
+      
+      if (!userData._id) {
+        setError('User ID is missing. Please log in again.');
+        return;
+      }
+      
+      await api.put(`/users/${userData._id}`, {
+        printerSettings: printerSettings
+      });
+      
+      setSuccess('Printer settings saved successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update printer settings');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -457,6 +512,7 @@ const Settings = () => {
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'security', label: 'Security', icon: FaLock },
     { id: 'notifications', label: 'Notifications', icon: FaBell },
+    { id: 'printer', label: 'Printer Config', icon: FaPrint },
     ...(userRole === 'admin' || userRole === 'cart_admin' ? [{ id: 'cart', label: 'Cart Settings', icon: FaCog }] : []),
   ];
 
@@ -672,6 +728,73 @@ const Settings = () => {
                     </button>
                   </div>
                 </div>
+              )}
+
+              {/* Printer Settings Tab */}
+              {activeTab === 'printer' && (
+                <form onSubmit={handlePrinterSettingsUpdate} className="max-w-lg space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-800 mb-4">Local Printer Configuration</h2>
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> These settings are used by the <strong>Local Print Agent</strong> running on your PC. 
+                      You must run the Print Agent utility for this to work.
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-semibold text-gray-800">Enable Local Printing</h3>
+                      <p className="text-xs text-gray-600">Toggle printing to local IP</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={printerSettings.enabled}
+                        onChange={(e) => setPrinterSettings({ ...printerSettings, enabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    </label>
+                  </div>
+
+                  {printerSettings.enabled && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Printer IP Address</label>
+                        <input
+                          type="text"
+                          value={printerSettings.ip}
+                          onChange={(e) => setPrinterSettings({ ...printerSettings, ip: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                          placeholder="e.g. 192.168.1.151"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">The local IP address of your thermal printer</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Printer Port</label>
+                        <input
+                          type="number"
+                          value={printerSettings.port}
+                          onChange={(e) => setPrinterSettings({ ...printerSettings, port: parseInt(e.target.value) || 9100 })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                          placeholder="Default: 9100"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? <FaSpinner className="animate-spin" /> : <FaSave />}
+                      Save Printer Config
+                    </button>
+                  </div>
+                </form>
               )}
 
               {/* Cart Settings Tab - Only for Cart Admins */}

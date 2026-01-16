@@ -15,6 +15,7 @@ import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { withCancellation } from "../utils/requestManager";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
+import { printKOT } from "../utils/kotPrinter";
 
 // Helper: get API base URL with protocol ensured
 const getApiBaseUrl = () => {
@@ -560,6 +561,42 @@ const Orders = () => {
   const [draftServiceType, setDraftServiceType] = useState("DINE_IN");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
+  // Auto-print preference (default: true for best kitchen experience)
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
+    return localStorage.getItem("autoPrintKOT") !== "false";
+  });
+  
+  // Toggle auto-print
+  const toggleAutoPrint = () => {
+    setAutoPrintEnabled(prev => {
+      const newValue = !prev;
+      localStorage.setItem("autoPrintKOT", newValue);
+      return newValue;
+    });
+  };
+
+  // Helper to handle auto-printing for incoming orders
+  const handleAutoPrint = useCallback((order) => {
+    if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return;
+    
+    // For new orders (just created), print the last KOT (usually the only one, or index 0)
+    // Actually, backend appends new KOTs.
+    // If it's a "newOrder" event, we assume KOT index 0 (or all KOTs if it's a fresh order).
+    // If it's "orderUpdated", we check if a NEW KOT was added.
+    
+    // Simplified logic: Print the *latest* KOT if it exists.
+    // We need to be careful not to re-print old KOTs on page reload.
+    // But this function is only called on *socket events* which represent *new* actions.
+    const latestKotIndex = order.kotLines.length - 1;
+    if (latestKotIndex >= 0) {
+      const latestKot = order.kotLines[latestKotIndex];
+      // Check if this KOT has items
+      if (latestKot.items && latestKot.items.length > 0) {
+        console.log(`[AutoPrint] Printing KOT #${latestKotIndex + 1} for Order ${order._id}`);
+        printKOT(order, latestKot, latestKotIndex);
+      }
+    }
+  }, []);
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
     // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
     if (!incoming || incoming.serviceType !== "DINE_IN") {
@@ -892,8 +929,21 @@ const Orders = () => {
                         className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm"
                       >
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                          <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-800">
-                            KOT #{idx + 1}
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-800">
+                              KOT #{idx + 1}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                printKOT(order, kot, idx);
+                              }}
+                              className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
+                              title="Print KOT"
+                            >
+                              🖨️ Print KOT
+                            </button>
                           </div>
                           <div className="text-sm sm:text-base md:text-lg font-bold text-green-600">
                             ₹{(kot.totalAmount || kot.total || 0).toString()}
@@ -1061,6 +1111,10 @@ const Orders = () => {
       // Only add if it matches the filter (if any)
       if (!filterCafeId) {
         upsertOrder(order, { prepend: true });
+        // Auto-print new order if enabled
+        if (autoPrintEnabled) {
+          handleAutoPrint(order);
+        }
       } else {
         let orderCafeId = order.cafeId;
         if (orderCafeId && typeof orderCafeId === "object") {
@@ -1068,27 +1122,55 @@ const Orders = () => {
         }
         if (orderCafeId && orderCafeId.toString() === filterCafeId) {
           upsertOrder(order, { prepend: true });
+          
+          // Auto-print new order if enabled
+          if (autoPrintEnabled) {
+            handleAutoPrint(order);
+          }
         }
       }
     });
 
     socket.on("orderUpdated", (updatedOrder) => {
-      // Only update if it matches the filter (if any)
-      if (!filterCafeId) {
-        upsertOrder(updatedOrder);
-      } else {
+      // Only process if matches filter
+      let matches = true;
+      if (filterCafeId) {
         let orderCafeId = updatedOrder.cafeId;
         if (orderCafeId && typeof orderCafeId === "object") {
           orderCafeId = orderCafeId._id || orderCafeId;
         }
-        if (orderCafeId && orderCafeId.toString() === filterCafeId) {
-          upsertOrder(updatedOrder);
-        } else {
-          // Remove if it no longer matches filter
-          setOrders((prev) =>
-            prev.filter((order) => order._id !== updatedOrder._id)
-          );
+        if (!orderCafeId || orderCafeId.toString() !== filterCafeId) {
+          matches = false;
         }
+      }
+
+      if (matches) {
+        // Check if KOT count increased compared to our current local state
+        // This prevents printing on status changes (like "Paying" -> "Paid")
+        // We only want to print when NEW ITEMS are added (which adds a new KOT line)
+        setOrders(prevOrders => {
+          const prevOrder = prevOrders.find(o => o._id === updatedOrder._id);
+          // If we have previous order data, check if kotLines length increased
+          if (autoPrintEnabled && prevOrder && updatedOrder.kotLines && prevOrder.kotLines) {
+            if (updatedOrder.kotLines.length > prevOrder.kotLines.length) {
+               // New KOT added!
+               handleAutoPrint(updatedOrder);
+            }
+          } else if (autoPrintEnabled && !prevOrder) {
+             // We didn't have this order before (maybe?), or just receiving it. 
+             // Safest not to print to avoid duplicates on refresh/re-connect, 
+             // unless we are sure it's a "AddItem" event. 
+             // But "newOrder" handles the first print.
+          }
+          return prevOrders; // We don't mutate state here, just reading properly for logic
+        });
+        
+        upsertOrder(updatedOrder);
+      } else {
+        // Remove if it no longer matches filter
+        setOrders((prev) =>
+          prev.filter((order) => order._id !== updatedOrder._id)
+        );
       }
     });
 
@@ -1101,7 +1183,7 @@ const Orders = () => {
       socket.off("orderUpdated");
       socket.off("orderDeleted");
     };
-  }, [upsertOrder, filterCafeId, user]);
+  }, [upsertOrder, filterCafeId, user, autoPrintEnabled, handleAutoPrint]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -1869,6 +1951,24 @@ const Orders = () => {
               View All Carts
             </button>
           )}
+
+          {/* Auto-print Toggle */}
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-2 rounded-lg border border-gray-300 shadow-sm">
+              <div className="relative">
+                <input 
+                  type="checkbox" 
+                  className="peer sr-only" 
+                  checked={autoPrintEnabled}
+                  onChange={toggleAutoPrint}
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </div>
+              <span className="text-sm font-medium text-gray-700">
+                {autoPrintEnabled ? '🖨️ Auto-Print ON' : '🖨️ Auto-Print OFF'}
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Search Filters */}

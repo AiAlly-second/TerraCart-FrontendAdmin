@@ -12,6 +12,7 @@ import {
   canReturn,
 } from "../domain/orderLogic";
 import api from "../utils/api";
+import { printKOT } from "../utils/kotPrinter";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 
@@ -523,6 +524,36 @@ const TakeawayOrders = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
 
+  // Auto-print preference (default: true)
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
+    return localStorage.getItem("autoPrintTakeawayKOT") !== "false";
+  });
+  
+  // Toggle auto-print
+  const toggleAutoPrint = () => {
+    setAutoPrintEnabled(prev => {
+      const newValue = !prev;
+      localStorage.setItem("autoPrintTakeawayKOT", newValue);
+      return newValue;
+    });
+  };
+
+  // Helper to handle auto-printing for incoming takeaway orders
+  const handleAutoPrint = useCallback((order) => {
+    if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return;
+    
+    // Print latest KOT
+    const latestKotIndex = order.kotLines.length - 1;
+    if (latestKotIndex >= 0) {
+      const latestKot = order.kotLines[latestKotIndex];
+      // Check if this KOT has items
+      if (latestKot.items && latestKot.items.length > 0) {
+         console.log(`[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`);
+         printKOT(order, latestKot, latestKotIndex);
+      }
+    }
+  }, []);
+
   const socketRef = React.useRef(null);
   const upsertOrder = React.useCallback(
     (incoming, { prepend = false } = {}) => {
@@ -698,6 +729,9 @@ const TakeawayOrders = () => {
         console.log("[TakeawayOrders] Socket: newOrder event received:", order);
       }
       upsertOrder(order, { prepend: true });
+      if (autoPrintEnabled) {
+        handleAutoPrint(order);
+      }
     };
 
     const handleOrderUpdated = (order) => {
@@ -708,6 +742,21 @@ const TakeawayOrders = () => {
         );
       }
       upsertOrder(order);
+      
+      // Auto-print updated orders (if new KOT added)
+      if (autoPrintEnabled) {
+         // Logic similar to Orders.jsx: check if new KOT added
+         // For takeaway, we usually don't have "tables", but updates are same.
+         setOrders(prevOrders => {
+           const prevOrder = prevOrders.find(o => o._id === order._id);
+           if (prevOrder && order.kotLines && prevOrder.kotLines) {
+             if (order.kotLines.length > prevOrder.kotLines.length) {
+                handleAutoPrint(order);
+             }
+           }
+           return prevOrders;
+         });
+      }
     };
 
     const handleOrderDeleted = ({ id }) => {
@@ -736,6 +785,9 @@ const TakeawayOrders = () => {
         );
       }
       upsertOrder(order, { prepend: true });
+      if (autoPrintEnabled) {
+        handleAutoPrint(order);
+      }
     };
 
     const handleOrderStatusUpdated = (order) => {
@@ -798,11 +850,12 @@ const TakeawayOrders = () => {
       socket.off("orderDeleted", handleOrderDeleted);
       socket.off("order:created", handleOrderCreated);
       socket.off("order:status:updated", handleOrderStatusUpdated);
+
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
     };
-  }, [loadMenu]); // Load once on mount
+  }, [upsertOrder, autoPrintEnabled, handleAutoPrint]);
 
   const getItemKey = (item) => item.id || item._id || item.name;
 
@@ -1780,8 +1833,21 @@ const TakeawayOrders = () => {
                                   className="bg-white p-4 rounded-lg border shadow-sm"
                                 >
                                   <div className="flex justify-between items-center mb-2">
-                                    <div className="text-lg font-semibold text-gray-800">
-                                      KOT #{idx + 1}
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-lg font-semibold text-gray-800">
+                                        KOT #{idx + 1}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          printKOT(order, kot, idx);
+                                        }}
+                                        className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
+                                        title="Print KOT"
+                                      >
+                                        🖨️ Print KOT
+                                      </button>
                                     </div>
                                     <div className="text-lg font-bold text-green-600">
                                       ₹
