@@ -16,7 +16,7 @@ const AttendanceManagement = () => {
         apiRef.current = apiModule.default;
         setDependenciesLoaded(true);
       } catch (error) {
-        console.error("Failed to load dependencies:", error);
+        console.error("Failed to load dependency:", error);
       }
     };
     loadDependencies();
