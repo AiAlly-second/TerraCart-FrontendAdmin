@@ -512,7 +512,7 @@ const Settings = () => {
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'security', label: 'Security', icon: FaLock },
     { id: 'notifications', label: 'Notifications', icon: FaBell },
-    { id: 'printer', label: 'Printer Config', icon: FaPrint },
+    ...(userRole !== 'franchise_admin' ? [{ id: 'printer', label: 'Printer Config', icon: FaPrint }] : []),
     ...(userRole === 'admin' || userRole === 'cart_admin' ? [{ id: 'cart', label: 'Cart Settings', icon: FaCog }] : []),
   ];
 

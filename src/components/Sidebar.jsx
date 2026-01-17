@@ -57,7 +57,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       };
 
       fetchMenuStats();
-      const interval = setInterval(fetchMenuStats, 30000);
+      const interval = setInterval(fetchMenuStats, 60000);
       return () => clearInterval(interval);
     } else {
       setMenuLoading(false);

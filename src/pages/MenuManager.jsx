@@ -518,6 +518,7 @@ const MenuManager = () => {
               )}
             </div>
 
+            {(userRole !== "admin" || editingCategoryId) && (
             <form
               onSubmit={handleCategorySubmit}
               className="space-y-3 border-t border-slate-200 pt-4"
@@ -629,6 +630,7 @@ const MenuManager = () => {
                 )}
               </div>
             </form>
+            )}
           </div>
 
           <div className="xl:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-6">
@@ -847,6 +849,7 @@ const MenuManager = () => {
                   )}
                 </div>
 
+                {(userRole !== "admin" || editingItemId) && (
                 <form
                   onSubmit={handleItemSubmit}
                   className="border border-slate-200 rounded-lg p-4 space-y-3"
@@ -1105,6 +1108,7 @@ const MenuManager = () => {
                     )}
                   </div>
                 </form>
+                )}
               </>
             )}
           </div>

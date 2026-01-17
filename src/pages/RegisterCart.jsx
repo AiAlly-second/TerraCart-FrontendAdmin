@@ -247,12 +247,10 @@ const RegisterCart = () => {
       if (phoneError) errors.phone = phoneError;
     }
 
-    // Validate GST number (optional but if provided, must be valid)
-    if (trimmedData.gstNumber) {
-      if (!validateGSTNumber(trimmedData.gstNumber)) {
-        errors.gstNumber =
-          "Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)";
-      }
+    // GST/FSSAI number validation - relaxed or switched to FSSAI
+    if (trimmedData.gstNumber && trimmedData.gstNumber.length !== 14) {
+       // Optional: validate FSSAI format (14 digits) if strictly needed.
+       // For now, accepting it as is, or you could add strict length check.
     }
 
     // Validate required documents
@@ -757,40 +755,40 @@ const RegisterCart = () => {
 
             <div>
               <label
-                htmlFor="gstNumber"
+                htmlFor="fssaiNumber"
                 className="block text-sm font-medium text-[#4a2e1f]"
               >
-                GST Number
+                FSSAI Number
               </label>
               <input
-                id="gstNumber"
-                name="gstNumber"
+                id="fssaiNumber"
+                name="fssaiNumber"
                 type="text"
-                value={formData.gstNumber}
+                value={formData.fssaiNumber || formData.gstNumber || ""}
                 onChange={(e) => {
-                  const value = e.target.value.toUpperCase();
-                  setFormData((prev) => ({ ...prev, gstNumber: value }));
-                  if (formErrors.gstNumber) {
-                    setFormErrors((prev) => ({ ...prev, gstNumber: "" }));
+                  const value = e.target.value;
+                  setFormData((prev) => ({ ...prev, fssaiNumber: value, gstNumber: value }));
+                  if (formErrors.fssaiNumber) {
+                    setFormErrors((prev) => ({ ...prev, fssaiNumber: "" }));
                   }
                   setError("");
                 }}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
-                  formErrors.gstNumber
+                  formErrors.fssaiNumber
                     ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                     : "border-[#e2c1ac] focus:ring-[#d86d2a] focus:border-[#d86d2a]"
                 }`}
-                placeholder="e.g., 29ABCDE1234F1Z5"
-                maxLength={15}
+                placeholder="e.g., 12345678901234"
+                maxLength={14}
               />
-              {formErrors.gstNumber && (
+              {formErrors.fssaiNumber && (
                 <p className="mt-1 text-sm text-red-600">
-                  {formErrors.gstNumber}
+                  {formErrors.fssaiNumber}
                 </p>
               )}
-              {!formErrors.gstNumber && (
+              {!formErrors.fssaiNumber && (
                 <p className="mt-1 text-xs text-[#6b4423]">
-                  Optional: 15-character GST number
+                  Optional: 14-digit FSSAI number
                 </p>
               )}
             </div>
