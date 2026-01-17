@@ -205,11 +205,12 @@ const Expenses = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = { ...formData, amount: parseFloat(formData.amount) || 0 };
       if (editingExpense) {
-        await updateExpense(editingExpense._id, formData);
+        await updateExpense(editingExpense._id, submitData);
         alert("Expense updated successfully!");
       } else {
-        await createExpense(formData);
+        await createExpense(submitData);
         alert("Expense created successfully!");
       }
       setModalOpen(false);
@@ -586,7 +587,7 @@ const Expenses = () => {
                     min="0"
                     step="0.01"
                     value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
                   />
                 </div>

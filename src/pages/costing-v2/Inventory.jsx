@@ -83,6 +83,7 @@ const Inventory = () => {
     try {
       await consumeInventory({
         ...formData,
+        qty: parseFloat(formData.qty) || 0,
         cartId: selectedOutlet,
       });
       alert("Inventory consumed successfully!");
@@ -110,7 +111,7 @@ const Inventory = () => {
     try {
       await returnToInventory({
         ingredientId: returnFormData.ingredientId,
-        qty: returnFormData.qty,
+        qty: parseFloat(returnFormData.qty) || 0,
         uom: returnFormData.uom,
         refType: "return",
         notes: returnFormData.notes || "Unused ingredients returned to inventory",
@@ -604,7 +605,7 @@ const Inventory = () => {
                     min="0"
                     step="0.01"
                     value={formData.qty || ""}
-                    onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   />
                 </div>
@@ -706,7 +707,7 @@ const Inventory = () => {
                     min="0"
                     step="0.01"
                     value={returnFormData.qty || ""}
-                    onChange={(e) => setReturnFormData({ ...returnFormData, qty: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setReturnFormData({ ...returnFormData, qty: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     placeholder="0.00"
                   />

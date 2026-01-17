@@ -1839,10 +1839,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${editingFranchise.udyamCertificate}`}
+                          href={
+                            editingFranchise.udyamCertificate?.startsWith("http")
+                              ? editingFranchise.udyamCertificate
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${editingFranchise.udyamCertificate}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -1889,10 +1893,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${editingFranchise.aadharCard}`}
+                          href={
+                            editingFranchise.aadharCard?.startsWith("http")
+                              ? editingFranchise.aadharCard
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${editingFranchise.aadharCard}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -1936,10 +1944,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${editingFranchise.panCard}`}
+                          href={
+                            editingFranchise.panCard?.startsWith("http")
+                              ? editingFranchise.panCard
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${editingFranchise.panCard}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -2774,10 +2786,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${cartExistingDocs.aadharCard}`}
+                          href={
+                            cartExistingDocs.aadharCard?.startsWith("http")
+                              ? cartExistingDocs.aadharCard
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${cartExistingDocs.aadharCard}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -2841,10 +2857,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${cartExistingDocs.panCard}`}
+                          href={
+                            cartExistingDocs.panCard?.startsWith("http")
+                              ? cartExistingDocs.panCard
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${cartExistingDocs.panCard}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -2905,10 +2925,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${cartExistingDocs.shopActLicense}`}
+                          href={
+                            cartExistingDocs.shopActLicense?.startsWith("http")
+                              ? cartExistingDocs.shopActLicense
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${cartExistingDocs.shopActLicense}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
@@ -2987,10 +3011,14 @@ const Franchises = () => {
                       <p className="text-xs text-gray-600 mb-1">
                         Current:{" "}
                         <a
-                          href={`${
-                            import.meta.env.VITE_NODE_API_URL ||
-                            "http://localhost:5001"
-                          }${cartExistingDocs.fssaiLicense}`}
+                          href={
+                            cartExistingDocs.fssaiLicense?.startsWith("http")
+                              ? cartExistingDocs.fssaiLicense
+                              : `${
+                                  import.meta.env.VITE_NODE_API_URL ||
+                                  "http://localhost:5001"
+                                }${cartExistingDocs.fssaiLicense}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"

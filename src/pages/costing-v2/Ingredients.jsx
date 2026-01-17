@@ -136,6 +136,8 @@ const Ingredients = () => {
       const validBaseUnit = getBaseUnitFromUom(formData.uom);
       const submitData = {
         ...formData,
+        reorderLevel: parseFloat(formData.reorderLevel) || 0,
+        shelfTimeDays: parseInt(formData.shelfTimeDays) || 0,
         baseUnit: validBaseUnit,
       };
 
@@ -918,7 +920,7 @@ const Ingredients = () => {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          reorderLevel: parseFloat(e.target.value) || 0,
+                          reorderLevel: e.target.value,
                         })
                       }
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
@@ -937,7 +939,7 @@ const Ingredients = () => {
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      shelfTimeDays: parseInt(e.target.value),
+                      shelfTimeDays: e.target.value,
                     })
                   }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
