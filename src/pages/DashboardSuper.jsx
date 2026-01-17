@@ -55,6 +55,12 @@ const Dashboard = () => {
     pendingApproval: 0,
     franchiseStats: [],
   });
+  
+  const [dailyStats, setDailyStats] = useState({
+    todayRevenue: 0,
+    avgOrderValue: 0,
+    activeCarts: 0
+  });
 
   const updateRevenue = (ordersData) => {
     // Super admin aggregates revenue from ACTIVE franchises only
@@ -236,7 +242,32 @@ const Dashboard = () => {
         // Store active orders for real-time updates
         setOrders(activeOrders);
         // Update revenue with active orders (for real-time updates)
+        // Update revenue with active orders (for real-time updates)
         updateRevenue(activeOrders);
+
+        // --- Calculate Daily Stats ---
+        const todayStr = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+        
+        const todayOrders = activeOrders.filter(order => {
+          if (!order.createdAt) return false;
+          const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+          return orderDate === todayStr && order.status === 'Paid';
+        });
+
+        const todayRev = todayOrders.reduce((sum, order) => {
+             if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
+             const orderTotal = order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
+             return sum + orderTotal;
+        }, 0);
+
+        const avgVal = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
+
+        setDailyStats(prev => ({
+            ...prev,
+            todayRevenue: todayRev,
+            avgOrderValue: avgVal
+        }));
+        // -----------------------------
       } catch (err) {
         console.error("Error fetching revenue data:", err);
         // Set revenue to 0 if there's an error
@@ -261,6 +292,10 @@ const Dashboard = () => {
         const cartStatsResponse = await api.get("/users/stats/carts");
         cartStatistics = cartStatsResponse.data || cartStatistics;
         setCartStats(cartStatistics);
+        setDailyStats(prev => ({
+            ...prev,
+            activeCarts: cartStatistics.activeCarts || 0
+        }));
       } catch (err) {
         console.error("Error fetching cart statistics:", err);
       }
@@ -498,7 +533,9 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-blue-700 font-medium">Today's Revenue</p>
-              <p className="text-2xl font-bold text-blue-900 mt-1">₹{(Math.random() * 50000 + 10000).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">
+                ₹{dailyStats.todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
             <FaChartLine className="w-8 h-8 text-blue-600 opacity-50" />
           </div>
@@ -506,17 +543,19 @@ const Dashboard = () => {
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-green-700 font-medium">Active Sessions</p>
-              <p className="text-2xl font-bold text-green-900 mt-1">{Math.floor(Math.random() * 50 + 20)}</p>
+              <p className="text-sm text-green-700 font-medium">Active Carts</p>
+              <p className="text-2xl font-bold text-green-900 mt-1">{dailyStats.activeCarts}</p>
             </div>
-            <FaUsers className="w-8 h-8 text-green-600 opacity-50" />
+            <FaBuilding className="w-8 h-8 text-green-600 opacity-50" />
           </div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-purple-700 font-medium">Avg Order Value</p>
-              <p className="text-2xl font-bold text-purple-900 mt-1">₹{(Math.random() * 500 + 200).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">
+                ₹{dailyStats.avgOrderValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
             <FaRupeeSign className="w-8 h-8 text-purple-600 opacity-50" />
           </div>

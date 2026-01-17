@@ -2001,13 +2001,15 @@ const Orders = () => {
             className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             title="Filter by order date"
           />
-          <button
-            onClick={handleAdd}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 transition-colors"
-          >
-            <span className="text-lg">+</span>
-            Add Order
-          </button>
+          {user?.role !== "franchise_admin" && (
+            <button
+              onClick={handleAdd}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 transition-colors"
+            >
+              <span className="text-lg">+</span>
+              Add Order
+            </button>
+          )}
         </div>
       </div>
 

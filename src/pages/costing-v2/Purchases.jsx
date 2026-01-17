@@ -397,7 +397,7 @@ const Purchases = () => {
                         step="0.01"
                         placeholder="Quantity"
                         value={item.qty === "" || item.qty === null || item.qty === undefined ? "" : item.qty}
-                        onChange={(e) => updateItem(index, "qty", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        onChange={(e) => updateItem(index, "qty", e.target.value)}
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"
                       />
                       <select
@@ -424,7 +424,7 @@ const Purchases = () => {
                           step="0.01"
                           placeholder="Unit Price"
                           value={item.unitPrice === "" || item.unitPrice === null || item.unitPrice === undefined ? "" : item.unitPrice}
-                          onChange={(e) => updateItem(index, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                          onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"
                         />
                         {formData.items.length > 1 && (

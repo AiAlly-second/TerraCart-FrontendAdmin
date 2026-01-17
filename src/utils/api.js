@@ -94,10 +94,9 @@ const timeout = isRenderBackend ? 120000 : 60000; // 120s for Render, 60s for ot
 const api = axios.create({
   baseURL: `${nodeApiBase.replace(/\/$/, "")}/api`,
   timeout: timeout,
-  // Add headers for better compatibility
-  headers: {
-    "Content-Type": "application/json",
-  },
+  // Don't set Content-Type here - let axios set it automatically based on the request data
+  // For JSON: axios will set "application/json"
+  // For FormData: axios will set "multipart/form-data" with boundary
 });
 
 // Get the appropriate token based on user role
@@ -180,6 +179,12 @@ api.interceptors.request.use(
       }
     }
 
+    // Don't override Content-Type for FormData - axios sets it automatically with boundary
+    if (config.data instanceof FormData) {
+      // Remove Content-Type if it was set, let axios handle it
+      delete config.headers['Content-Type'];
+    }
+
     // Log request for debugging (only in development)
     if (import.meta.env.DEV) {
       console.log(
@@ -188,6 +193,7 @@ api.interceptors.request.use(
           baseURL: config.baseURL,
           hasToken: !!config.headers.Authorization,
           tokenLength: token?.length || 0,
+          isFormData: config.data instanceof FormData,
         }
       );
     }

@@ -135,6 +135,8 @@ const Recipes = () => {
 
       const submitData = {
         ...formData,
+        yieldPercent: parseFloat(formData.yieldPercent) || 0,
+        portions: parseInt(formData.portions) || 1,
         ingredients: formData.ingredients.map((ing) => ({
           ...ing,
           qty:
@@ -636,7 +638,7 @@ const Recipes = () => {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        portions: parseInt(e.target.value),
+                        portions: e.target.value,
                       })
                     }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
@@ -655,7 +657,7 @@ const Recipes = () => {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        yieldPercent: parseFloat(e.target.value),
+                        yieldPercent: e.target.value,
                       })
                     }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
@@ -772,9 +774,7 @@ const Recipes = () => {
                           updateIngredient(
                             index,
                             "qty",
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value) || ""
+                            e.target.value
                           )
                         }
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"

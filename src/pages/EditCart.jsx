@@ -120,6 +120,7 @@ const EditCart = () => {
 
   const getDocumentUrl = (docPath) => {
     if (!docPath) return null;
+    if (docPath.startsWith("http")) return docPath;
     const nodeApiBase =
       import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
     const baseUrl = nodeApiBase.replace(/\/$/, "");

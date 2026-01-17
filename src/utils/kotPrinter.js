@@ -52,100 +52,215 @@ export const printKOT = (order, kot, kotIndex = 0) => {
             margin: 0 auto;
             background: #fff;
             color: #000;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.3;
           }
           .header {
             text-align: center;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
+            border-bottom: 3px double #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .header h1 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
           }
           .header h2 {
             margin: 0;
+            font-size: 11px;
+            font-weight: bold;
+            border: 2px solid #000;
+            padding: 4px;
+            display: inline-block;
+          }
+          .kot-number {
+            text-align: center;
             font-size: 16px;
             font-weight: bold;
+            margin: 8px 0;
+            padding: 6px;
+            background: #000;
+            color: #fff;
           }
-          .header p {
-            margin: 2px 0;
-            font-size: 12px;
+          .service-badge {
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            margin: 8px 0;
+            padding: 5px;
+            border: 2px dashed #000;
+          }
+          .service-badge.takeaway {
+            background: #f0f0f0;
           }
           .info {
-            margin-bottom: 10px;
-            font-size: 12px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 6px;
           }
-          .info div {
+          .info-row {
             display: flex;
             justify-content: space-between;
+            margin: 2px 0;
+          }
+          .info-label {
+            font-weight: bold;
+          }
+          .highlight-box {
+            border: 4px double #000;
+            padding: 8px;
+            margin: 8px 0;
+            text-align: center;
+            background: #f5f5f5;
+          }
+          .highlight-box .label {
+            font-size: 11px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 3px;
+          }
+          .highlight-box .value {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 2px;
+          }
+          .section-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 10px 0 6px 0;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 4px;
           }
           .items-table {
-            width: 100%;
+            width: 100%
+
+;
             border-collapse: collapse;
+            margin: 6px 0;
           }
           .items-table th {
             text-align: left;
-            border-bottom: 1px solid #000;
-            padding: 2px 0;
+            border-bottom: 2px solid #000;
+            padding: 4px 2px;
+            font-weight: bold;
+            font-size: 10px;
           }
           .items-table td {
             text-align: left;
-            padding: 4px 0;
+            padding: 6px 2px;
             vertical-align: top;
+            border-bottom: 1px dotted #ccc;
           }
           .qty {
-            width: 15%;
+            width: 20%;
             font-weight: bold;
+            font-size: 13px;
           }
           .item-name {
-            width: 85%;
+            width: 80%;
+            font-size: 12px;
+          }
+          .item-note {
+            font-size: 10px;
+            color: #333;
+            font-style: italic;
+            padding-left: 10px;
+            margin-top: 2px;
+          }
+          .summary {
+            border-top: 2px solid #000;
+            margin-top: 8px;
+            padding-top: 6px;
+            text-align: center;
+            font-weight: bold;
           }
           .footer {
-            border-top: 2px dashed #000;
+            border-top: 3px double #000;
             margin-top: 10px;
-            padding-top: 5px;
+            padding-top: 6px;
             text-align: center;
             font-style: italic;
+            font-size: 10px;
+          }
+          .footer .message {
+            font-weight: bold;
+            margin-bottom: 2px;
           }
           .badge {
-             font-weight: bold;
-             display: inline-block;
-             margin-left: 5px;
-          }
-          .takeaway {
-            color: #000; /* Black for thermal printers */
-            text-decoration: underline;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 5px;
+            padding: 2px 5px;
+            background: #000;
+            color: #fff;
+            font-size: 9px;
           }
         </style>
       </head>
       <body>
         <div class="header">
+          <h1>** TERRA CART **</h1>
           <h2>KITCHEN ORDER TICKET</h2>
-          <p>KOT #: ${kotIndex + 1}</p>
+        </div>
+
+        <div class="kot-number">
+          KOT #${String(kotIndex + 1).padStart(3, '0')}
+        </div>
+
+        <div class="service-badge ${order.serviceType === 'TAKEAWAY' ? 'takeaway' : ''}">
+          ${order.serviceType === 'TAKEAWAY' ? '*** TAKEAWAY ORDER ***' : '~~~ DINE-IN ORDER ~~~'}
         </div>
 
         <div class="info">
-          <div>
-            <span>Order ID:</span>
-            <span>${(order._id || "").toString().slice(-6).toUpperCase()}</span>
+          <div class="info-row">
+            <span class="info-label">Date:</span>
+            <span>${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
           </div>
-          <div>
-            <span>Table:</span>
-            <span>${order.tableNumber || "N/A"}</span>
+          <div class="info-row">
+            <span class="info-label">Time:</span>
+            <span>${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
           </div>
-           <div>
-            <span>Service:</span>
-            <span>${order.serviceType || "DINE_IN"}</span>
+          <div class="info-row">
+            <span class="info-label">Order Ref:</span>
+            <span>${(order._id || "").toString().slice(-8).toUpperCase()}</span>
           </div>
-          <div>
-            <span>Time:</span>
-            <span>${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+
+        ${order.serviceType === 'TAKEAWAY' && order.takeawayToken ? `
+        <div class="highlight-box">
+          <span class="label">TOKEN NUMBER</span>
+          <span class="value">${order.takeawayToken.toUpperCase()}</span>
+        </div>
+        ` : order.tableNumber ? `
+        <div class="highlight-box">
+          <span class="label">TABLE NUMBER</span>
+          <span class="value">${order.tableNumber}</span>
+        </div>
+        ` : ''}
+
+        ${order.serviceType === 'TAKEAWAY' && (order.customerName || order.customerMobile) ? `
+        <div class="info" style="border-top: 1px solid #000; padding-top: 6px;">
+          ${order.customerName ? `
+          <div class="info-row">
+            <span class="info-label">Customer:</span>
+            <span>${order.customerName}</span>
           </div>
-          ${order.serviceType === 'TAKEAWAY' && order.takeawayToken ? `
-          <div style="margin-top:4px; font-weight:bold; font-size:14px;">
-            <span>Token:</span>
-            <span>${order.takeawayToken}</span>
+          ` : ''}
+          ${order.customerMobile ? `
+          <div class="info-row">
+            <span class="info-label">Mobile:</span>
+            <span>${order.customerMobile}</span>
           </div>
           ` : ''}
         </div>
+        ` : ''}
+
+        <div class="section-title">ITEMS TO PREPARE</div>
 
         <table class="items-table">
           <thead>
@@ -156,14 +271,21 @@ export const printKOT = (order, kot, kotIndex = 0) => {
           </thead>
           <tbody>
             ${(kot.items || []).map(item => {
-              if (item.returned) return '';
+              if (item.returned) {
+                return `
+                <tr style="text-decoration: line-through; opacity: 0.6;">
+                  <td class="qty" colspan="2">✗ CANCELLED: ${item.name}</td>
+                </tr>
+                `;
+              }
               const isTakeaway = item.convertedToTakeaway === true;
               return `
               <tr>
-                <td class="qty">${item.quantity}</td>
+                <td class="qty">[${item.quantity}x]</td>
                 <td class="item-name">
-                  ${item.name}
-                  ${isTakeaway ? '<span class="badge takeaway">(TAKEAWAY)</span>' : ''}
+                  <strong>${item.name}</strong>
+                  ${isTakeaway ? '<span class="badge">TAKEAWAY</span>' : ''}
+                  ${item.specialInstructions ? `<div class="item-note">Note: ${item.specialInstructions}</div>` : ''}
                 </td>
               </tr>
               `;
@@ -171,8 +293,17 @@ export const printKOT = (order, kot, kotIndex = 0) => {
           </tbody>
         </table>
 
+        <div class="summary">
+          ${(() => {
+            const activeItems = (kot.items || []).filter(i => !i.returned);
+            const totalQty = activeItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            return `Total Items: ${activeItems.length} | Total Qty: ${totalQty}`;
+          })()}
+        </div>
+
         <div class="footer">
-          Terra Cart KOT
+          <div class="message">Prepare with care!</div>
+          <div>Terra Cart Kitchen</div>
         </div>
       </body>
     </html>
