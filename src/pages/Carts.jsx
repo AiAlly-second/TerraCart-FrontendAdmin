@@ -42,7 +42,7 @@ const Carts = () => {
       // Transform to cart format
       const cartsData = adminUsers.map((user) => ({
         id: user._id,
-        name: user.cartName || user.name || "Unnamed Cart",
+        name: user.cartName || user.name || "Unname Cart",
         managerName: user.name,
         email: user.email,
         location: user.location || "Not specified",
