@@ -106,8 +106,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
 
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
-  // Get franchise GST number
-  const franchiseGST = franchiseData?.gstNumber || "—";
+  // Get franchise FSSAI number (fallback to GST if available)
+  const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
   // Payment mode display (fallback to CASH if not available on order)
   const paymentMethod =
@@ -205,7 +205,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
         <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
@@ -337,9 +337,40 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
 const printOrderInvoice = async (order) => {
   if (!order) return;
 
-  // For takeaway orders in cart admin panel, avoid extra user lookups that can 403
-  // due to access-control on /users/:id. Use the order data only.
-  const html = buildInvoiceMarkup(order, null, null);
+  // Fetch franchise and cart data
+  let franchiseData = null;
+  let cartData = null;
+
+  try {
+    // Fetch franchise data if franchiseId exists
+    if (order.franchiseId) {
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      if (franchiseRes.data) {
+        franchiseData = {
+          gstNumber: franchiseRes.data.gstNumber || null,
+          fssaiNumber: franchiseRes.data.fssaiNumber || null,
+          name: franchiseRes.data.name || null,
+        };
+      }
+    }
+
+    // Fetch cart data if cartId exists
+    if (order.cartId) {
+      const cartRes = await api.get(`/users/${order.cartId}`);
+      if (cartRes.data) {
+        cartData = {
+          address: cartRes.data.address || cartRes.data.location || null,
+          cartName: cartRes.data.cartName || cartRes.data.name || null,
+        };
+      }
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.error("Failed to load franchise/cart data:", err);
+    }
+  }
+
+  const html = buildInvoiceMarkup(order, franchiseData, cartData);
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.right = "0";
@@ -421,6 +452,7 @@ const downloadOrderInvoice = async (order) => {
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
+          fssaiNumber: franchiseRes.data.fssaiNumber || null,
           name: franchiseRes.data.name || null,
         };
       }

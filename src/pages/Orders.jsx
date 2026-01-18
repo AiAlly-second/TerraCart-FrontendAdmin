@@ -137,8 +137,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
 
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
-  // Get franchise GST number
-  const franchiseGST = franchiseData?.gstNumber || "—";
+  // Get franchise FSSAI number (fallback to GST if available)
+  const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
   // Payment mode display (fallback to CASH if not available)
   const paymentMethod =
@@ -274,7 +274,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
         <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
@@ -341,6 +341,7 @@ const printOrderInvoice = async (order) => {
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
+          fssaiNumber: franchiseRes.data.fssaiNumber || null,
           name: franchiseRes.data.name || null,
         };
       }
@@ -445,6 +446,7 @@ const downloadOrderInvoice = async (order) => {
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
+          fssaiNumber: franchiseRes.data.fssaiNumber || null,
           name: franchiseRes.data.name || null,
         };
       }

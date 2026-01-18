@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   getFoodCostReport,
-  getMenuEngineeringReport,
   getSupplierPriceHistory,
   getPnLReport,
 } from "../../services/costingV2Api";
@@ -19,7 +18,7 @@ const Reports = () => {
     to: new Date().toISOString().split("T")[0],
   });
   const [foodCostData, setFoodCostData] = useState(null);
-  const [menuEngineeringData, setMenuEngineeringData] = useState([]);
+
   const [priceHistoryData, setPriceHistoryData] = useState([]);
   const [pnlData, setPnlData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -43,11 +42,7 @@ const Reports = () => {
           const foodCostRes = await getFoodCostReport(params);
           if (foodCostRes.data.success) setFoodCostData(foodCostRes.data.data);
           break;
-        case "menu-engineering":
-          const menuEngRes = await getMenuEngineeringReport(params);
-          if (menuEngRes.data.success)
-            setMenuEngineeringData(menuEngRes.data.data);
-          break;
+
         case "price-history":
           const priceRes = await getSupplierPriceHistory();
           if (priceRes.data.success) setPriceHistoryData(priceRes.data.data);
@@ -67,48 +62,157 @@ const Reports = () => {
     }
   };
 
-  const exportToCSV = (data, filename) => {
-    const ws = XLSX.utils.json_to_sheet(data);
+  const exportToExcel = () => {
+    const dateStr = new Date().toISOString().split("T")[0];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, `${filename}.csv`);
-  };
 
-  const exportToExcel = (data, filename, sheetName = "Sheet1") => {
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, `${filename}.xlsx`);
+    if (activeReport === "pnl" && pnlData) {
+      // ========== COMPREHENSIVE P&L EXPORT ==========
+      const pnlExportData = [];
+      
+      // Header
+      pnlExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      pnlExportData.push(["PROFIT & LOSS STATEMENT - DETAILED REPORT"]);
+      pnlExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      pnlExportData.push([""]);
+      pnlExportData.push(["Generated:", new Date().toLocaleString("en-IN")]);
+      pnlExportData.push(["Period:", `${dateRange.from} to ${dateRange.to}`]);
+      pnlExportData.push(["Outlet:", selectedOutlet || "All Outlets"]);
+      pnlExportData.push([""]);
+      
+      // Income Section
+      pnlExportData.push(["INCOME"]);
+      pnlExportData.push(["─────────────────────────────────────"]);
+      pnlExportData.push(["Total Sales", `₹${Number(pnlData.sales || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push([""]);
+      
+      // Expenses Section
+      pnlExportData.push(["EXPENSES"]);
+      pnlExportData.push(["─────────────────────────────────────"]);
+      pnlExportData.push(["Food Cost", `₹${Number(pnlData.costs?.foodCost || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push(["Labour Cost", `₹${Number(pnlData.costs?.labour || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push(["Overhead Cost", `₹${Number(pnlData.costs?.overhead || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push(["Total Expenses", `₹${Number(pnlData.costs?.total || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push([""]);
+      
+      // Net Profit Section
+      pnlExportData.push(["NET PROFIT"]);
+      pnlExportData.push(["─────────────────────────────────────"]);
+      pnlExportData.push(["Profit/Loss", `₹${Number(pnlData.profit || 0).toLocaleString("en-IN")}`]);
+      pnlExportData.push(["Profit Margin", `${Number(pnlData.profitMargin || 0).toFixed(2)}%`]);
+      pnlExportData.push([""]);
+      
+      // Percentages Breakdown
+      pnlExportData.push(["COST BREAKDOWN (% of Sales)"]);
+      pnlExportData.push(["─────────────────────────────────────"]);
+      pnlExportData.push(["Food Cost %", `${((pnlData.costs?.foodCost / pnlData.sales) * 100 || 0).toFixed(2)}%`]);
+      pnlExportData.push(["Labour Cost %", `${((pnlData.costs?.labour / pnlData.sales) * 100 || 0).toFixed(2)}%`]);
+      pnlExportData.push(["Overhead Cost %", `${((pnlData.costs?.overhead / pnlData.sales) * 100 || 0).toFixed(2)}%`]);
+      
+      const pnlSheet = XLSX.utils.aoa_to_sheet(pnlExportData);
+      pnlSheet["!cols"] = [{ wch: 30 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, pnlSheet, "P&L Statement");
+      
+      const fileName = `pnl-detailed-${dateRange.from}-to-${dateRange.to}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+    } else if (activeReport === "food-cost" && foodCostData) {
+      // ========== COMPREHENSIVE FOOD COST EXPORT ==========
+      const foodCostExportData = [];
+      
+      // Header
+      foodCostExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      foodCostExportData.push(["FOOD COST REPORT - DETAILED ANALYSIS"]);
+      foodCostExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      foodCostExportData.push([""]);
+      foodCostExportData.push(["Generated:", new Date().toLocaleString("en-IN")]);
+      foodCostExportData.push(["Period:", `${dateRange.from} to ${dateRange.to}`]);
+      foodCostExportData.push(["Outlet:", selectedOutlet || "All Outlets"]);
+      foodCostExportData.push([""]);
+      
+      // Summary
+      foodCostExportData.push(["SUMMARY"]);
+      foodCostExportData.push(["─────────────────────────────────────"]);
+      foodCostExportData.push(["Total Food Cost", `₹${Number(foodCostData.totalFoodCost || 0).toLocaleString("en-IN")}`]);
+      foodCostExportData.push(["Total Sales", `₹${Number(foodCostData.totalSales || 0).toLocaleString("en-IN")}`]);
+      foodCostExportData.push(["Food Cost Percentage", `${Number(foodCostData.foodCostPercent || 0).toFixed(2)}%`]);
+      foodCostExportData.push([""]);
+      
+      // Analysis
+      foodCostExportData.push(["ANALYSIS"]);
+      foodCostExportData.push(["─────────────────────────────────────"]);
+      foodCostExportData.push(["Target Food Cost %", "30%"]);
+      foodCostExportData.push(["Actual Food Cost %", `${Number(foodCostData.foodCostPercent || 0).toFixed(2)}%`]);
+      const variance = Number(foodCostData.foodCostPercent || 0) - 30;
+      foodCostExportData.push(["Variance", `${variance > 0 ? '+' : ''}${variance.toFixed(2)}%`]);
+      foodCostExportData.push(["Status", variance > 5 ? "ATTENTION NEEDED" : variance > 0 ? "Monitor" : "Good"]);
+      
+      const foodCostSheet = XLSX.utils.aoa_to_sheet(foodCostExportData);
+      foodCostSheet["!cols"] = [{ wch: 30 }, { wch: 25 }];
+      XLSX.utils.book_append_sheet(wb, foodCostSheet, "Food Cost Analysis");
+      
+      const fileName = `food-cost-detailed-${dateRange.from}-to-${dateRange.to}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+
+    } else if (activeReport === "price-history" && priceHistoryData.length > 0) {
+      // ========== COMPREHENSIVE PRICE HISTORY EXPORT ==========
+      const priceExportData = [];
+      
+      // Header
+      priceExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      priceExportData.push(["SUPPLIER PRICE HISTORY - COMPLETE RECORDS"]);
+      priceExportData.push(["═════════════════════════════════════════════════════════════════════"]);
+      priceExportData.push([""]);
+      priceExportData.push(["Generated:", new Date().toLocaleString("en-IN")]);
+      priceExportData.push(["Outlet:", selectedOutlet || "All Outlets"]);
+      priceExportData.push(["Total Records:", priceHistoryData.length]);
+      priceExportData.push([""]);
+      priceExportData.push([""]);
+      
+      // Detailed Table
+      priceExportData.push(["PURCHASE HISTORY"]);
+      priceExportData.push(["─────────────────────────────────────"]);
+      priceExportData.push([""]);
+      priceExportData.push(["#", "Date", "Supplier", "Ingredient", "Quantity", "Unit", "Unit Price (₹)", "Total (₹)"]);
+      priceExportData.push(["───", "────────────", "─────────────", "─────────────", "──────────", "──────", "──────────────", "───────────"]);
+      
+      priceHistoryData
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .forEach((item, index) => {
+          priceExportData.push([
+            index + 1,
+            new Date(item.date).toLocaleDateString("en-IN"),
+            item.supplierName,
+            item.ingredientName,
+            item.qty,
+            item.uom,
+            Number(item.unitPrice || 0).toFixed(2),
+            Number(item.total || 0).toFixed(2)
+          ]);
+        });
+      
+      const priceSheet = XLSX.utils.aoa_to_sheet(priceExportData);
+      priceSheet["!cols"] = [
+        { wch: 5 }, { wch: 15 }, { wch: 20 }, { wch: 25 },
+        { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }
+      ];
+      XLSX.utils.book_append_sheet(wb, priceSheet, "Price History");
+      
+      const fileName = `supplier-price-history-detailed-${dateStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    }
+    
+    alert("Detailed financial report exported successfully!");
   };
 
   const handleExportCSV = () => {
-    switch (activeReport) {
-      case "food-cost":
-        exportToCSV(
-          [foodCostData],
-          `food-cost-report-${dateRange.from}-${dateRange.to}`
-        );
-        break;
-      case "menu-engineering":
-        exportToCSV(
-          menuEngineeringData,
-          `menu-engineering-report-${dateRange.from}-${dateRange.to}`
-        );
-        break;
-      case "price-history":
-        exportToCSV(
-          priceHistoryData,
-          `supplier-price-history-${new Date().toISOString().split("T")[0]}`
-        );
-        break;
-      case "pnl":
-        exportToCSV([pnlData], `pnl-report-${dateRange.from}-${dateRange.to}`);
-        break;
-    }
+    // Use the same comprehensive export but as Excel
+    exportToExcel();
   };
 
   const handleExportPDF = () => {
-    // Simple PDF generation using window.print() - can be enhanced with jsPDF
+    // Simple PDF generation using window.print()
     window.print();
   };
 
@@ -155,7 +259,7 @@ const Reports = () => {
       </div>
 
       <div className="mb-3 sm:mb-4 flex flex-wrap gap-1 sm:gap-2 border-b overflow-x-auto">
-        {["food-cost", "menu-engineering", "price-history", "pnl"].map(
+        {["food-cost", "price-history", "pnl"].map(
           (report) => (
             <button
               key={report}
@@ -242,77 +346,7 @@ const Reports = () => {
           </div>
         )}
 
-        {activeReport === "menu-engineering" && (
-          <div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
-              Menu Engineering Report
-            </h2>
-            <div className="overflow-x-auto -mx-3 sm:mx-0">
-              <div className="inline-block min-w-full align-middle">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Menu Item
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Category
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Qty Sold
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Revenue
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Cost
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Margin
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Margin %
-                      </th>
-                      <th className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                        Popularity
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {menuEngineeringData.map((item) => (
-                      <tr key={item.menuItemId}>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm font-medium min-w-[120px]">
-                          <span className="truncate block">{item.name}</span>
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          {item.category}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          {item.quantitySold}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          ₹{Number(item.revenue || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          ₹{Number(item.cost || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          ₹{Number(item.margin || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          {Number(item.marginPercent || 0).toFixed(2)}%
-                        </td>
-                        <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 sm:py-4 text-xs sm:text-sm whitespace-nowrap">
-                          {item.popularity}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {activeReport === "price-history" && (
           <div>

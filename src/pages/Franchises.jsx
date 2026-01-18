@@ -589,12 +589,11 @@ const Franchises = () => {
       }
     }
 
-    // GST number validation
-    if (trimmedData.gstNumber && !validateGSTNumber(trimmedData.gstNumber)) {
-      setFormError(
-        "Please enter a valid GST number (15 characters, e.g., 29ABCDE1234F1Z5)"
-      );
-      return;
+    // GST number validation - REMOVED or replaced with FSSAI length check if desired.
+    // FSSAI is 14 digits.
+    if (trimmedData.gstNumber && trimmedData.gstNumber.length !== 14) {
+       // Optional: validate FSSAI format if strictly needed, otherwise loose check or no check.
+       // For now, accepting it as string.
     }
 
     // Password validation for edit mode (if password is provided)
@@ -1773,23 +1772,23 @@ const Franchises = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      GST Number
+                      FSSAI Number
                     </label>
                     <input
                       type="text"
-                      value={formData.gstNumber}
+                      value={formData.fssaiNumber || formData.gstNumber || ""}
                       onChange={(e) => {
-                        const value = e.target.value.toUpperCase();
-                        setFormData({ ...formData, gstNumber: value });
+                        const value = e.target.value; // FSSAI is usually numeric, but can be string
+                        setFormData({ ...formData, fssaiNumber: value, gstNumber: value }); // Keep gstNumber for backward compatibility if needed in handleSubmit
                         // Clear error when user starts typing
                         if (formError) setFormError(null);
                       }}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="29ABCDE1234F1Z5"
-                      maxLength={15}
+                      placeholder="12345678901234"
+                      maxLength={14}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      15 characters, alphanumeric
+                      14 digit FSSAI license number
                     </p>
                   </div>
                   <div className="sm:col-span-2">

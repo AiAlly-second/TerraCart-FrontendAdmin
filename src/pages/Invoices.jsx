@@ -98,8 +98,8 @@ const buildInvoiceMarkup = (
 
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
-  // Get franchise GST number
-  const franchiseGST = franchiseData?.gstNumber || "—";
+  // Get franchise FSSAI number (fallback to GST for backward comp)
+  const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
   // Payment mode display (fallback to CASH if not provided)
   const resolvedPaymentMethod = paymentMethod || "CASH";
@@ -193,7 +193,7 @@ const buildInvoiceMarkup = (
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
         <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">GSTIN: ${franchiseGST}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
@@ -287,16 +287,41 @@ const Invoices = () => {
   }, []);
 
   const loadFranchiseAndCartData = useCallback(async (order) => {
-    // To avoid 403 errors from protected /users/:id endpoint for other cafes,
-    // we no longer fetch user profiles here. Invoices will use generic
-    // address/GST placeholders or any data already attached to the order.
     if (!order) {
       setFranchiseData(null);
       setCartData(null);
       return;
     }
+    
+    // Reset first
     setFranchiseData(null);
     setCartData(null);
+
+    try {
+      // 1. Fetch Franchise Data
+      if (order.franchiseId) {
+        // Handle if franchiseId is an object or string
+        const franchiseId = typeof order.franchiseId === 'object' ? order.franchiseId._id : order.franchiseId;
+        if (franchiseId) {
+             const fRes = await api.get(`/users/${franchiseId}`);
+             setFranchiseData(fRes.data);
+        }
+      }
+
+      // 2. Fetch Cart Data
+      if (order.cartId) {
+        // Handle if cartId is an object or string
+        const cartId = typeof order.cartId === 'object' ? order.cartId._id : order.cartId;
+        if (cartId) {
+            const cRes = await api.get(`/users/${cartId}`);
+            setCartData(cRes.data);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch franchise/cart data for invoice:", err);
+      // We do not set error state here to avoid blocking the UI
+      // The invoice will just render with placeholders ("—")
+    }
   }, []);
 
   const loadPayments = useCallback(async () => {

@@ -89,16 +89,15 @@ const AttendanceManagement = () => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for dependencies to load
 
     fetchEmployees();
-    fetchCarts();
+    // Only fetch carts if user is NOT a simple admin (cart admin)
+    // Cart admins don't need the cart selector as they are bound to their cart
+    if (userRole && userRole !== "admin") {
+      fetchCarts();
+    }
     fetchTodayAttendance();
 
-    // Set up HTTP polling for real-time updates (replaces Socket.IO)
-    // Poll every 8 seconds for attendance updates
-    pollingIntervalRef.current = setInterval(() => {
-      if (activeTab === "today") {
-        fetchTodayAttendance();
-      }
-    }, 8000); // 8 seconds polling interval
+    // Removed automatic polling as per user request
+    pollingIntervalRef.current = null;
 
     return () => {
       if (pollingIntervalRef.current) {
@@ -106,7 +105,7 @@ const AttendanceManagement = () => {
         pollingIntervalRef.current = null;
       }
     };
-  }, [activeTab, dependenciesLoaded, selectedCart]);
+  }, [activeTab, dependenciesLoaded, selectedCart, userRole]);
 
   useEffect(() => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for api to load
@@ -138,7 +137,8 @@ const AttendanceManagement = () => {
   };
 
   const fetchCarts = async () => {
-    if (!apiRef.current) return;
+    // Double check role prevents unnecessary calls even if called manually
+    if (!apiRef.current || (userRole === "admin")) return;
     try {
       const response = await apiRef.current.get("/users");
       const allUsers = response.data || [];
@@ -565,10 +565,17 @@ const AttendanceManagement = () => {
   };
 
   const formatHours = (minutes) => {
-    if (!minutes) return "0h 0m";
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    if (minutes === null || minutes === undefined) return "-";
+    const totalMins = Math.round(Number(minutes));
+    if (totalMins <= 0) return "0m";
+    
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    
+    if (hours > 0) {
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    return `${mins}m`;
   };
 
   const calculateRealTimeHours = (record) => {
@@ -766,22 +773,7 @@ const AttendanceManagement = () => {
                                 a.employeeId?._id || a.employeeId;
                               const employeeIdStr =
                                 employee._id?.toString() || employee._id;
-                              const match =
-                                recordEmployeeId?.toString() === employeeIdStr;
-
-                              // Logging (development only)
-                              if (match && import.meta.env.DEV) {
-                                console.log(
-                                  "[ATTENDANCE] Found record for employee:",
-                                  {
-                                    employeeId: employeeIdStr,
-                                    record: a,
-                                    hasCheckIn: !!a.checkIn?.time,
-                                    hasCheckOut: !!a.checkOut?.time,
-                                  }
-                                );
-                              }
-
+                              const match = recordEmployeeId?.toString() === employeeIdStr;
                               return match;
                             })
                           : null;

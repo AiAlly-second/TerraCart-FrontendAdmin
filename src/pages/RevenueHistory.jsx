@@ -100,118 +100,263 @@ const RevenueHistory = () => {
       setExporting(true);
       const dateStr = new Date().toISOString().split("T")[0];
       
-      // Fetch detailed data from new endpoint
-      // We export ALL data by default as requested, or we could pass date range filters from state if set
+      // Fetch detailed data from backend export endpoint
       let url = '/revenue/export';
+      const params = new URLSearchParams();
+      
       if (dateRange.startDate && dateRange.endDate) {
-        url += `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
+        params.set('startDate', dateRange.startDate);
+        params.set('endDate', dateRange.endDate);
+        url += `?${params.toString()}`;
       }
       
       const response = await api.get(url);
       const detailedData = response.data?.data || {};
       const { orders = [], items = [] } = detailedData;
 
-      const workbook = XLSX.utils.book_new();
+      if (orders.length === 0) {
+        alert("No data found for the selected period.");
+        setExporting(false);
+        return;
+      }
 
-      // Sheet 1: Summary/Overview (using current view data)
-      const summaryData = [
-        ["REVENUE HISTORY - DETAILED REPORT"],
-        ["Generated At:", new Date().toLocaleString("en-IN")],
-        ["Total Revenue", formatCurrency(currentRevenue?.totalRevenue || 0)],
-        ["Total Orders (Active)", currentRevenue?.totalOrders || 0],
-        ["Active Franchises", currentRevenue?.franchiseRevenue?.length || 0],
-        ["Active Carts", currentRevenue?.cartRevenue?.length || 0],
-        [],
-        ["NOTE:", "This report includes detailed breakdowns of all paid orders and line items."],
+      // Build comprehensive data structures
+      const franchiseMap = new Map();
+      const dailyMap = new Map();
+
+      orders.forEach(order => {
+        const franchiseName = order.Franchise || "Unknown";
+        const cartName = order.Cart || "Unknown";
+        const totalAmount = parseFloat(order.TotalAmount) || 0;
+        const orderDate = order.Date || "Unknown";
+
+        // Franchise and Cart aggregation
+        if (!franchiseMap.has(franchiseName)) {
+          franchiseMap.set(franchiseName, {
+            revenue: 0,
+            orderCount: 0,
+            carts: new Map()
+          });
+        }
+        
+        const franchise = franchiseMap.get(franchiseName);
+        franchise.revenue += totalAmount;
+        franchise.orderCount += 1;
+
+        if (!franchise.carts.has(cartName)) {
+          franchise.carts.set(cartName, {
+            revenue: 0,
+            orderCount: 0,
+            orders: []
+          });
+        }
+        
+        const cart = franchise.carts.get(cartName);
+        cart.revenue += totalAmount;
+        cart.orderCount += 1;
+        cart.orders.push(order);
+
+        // Daily aggregation
+        if (!dailyMap.has(orderDate)) {
+          dailyMap.set(orderDate, {
+            revenue: 0,
+            orderCount: 0
+          });
+        }
+        
+        const daily = dailyMap.get(orderDate);
+        daily.revenue += totalAmount;
+        daily.orderCount += 1;
+      });
+
+      // Calculate totals
+      const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order.TotalAmount) || 0), 0);
+      const totalOrders = orders.length;
+
+      // ========== CREATE SINGLE COMPREHENSIVE SHEET ==========
+      const allData = [];
+
+      // SECTION 1: HEADER & SUMMARY
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["COMPREHENSIVE REVENUE REPORT - ALL DATA IN ONE SHEET"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push([""]);
+      allData.push(["Generated:", new Date().toLocaleString("en-IN")]);
+      allData.push(["Date Range:", dateRange.startDate && dateRange.endDate ? `${dateRange.startDate} to ${dateRange.endDate}` : "All Time"]);
+      allData.push([""]);
+      allData.push(["OVERALL SUMMARY"]);
+      allData.push(["Total Revenue:", `₹${totalRevenue.toFixed(2)}`]);
+      allData.push(["Total Orders:", totalOrders]);
+      allData.push(["Total Franchises:", franchiseMap.size]);
+      allData.push(["Total Carts:", Array.from(franchiseMap.values()).reduce((sum, f) => sum + f.carts.size, 0)]);
+      allData.push(["Average Order Value:", `₹${(totalRevenue / totalOrders).toFixed(2)}`]);
+      allData.push([""]);
+      allData.push([""]);
+
+      // SECTION 2: FRANCHISE & CART BREAKDOWN
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["SECTION 1: FRANCHISE & CART REVENUE BREAKDOWN"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push([""]);
+      allData.push(["#", "Type", "Name", "Parent Franchise", "Revenue (₹)", "Orders", "Avg Order (₹)", "Carts", "% of Franchise", "% of Total"]);
+      allData.push(["─────", "─────────", "─────────────────────", "─────────────────────", "─────────────", "───────", "──────────────", "──────", "──────────────", "───────────"]);
+
+      let rowNum = 1;
+      Array.from(franchiseMap.entries())
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .forEach(([franchiseName, franchiseData]) => {
+          // Franchise row
+          allData.push([
+            rowNum++,
+            "FRANCHISE",
+            franchiseName,
+            "—",
+            franchiseData.revenue.toFixed(2),
+            franchiseData.orderCount,
+            (franchiseData.revenue / franchiseData.orderCount).toFixed(2),
+            franchiseData.carts.size,
+            "100.00%",
+            `${((franchiseData.revenue / totalRevenue) * 100).toFixed(2)}%`
+          ]);
+
+          // Cart rows
+          Array.from(franchiseData.carts.entries())
+            .sort((a, b) => b[1].revenue - a[1].revenue)
+            .forEach(([cartName, cartData]) => {
+              allData.push([
+                `  ${rowNum++}`,
+                "  └ CART",
+                `  ${cartName}`,
+                franchiseName,
+                cartData.revenue.toFixed(2),
+                cartData.orderCount,
+                (cartData.revenue / cartData.orderCount).toFixed(2),
+                "—",
+                `${((cartData.revenue / franchiseData.revenue) * 100).toFixed(2)}%`,
+                `${((cartData.revenue / totalRevenue) * 100).toFixed(2)}%`
+              ]);
+            });
+
+          allData.push([""]); // Spacing
+        });
+
+      // Add totals
+      allData.push(["", "GRAND TOTAL", `${franchiseMap.size} Franchises, ${Array.from(franchiseMap.values()).reduce((sum, f) => sum + f.carts.size, 0)} Carts`, "", totalRevenue.toFixed(2), totalOrders, (totalRevenue / totalOrders).toFixed(2), "", "", "100.00%"]);
+      allData.push([""]);
+      allData.push([""]);
+
+      // SECTION 3: DAILY REVENUE BREAKDOWN
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["SECTION 2: DAILY REVENUE BREAKDOWN"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push([""]);
+      allData.push(["Date", "Revenue (₹)", "Orders", "Avg Order Value (₹)"]);
+      allData.push(["─────────────", "─────────────", "───────", "───────────────────"]);
+
+      Array.from(dailyMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([date, data]) => {
+          allData.push([
+            date,
+            data.revenue.toFixed(2),
+            data.orderCount,
+            (data.revenue / data.orderCount).toFixed(2)
+          ]);
+        });
+
+      allData.push([""]);
+      allData.push([""]);
+
+      // SECTION 4: ALL ORDERS
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["SECTION 3: ALL ORDERS (COMPLETE DETAILS)"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push([""]);
+      allData.push(["Order ID", "Invoice", "Date", "Time", "Franchise", "Cart", "Service Type", "Order Type", "Customer", "Mobile", "Payment", "Subtotal (₹)", "GST (₹)", "Total (₹)"]);
+      allData.push(["───────────", "──────────────", "────────────", "────────", "───────────────", "───────────────", "─────────────", "────────────", "──────────────", "──────────────", "─────────", "──────────────", "────────", "──────────"]);
+
+      orders.forEach(order => {
+        allData.push([
+          order.OrderID,
+          order.InvoiceNo,
+          order.Date,
+          order.Time,
+          order.Franchise,
+          order.Cart,
+          order.ServiceType,
+          order.OrderType || "N/A",
+          order.CustomerName || "N/A",
+          order.Mobile || "N/A",
+          order.PaymentMethod,
+          order.Subtotal,
+          order.GST,
+          order.TotalAmount
+        ]);
+      });
+
+      allData.push([""]);
+      allData.push([""]);
+
+      // SECTION 5: ALL LINE ITEMS
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["SECTION 4: ALL LINE ITEMS (ITEM-LEVEL DETAILS)"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push([""]);
+      allData.push(["Order ID", "Item Name", "Quantity", "Unit Price (₹)", "Total Price (₹)", "Is Returned", "Is Takeaway", "Franchise", "Cart"]);
+      allData.push(["───────────", "────────────────────", "──────────", "───────────────", "────────────────", "────────────", "─────────────", "───────────────", "───────────────"]);
+
+      items.forEach(item => {
+        allData.push([
+          item.OrderID,
+          item.ItemName,
+          item.Quantity,
+          item.UnitPrice,
+          item.TotalPrice,
+          item.Isreturned,
+          item.IsTakeaway,
+          item.Franchise,
+          item.Cart
+        ]);
+      });
+
+      allData.push([""]);
+      allData.push([""]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+      allData.push(["END OF REPORT"]);
+      allData.push(["═════════════════════════════════════════════════════════════════════════════"]);
+
+      // Create workbook with single sheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(allData);
+      
+      // Set column widths for better readability
+      worksheet["!cols"] = [
+        { wch: 12 },  // Column A
+        { wch: 15 },  // Column B
+        { wch: 28 },  // Column C
+        { wch: 22 },  // Column D
+        { wch: 15 },  // Column E
+        { wch: 10 },  // Column F
+        { wch: 15 },  // Column G
+        { wch: 12 },  // Column H
+        { wch: 15 },  // Column I
+        { wch: 15 },  // Column J
+        { wch: 12 },  // Column K
+        { wch: 14 },  // Column L
+        { wch: 10 },  // Column M
+        { wch: 12 }   // Column N
       ];
 
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      summarySheet["!cols"] = [{ wch: 25 }, { wch: 30 }];
-      XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Complete Revenue Report");
 
-      // Sheet 2: All Orders (Detailed)
-      if (orders.length > 0) {
-        const ordersSheet = XLSX.utils.json_to_sheet(orders);
-        ordersSheet["!cols"] = [
-           { wch: 22 }, // OrderID
-           { wch: 20 }, // InvoiceNo
-           { wch: 12 }, // Date
-           { wch: 10 }, // Time
-           { wch: 20 }, // Franchise
-           { wch: 20 }, // Cart
-           { wch: 12 }, // ServiceType
-           { wch: 12 }, // OrderType
-           { wch: 20 }, // CustomerName
-           { wch: 15 }, // Mobile
-           { wch: 15 }, // Payment
-           { wch: 10 }, // Subtotal
-           { wch: 10 }, // GST
-           { wch: 12 }, // Total
-        ];
-        XLSX.utils.book_append_sheet(workbook, ordersSheet, "All Orders");
-      }
-
-      // Sheet 3: Line Items (Detailed)
-      if (items.length > 0) {
-        const itemsSheet = XLSX.utils.json_to_sheet(items);
-        itemsSheet["!cols"] = [
-           { wch: 22 }, // OrderID
-           { wch: 25 }, // ItemName
-           { wch: 10 }, // Quantity
-           { wch: 12 }, // UnitPrice
-           { wch: 12 }, // TotalPrice
-           { wch: 10 }, // IsReturned
-           { wch: 10 }, // IsTakeaway
-           { wch: 20 }, // Franchise
-           { wch: 20 }, // Cart
-        ];
-        XLSX.utils.book_append_sheet(workbook, itemsSheet, "Line Items");
-      }
-
-      // Sheet 4: Franchise Revenue Breakdown (Aggregated)
-      if (currentRevenue?.franchiseRevenue?.length > 0) {
-        const franchiseHeaders = ["#", "Franchise Name", "Revenue", "Orders", "Carts", "% of Total"];
-        const franchiseRows = currentRevenue.franchiseRevenue
-          .sort((a, b) => b.revenue - a.revenue)
-          .map((franchise, index) => [
-            index + 1,
-            franchise.franchiseName || "Unknown",
-            franchise.revenue || 0,
-            getCafesForFranchise(franchise.franchiseId).reduce((sum, c) => sum + (c.orderCount || 0), 0),
-            franchise.cartCount || getCafesForFranchise(franchise.franchiseId).length,
-            currentRevenue.totalRevenue ? ((franchise.revenue / currentRevenue.totalRevenue) * 100).toFixed(2) + "%" : "0%"
-          ]);
-        
-        const franchiseSheet = XLSX.utils.aoa_to_sheet([franchiseHeaders, ...franchiseRows]);
-        franchiseSheet["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(workbook, franchiseSheet, "Franchise Summary");
-      }
-
-      // Sheet 5: Cart Revenue Breakdown (Aggregated)
-      if (currentRevenue?.cartRevenue?.length > 0) {
-        const cartHeaders = ["#", "Cart Name", "Franchise Name", "Revenue", "Orders", "% of Total"];
-        const cartRows = currentRevenue.cartRevenue
-          .sort((a, b) => b.revenue - a.revenue)
-          .map((cart, index) => [
-            index + 1,
-            cart.cartName || cart.cafeName || "Unknown",
-            cart.franchiseName || "Unknown",
-            cart.revenue || 0,
-            cart.orderCount || 0,
-             currentRevenue.totalRevenue ? ((cart.revenue / currentRevenue.totalRevenue) * 100).toFixed(2) + "%" : "0%"
-          ]);
-
-        const cartSheet = XLSX.utils.aoa_to_sheet([cartHeaders, ...cartRows]);
-        cartSheet["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(workbook, cartSheet, "Cart Summary");
-      }
-
-      // Generate Excel file
-      const fileName = `revenue-detailed-${dateStr}.xlsx`;
+      // Generate filename
+      const fileName = `revenue-complete-${dateRange.startDate || 'all'}-to-${dateRange.endDate || dateStr}.xlsx`;
       XLSX.writeFile(workbook, fileName);
+      
+      alert(`Export successful! All data consolidated in one sheet with ${orders.length} orders.`);
     } catch (error) {
-      console.error("Error exporting detailed report:", error);
-      alert("Failed to export detailed report. Please try again.");
+      console.error("Error exporting revenue report:", error);
+      alert(`Failed to export: ${error.message || 'Unknown error'}. Please try again.`);
     } finally {
       setExporting(false);
     }

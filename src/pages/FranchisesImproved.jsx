@@ -45,7 +45,7 @@ const FranchisesImproved = () => {
     email: "",
     password: "",
     mobile: "",
-    gstNumber: "",
+    fssaiNumber: "",
   });
   const [files, setFiles] = useState({
     udyamCertificate: null,
@@ -133,4 +133,16 @@ const FranchisesImproved = () => {
 
  const filteredFranchises = filterBySearch.filter((franchise) => {
     const isActive = franchise.isActive !== false;
-    if (filterStatus === "active") return isActive
+    if (filterStatus === "active") return isActive;
+    return true;
+  });
+
+  return (
+    <div className="p-4">
+      <h1>Franchises (Incomplete File)</h1>
+      <p>This component seems to be incomplete in the codebase.</p>
+    </div>
+  );
+};
+
+export default FranchisesImproved;
