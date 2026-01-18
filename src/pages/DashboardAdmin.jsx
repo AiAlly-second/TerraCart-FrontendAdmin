@@ -326,60 +326,10 @@ const StaffStatus = ({ staff, activeOrders }) => {
 
 
 const OrdersTimeline = ({ orders }) => {
-    // Group orders by hour (0 to 23)
-    const hours = Array.from({ length: 24 }, (_, i) => i); 
-    const data = hours.map(h => {
-        const count = orders.filter(o => {
-            if(!o.createdAt) return false;
-            const date = new Date(o.createdAt);
-            return date.getHours() === h;
-        }).length;
-        
-        // Format hour label
-        const hourLabel = h === 0 ? '12 AM' : (h > 12 ? `${h - 12} PM` : `${h} ${h === 12 ? 'PM' : 'AM'}`);
-        return { hour: h, count, label: hourLabel };
-    });
-
+    // Recharts temporarily disabled due to 'forwardRef' error
     return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full">
-            <h3 className="text-lg font-bold text-[#4a2e1f] mb-4">Orders Timeline</h3>
-            <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#d86d2a" stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor="#d86d2a" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis 
-                            dataKey="label" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fontSize: 10, fill: '#8b5e3c' }} 
-                            interval={3} // Show every 3rd hour to avoid clutter
-                        />
-                        <YAxis 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fontSize: 10, fill: '#8b5e3c' }} 
-                        />
-                        <Tooltip 
-                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2c1ac', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                            itemStyle={{ color: '#4a2e1f', fontWeight: 'bold' }}
-                            labelStyle={{ color: '#8b5e3c', fontSize: '12px', marginBottom: '4px' }}
-                        />
-                        <Area 
-                            type="monotone" 
-                            dataKey="count" 
-                            stroke="#d86d2a" 
-                            fillOpacity={1} 
-                            fill="url(#colorCount)" 
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex items-center justify-center">
+            <p className="text-gray-500">Orders Timeline Chart (Disabled for Debugging)</p>
         </div>
     )
 }
