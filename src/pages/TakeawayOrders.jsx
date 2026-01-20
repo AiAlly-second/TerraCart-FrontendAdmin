@@ -1530,6 +1530,11 @@ const TakeawayOrders = () => {
                                 : "Takeaway"}
                             </span>
                           </div>
+                          {order.cancellationReason && (
+                            <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100 mb-1">
+                              Reason: {order.cancellationReason}
+                            </div>
+                          )}
                           {order.orderType && (
                             <div className="mt-1">
                               <span
@@ -2200,6 +2205,18 @@ const TakeawayOrders = () => {
                         <option value="Returned">↩️ Returned</option>
                       </select>
                     </div>
+
+                    {/* Cancellation/Return Reason Display */}
+                    {currentOrder?.cancellationReason && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mt-4">
+                         <h4 className="text-sm font-bold text-red-800 mb-1">
+                           Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
+                         </h4>
+                         <p className="text-sm text-red-700">
+                           {currentOrder.cancellationReason}
+                         </p>
+                      </div>
+                    )}
 
                     {/* Current Order Items section - with cancel option */}
                     <div className="border-t border-gray-200 pt-4 space-y-4">
