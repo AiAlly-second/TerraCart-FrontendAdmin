@@ -769,6 +769,11 @@ const Orders = () => {
                     {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
                   </span>
                 </div>
+                {order.cancellationReason && (
+                   <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100">
+                     Reason: {order.cancellationReason}
+                   </div>
+                )}
               </div>
             )}
           </td>
@@ -2554,6 +2559,18 @@ const Orders = () => {
                         </select>
                       </div>
                     </div>
+
+                    {/* Cancellation/Return Reason Display */}
+                    {currentOrder?.cancellationReason && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
+                         <h4 className="text-sm font-bold text-red-800 mb-1">
+                           Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
+                         </h4>
+                         <p className="text-sm text-red-700">
+                           {currentOrder.cancellationReason}
+                         </p>
+                      </div>
+                    )}
 
                     {/* Current Order Items Section */}
                     {currentOrder && !currentOrder.isNew && (
