@@ -1844,7 +1844,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.udyamCertificate}`
+                                }/${editingFranchise.udyamCertificate}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1898,7 +1898,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.aadharCard}`
+                                }/${editingFranchise.aadharCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1949,7 +1949,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.panCard}`
+                                }/${editingFranchise.panCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2791,7 +2791,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.aadharCard}`
+                                }/${cartExistingDocs.aadharCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2862,7 +2862,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.panCard}`
+                                }/${cartExistingDocs.panCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2930,7 +2930,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.shopActLicense}`
+                                }/${cartExistingDocs.shopActLicense}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -3016,7 +3016,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.fssaiLicense}`
+                                }/${cartExistingDocs.fssaiLicense}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"

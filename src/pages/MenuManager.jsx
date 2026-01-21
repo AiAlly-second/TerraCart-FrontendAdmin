@@ -48,6 +48,11 @@ const getImageUrl = (imagePath) => {
     return `${normalizedApiBase}${imagePath}`;
   }
 
+  // Just filename, check if it already includes uploads path
+  if (imagePath.startsWith("uploads/")) {
+    return `${normalizedApiBase}/${imagePath}`;
+  }
+  
   // Just filename, construct full path
   return `${normalizedApiBase}/uploads/${imagePath}`;
 };
