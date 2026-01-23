@@ -10,6 +10,7 @@ import {
   FaArrowRight,
   FaChartBar,
 } from "react-icons/fa";
+import { useRef } from "react";
 import api from "../utils/api";
 // Removed socket import - using HTTP polling instead
 
@@ -62,79 +63,46 @@ const Dashboard = () => {
     activeCarts: 0
   });
 
+  const isFetchingRef = useRef(false);
+
   const updateRevenue = (ordersData) => {
     // Super admin aggregates revenue from ACTIVE franchises only
-    // ordersData should already be filtered to active franchises from fetchDashboardData
     if (!Array.isArray(ordersData)) {
-      return;
+      return { revenue: "₹0.00", ordersCount: "0" };
     }
-    const paidOrders = (ordersData || []).filter(
+    const paidOrders = ordersData.filter(
       (order) => order && order.status === "Paid"
     );
 
-    // Calculate total revenue from paid orders (already filtered to active franchises)
     const totalRevenue = paidOrders.reduce((sum, order) => {
-      if (
-        !order ||
-        !order.kotLines ||
-        !Array.isArray(order.kotLines) ||
-        order.kotLines.length === 0
-      ) {
-        return sum;
-      }
-      // Sum all KOTs in the order
-      const orderTotal = order.kotLines.reduce((kotSum, kot) => {
-        return kotSum + Number(kot.totalAmount || 0);
-      }, 0);
-      return sum + orderTotal;
+      if (!order?.kotLines || !Array.isArray(order.kotLines)) return sum;
+      return sum + order.kotLines.reduce((kotSum, kot) => kotSum + Number(kot.totalAmount || 0), 0);
     }, 0);
 
     const safeTotalRevenue = Number(totalRevenue || 0);
-    setStats((prev) => ({
-      ...prev,
-      revenue: {
-        ...prev.revenue,
-        value: `₹${safeTotalRevenue.toLocaleString("en-IN", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`,
-        loading: false,
-      },
-      orders: {
-        ...prev.orders,
-        value: ordersData.length.toString(), // Already filtered to active franchises
-      },
-    }));
+    return {
+      revenue: `₹${safeTotalRevenue.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+      ordersCount: ordersData.length.toString()
+    };
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(true); // Initial load with spinner
   }, []); // Only run once on mount
+
+  // Stringify activeFranchiseIds for use in useEffect dependency to avoid ref-equality issues with Set
+  const activeFranchiseIdsStr = Array.from(activeFranchiseIds).sort().join(',');
 
   useEffect(() => {
     // HTTP polling for real-time updates (replaces Socket.IO)
     // Poll orders every 12 seconds to check for new/updated orders and payments
     const pollingInterval = setInterval(async () => {
       try {
-        const ordersResponse = await api.get("/orders");
-        const fetchedOrders = ordersResponse.data || [];
-
-        // Get current active franchise IDs
-        const currentIds = activeFranchiseIds;
-
-        // Filter to only active franchises
-        const activeOrders = fetchedOrders.filter((order) => {
-          const franchiseId =
-            order.franchiseId?.toString() || order.franchiseId;
-          return franchiseId && currentIds.has(franchiseId);
-        });
-
-        setOrders(activeOrders);
-        // Recalculate total revenue from active franchises only
-        updateRevenue(activeOrders);
-
-        // Fetch dashboard data to update recent users and stats
-        fetchDashboardData();
+        // Fetch dashboard data in the background (no spinner)
+        fetchDashboardData(false);
       } catch (err) {
         // Silently fail polling - don't spam console
         if (import.meta.env.DEV) {
@@ -146,159 +114,111 @@ const Dashboard = () => {
     return () => {
       clearInterval(pollingInterval);
     };
-  }, [activeFranchiseIds]); // Re-run when activeFranchiseIds changes
+  }, [activeFranchiseIdsStr]); // Re-run only if the actual IDs change
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (showLoading = false) => {
+    if (isFetchingRef.current) return;
+    
     try {
-      setLoading(true);
+      isFetchingRef.current = true;
+      if (showLoading) setLoading(true);
 
-      // Fetch users
-      let users = [];
-      try {
-        const usersResponse = await api.get("/users");
-        users = usersResponse.data || [];
-      } catch (err) {
-        if (import.meta.env.DEV) {
-          console.error("Error fetching users:", err);
-        }
-        // Continue even if users fetch fails
-      }
+      // Fetch basic data in parallel
+      const [usersRes, cartStatsRes] = await Promise.all([
+        api.get("/users").catch(() => ({ data: [] })),
+        api.get("/users/stats/carts").catch(() => null)
+      ]);
 
-      // Count ACTIVE franchises only (users with franchise_admin role AND isActive !== false)
-      const activeFranchises = users.filter(
-        (u) => u.role === "franchise_admin" && u.isActive !== false
-      );
-      const allFranchises = users.filter((u) => u.role === "franchise_admin");
+      const users = usersRes.data || [];
+      const activeFranchises = users.filter((u) => u.role === "franchise_admin" && u.isActive !== false);
 
       // Get active franchise IDs for filtering orders
       const activeFranchiseIdsSet = new Set(
         activeFranchises.filter((f) => f && f._id).map((f) => f._id.toString())
       );
-      setActiveFranchiseIds(activeFranchiseIdsSet);
+      
+      const newIdsArray = Array.from(activeFranchiseIdsSet).sort();
+      const newIdsStr = newIdsArray.join(",");
+      const currentIdsStr = Array.from(activeFranchiseIds).sort().join(",");
 
-      // Fetch current revenue from persistent API (calculates from database, not session)
-      let fetchedOrders = [];
-      let totalRevenue = 0;
-      let totalOrdersCount = 0;
-      try {
-        // First try to get current revenue from revenue API (persistent, calculated from DB)
-        // This API already filters by active franchises
-        try {
-          const revenueResponse = await api.get("/revenue/current");
-          if (revenueResponse.data?.success && revenueResponse.data?.data) {
-            totalRevenue = revenueResponse.data.data.totalRevenue || 0;
-            totalOrdersCount = revenueResponse.data.data.totalOrders || 0;
-            console.log(
-              "Using persistent revenue data:",
-              totalRevenue,
-              "Orders:",
-              totalOrdersCount
-            );
-          }
-        } catch (revenueErr) {
-          console.log(
-            "Revenue API not available, calculating from orders:",
-            revenueErr.message
-          );
-        }
-
-        // Also fetch orders for real-time updates and as fallback
-        const ordersResponse = await api.get("/orders");
-        fetchedOrders = ordersResponse.data || [];
-
-        // Filter orders to only include those from ACTIVE franchises
-        const activeOrders = (fetchedOrders || []).filter((order) => {
-          if (!order) return false;
-          const franchiseId =
-            order.franchiseId?.toString() || order.franchiseId;
-          return franchiseId && activeFranchiseIdsSet.has(franchiseId);
-        });
-
-        // If revenue API failed, calculate from active orders only
-        if (totalRevenue === 0) {
-          const paidOrders = activeOrders.filter(
-            (order) => order.status === "Paid"
-          );
-          totalRevenue = paidOrders.reduce((sum, order) => {
-            if (
-              !order.kotLines ||
-              !Array.isArray(order.kotLines) ||
-              order.kotLines.length === 0
-            ) {
-              return sum;
-            }
-            const orderTotal = order.kotLines.reduce((kotSum, kot) => {
-              return kotSum + Number(kot.totalAmount || 0);
-            }, 0);
-            return sum + orderTotal;
-          }, 0);
-        }
-
-        // Set total orders count from active orders if not set from API
-        if (totalOrdersCount === 0) {
-          totalOrdersCount = activeOrders.length;
-        }
-
-        // Store active orders for real-time updates
-        setOrders(activeOrders);
-        // Update revenue with active orders (for real-time updates)
-        // Update revenue with active orders (for real-time updates)
-        updateRevenue(activeOrders);
-
-        // --- Calculate Daily Stats ---
-        const todayStr = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-        
-        const todayOrders = activeOrders.filter(order => {
-          if (!order.createdAt) return false;
-          const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-          return orderDate === todayStr && order.status === 'Paid';
-        });
-
-        const todayRev = todayOrders.reduce((sum, order) => {
-             if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
-             const orderTotal = order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
-             return sum + orderTotal;
-        }, 0);
-
-        const avgVal = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
-
-        setDailyStats(prev => ({
-            ...prev,
-            todayRevenue: todayRev,
-            avgOrderValue: avgVal
-        }));
-        // -----------------------------
-      } catch (err) {
-        console.error("Error fetching revenue data:", err);
-        // Set revenue to 0 if there's an error
-        totalRevenue = 0;
-        totalOrdersCount = 0;
+      if (newIdsStr !== currentIdsStr) {
+        setActiveFranchiseIds(activeFranchiseIdsSet);
       }
 
-      // Get recent users (last 5)
-      const recent = users
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 5);
+      // Fetch revenue and orders
+      let totalRevenue = 0;
+      let totalOrdersCount = 0;
+      let fetchedOrders = [];
 
-      // Fetch cart statistics
-      let cartStatistics = {
+      try {
+        const revenueResponse = await api.get("/revenue/current");
+        if (revenueResponse.data?.success && revenueResponse.data?.data) {
+          totalRevenue = revenueResponse.data.data.totalRevenue || 0;
+          totalOrdersCount = revenueResponse.data.data.totalOrders || 0;
+        }
+      } catch (e) { /* ignore */ }
+
+      try {
+        const ordersResponse = await api.get("/orders");
+        fetchedOrders = ordersResponse.data || [];
+      } catch (e) { /* ignore */ }
+
+      // Filter orders to only include those from ACTIVE franchises
+      const activeOrders = fetchedOrders.filter((order) => {
+        if (!order) return false;
+        const franchiseId = order.franchiseId?.toString() || order.franchiseId;
+        return franchiseId && activeFranchiseIdsSet.has(franchiseId);
+      });
+
+      // Recalculate if needed
+      const revenueInfo = updateRevenue(activeOrders);
+      if (totalRevenue === 0) {
+        totalRevenue = activeOrders.filter(o => o.status === 'Paid').reduce((sum, order) => {
+           if (!order.kotLines) return sum;
+           return sum + order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
+        }, 0);
+        totalOrdersCount = activeOrders.length;
+      }
+
+      // Daily Stats
+      const todayStr = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+      const todayOrders = activeOrders.filter(order => {
+        if (!order.createdAt) return false;
+        const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+        return orderDate === todayStr && order.status === 'Paid';
+      });
+
+      const todayRev = todayOrders.reduce((sum, order) => {
+        if (!order.kotLines) return sum;
+        return sum + order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
+      }, 0);
+
+      const avgVal = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
+
+      // Cart Stats
+      const cartStatistics = cartStatsRes?.data || {
         totalCarts: 0,
         activeCarts: 0,
         inactiveCarts: 0,
         pendingApproval: 0,
         franchiseStats: [],
       };
-      try {
-        const cartStatsResponse = await api.get("/users/stats/carts");
-        cartStatistics = cartStatsResponse.data || cartStatistics;
-        setCartStats(cartStatistics);
-        setDailyStats(prev => ({
-            ...prev,
-            activeCarts: cartStatistics.activeCarts || 0
-        }));
-      } catch (err) {
-        console.error("Error fetching cart statistics:", err);
-      }
+
+      // State Updates (mostly batched)
+      setOrders(activeOrders);
+      
+      setDailyStats({
+        todayRevenue: todayRev,
+        avgOrderValue: avgVal,
+        activeCarts: cartStatistics.activeCarts || 0
+      });
+
+      setCartStats(prev => {
+        // Simple stability check for cartStats to prevent re-render if data is identical
+        const prevStr = JSON.stringify(prev);
+        const nextStr = JSON.stringify(cartStatistics);
+        return prevStr === nextStr ? prev : cartStatistics;
+      });
 
       setStats({
         franchises: {
@@ -334,11 +254,15 @@ const Dashboard = () => {
         },
       });
 
-      setRecentUsers(recent);
+      setRecentUsers(users
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 5));
+
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (showLoading) setLoading(false);
     }
   };
 

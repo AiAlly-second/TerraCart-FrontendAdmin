@@ -111,8 +111,6 @@ const AttendanceManagement = () => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for api to load
     if (activeTab === "history") {
       fetchAttendance();
-    } else if (activeTab === "stats") {
-      fetchStats();
     }
   }, [activeTab, selectedEmployee, startDate, endDate, dependenciesLoaded, selectedCart]);
 
@@ -710,16 +708,6 @@ const AttendanceManagement = () => {
             >
               Attendance History
             </button>
-            <button
-              onClick={() => setActiveTab("stats")}
-              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
-                activeTab === "stats"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              Statistics
-            </button>
           </nav>
         </div>
 
@@ -1095,128 +1083,6 @@ End Break
           )}
 
           {/* Statistics Tab */}
-          {activeTab === "stats" && (
-            <div className="space-y-4">
-              <div className="flex gap-4 items-end">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Employee
-                  </label>
-                  <select
-                    value={selectedEmployee}
-                    onChange={(e) => setSelectedEmployee(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">All Employees</option>
-                    {Array.isArray(employees) &&
-                      employees.map((emp) => (
-                        <option key={emp._id} value={emp._id}>
-                          {emp.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                <button
-                  onClick={fetchStats}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Get Stats
-                </button>
-              </div>
-              {loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                </div>
-              ) : stats ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-blue-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-blue-600">
-                      Total Days
-                    </h3>
-                    <p className="text-3xl font-bold text-blue-900 mt-2">
-                      {stats.totalDays}
-                    </p>
-                  </div>
-                  <div className="bg-green-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-green-600">
-                      Present
-                    </h3>
-                    <p className="text-3xl font-bold text-green-900 mt-2">
-                      {stats.present}
-                    </p>
-                  </div>
-                  <div className="bg-red-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-red-600">Absent</h3>
-                    <p className="text-3xl font-bold text-red-900 mt-2">
-                      {stats.absent}
-                    </p>
-                  </div>
-                  <div className="bg-yellow-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-yellow-600">
-                      Late
-                    </h3>
-                    <p className="text-3xl font-bold text-yellow-900 mt-2">
-                      {stats.late}
-                    </p>
-                  </div>
-                  <div className="bg-orange-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-orange-600">
-                      Half Day
-                    </h3>
-                    <p className="text-3xl font-bold text-orange-900 mt-2">
-                      {stats.halfDay}
-                    </p>
-                  </div>
-                  <div className="bg-purple-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-purple-600">
-                      On Leave
-                    </h3>
-                    <p className="text-3xl font-bold text-purple-900 mt-2">
-                      {stats.onLeave}
-                    </p>
-                  </div>
-                  <div className="bg-indigo-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-indigo-600">
-                      Total Working Hours
-                    </h3>
-                    <p className="text-3xl font-bold text-indigo-900 mt-2">
-                      {formatHours(stats.totalWorkingHours)}
-                    </p>
-                  </div>
-                  <div className="bg-pink-50 p-6 rounded-lg">
-                    <h3 className="text-sm font-medium text-pink-600">
-                      Total Overtime
-                    </h3>
-                    <p className="text-3xl font-bold text-pink-900 mt-2">
-                      {formatHours(stats.totalOvertime)}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
         </div>
       </div>
     </div>

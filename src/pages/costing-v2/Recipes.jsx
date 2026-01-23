@@ -147,24 +147,19 @@ const Recipes = () => {
       };
 
       // Prevent multiple BOMs with the same name for the same outlet (only when creating, not editing)
+      // Prevent multiple BOMs with the same name (only when creating, not editing)
       if (!editing) {
-        // For cart admin, check against their own cartId
-        // For super admin, check against cartId: null (global BOMs)
-        const currentCartId = isCartAdmin ? user._id : null;
+        // Check against ALL existing recipes (both local and global) to prevent duplicates in the list
+        // content: "validate this [because currently it] dont give warning on that"
         const duplicateRecipe = recipes.find(
           (r) =>
             r.name.trim().toLowerCase() ===
-              submitData.name.trim().toLowerCase() &&
-            ((isCartAdmin &&
-              r.cartId?.toString() === currentCartId?.toString()) ||
-              (isSuperAdmin && !r.cartId))
+            submitData.name.trim().toLowerCase()
         );
 
         if (duplicateRecipe) {
           alert(
-            `A BOM with the name "${submitData.name}" already exists${
-              isCartAdmin ? " for your outlet" : " (global BOM)"
-            }. Please use a different name or edit the existing BOM.`
+            `A BOM with the name "${submitData.name}" already exists. Please use a different name or edit the existing BOM.`
           );
           return;
         }

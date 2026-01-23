@@ -479,51 +479,43 @@ const downloadOrderInvoice = async (order) => {
 
   const element = wrapper.querySelector(".invoice-root");
   if (!element) {
-    document.body.removeChild(wrapper);
+    if (document.body.contains(wrapper)) {
+      document.body.removeChild(wrapper);
+    }
     alert("Failed to render invoice for download.");
     return;
   }
 
   try {
     const canvas = await html2canvas(element, {
-      scale: window.devicePixelRatio || 2,
+      scale: 2,
       useCORS: true,
       backgroundColor: "#ffffff",
     });
 
     const imageData = canvas.toDataURL("image/png");
+    
+    // Calculate dimensions
+    const pdfWidth = 80;
+    const margin = 5;
+    const usableWidth = pdfWidth - (margin * 2);
+    
+    const tempPdf = new jsPDF();
+    const imgProps = tempPdf.getImageProperties(imageData);
+    const imgRatio = imgProps.height / imgProps.width;
+    const imgHeight = usableWidth * imgRatio;
+    const pdfHeight = imgHeight + (margin * 2);
+
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
-      format: [80, "auto"],
+      format: [pdfWidth, pdfHeight],
     });
-    const pdfWidth = 80;
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const margin = 4;
-    const usableWidth = pdfWidth - margin * 2;
 
-    const imgProps = pdf.getImageProperties(imageData);
-    const imgRatio = imgProps.height / imgProps.width;
-    const imgHeight = usableWidth * imgRatio;
-
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= pdfHeight - margin * 2;
-
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin - heightLeft;
-      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= pdfHeight - margin * 2;
-    }
-
+    pdf.addImage(imageData, "PNG", margin, margin, usableWidth, imgHeight);
     pdf.save(`${buildInvoiceId(order)}.pdf`);
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.error("Failed to download invoice PDF", err);
-    }
+    console.error("Failed to download invoice PDF", err);
     alert("Failed to generate PDF. Please try again.");
   } finally {
     if (document.body.contains(wrapper)) {
@@ -564,17 +556,39 @@ const Orders = () => {
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
   // Auto-print preference (default: true for best kitchen experience)
-  const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
-    return localStorage.getItem("autoPrintKOT") !== "false";
+  // Auto-print preference (read-only from storage, default: true)
+  const autoPrintEnabled = localStorage.getItem("autoPrintKOT") !== "false";
+
+  // Reason Modal State
+  const [reasonModal, setReasonModal] = useState({
+    open: false,
+    orderId: null,
+    status: null,
+    title: "",
   });
-  
-  // Toggle auto-print
-  const toggleAutoPrint = () => {
-    setAutoPrintEnabled(prev => {
-      const newValue = !prev;
-      localStorage.setItem("autoPrintKOT", newValue);
-      return newValue;
+  const [reasonInput, setReasonInput] = useState("");
+
+  const openReasonModal = (orderId, status) => {
+    setReasonModal({
+      open: true,
+      orderId,
+      status,
+      title: status === "Cancelled" ? "Cancel Order" : "Return Order",
     });
+    setReasonInput("");
+  };
+
+  const closeReasonModal = () => {
+    setReasonModal({ open: false, orderId: null, status: null, title: "" });
+    setReasonInput("");
+  };
+
+  const handleReasonSubmit = () => {
+    if (!reasonInput.trim()) {
+      alert("Please provide a reason.");
+      return;
+    }
+    changeStatus(reasonModal.orderId, reasonModal.status, reasonInput);
   };
 
   // Helper to handle auto-printing for incoming orders
@@ -687,18 +701,19 @@ const Orders = () => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const changeStatus = async (orderId, newStatus) => {
+  const changeStatus = async (orderId, newStatus, reason = null) => {
     const requestType = `order-status-${orderId}`;
 
     try {
       const response = await withCancellation(requestType, async (signal) => {
         return await api.patch(
           `/orders/${orderId}/status`,
-          { status: newStatus },
+          { status: newStatus, reason },
           { signal }
         );
       });
       upsertOrder(response.data);
+      if (reasonModal.open) closeReasonModal();
     } catch (e) {
       // Ignore AbortError (request was cancelled)
       if (e.name === "AbortError") {
@@ -856,7 +871,7 @@ const Orders = () => {
                       <button
                         key="return"
                         type="button"
-                        onClick={() => changeStatus(order._id, "Returned")}
+                        onClick={() => openReasonModal(order._id, "Returned")}
                         title="Return Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                       >
@@ -868,7 +883,7 @@ const Orders = () => {
                       <button
                         key="cancel"
                         type="button"
-                        onClick={() => changeStatus(order._id, "Cancelled")}
+                        onClick={() => openReasonModal(order._id, "Cancelled")}
                         title="Cancel Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                       >
@@ -903,7 +918,7 @@ const Orders = () => {
               >
                 ✏️ <span className="hidden sm:inline">Edit</span>
               </button>
-              {user?.role !== "admin" && (
+              {user?.role !== "admin" && user?.role !== "franchise_admin" && (
                 <button
                   type="button"
                   onClick={(e) => handleDelete(e, order._id)}
@@ -1959,23 +1974,7 @@ const Orders = () => {
             </button>
           )}
 
-          {/* Auto-print Toggle */}
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-2 rounded-lg border border-gray-300 shadow-sm">
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  className="peer sr-only" 
-                  checked={autoPrintEnabled}
-                  onChange={toggleAutoPrint}
-                />
-                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-              </div>
-              <span className="text-sm font-medium text-gray-700">
-                {autoPrintEnabled ? '🖨️ Auto-Print ON' : '🖨️ Auto-Print OFF'}
-              </span>
-            </label>
-          </div>
+
         </div>
 
         {/* Search Filters */}
@@ -3341,6 +3340,57 @@ const Orders = () => {
                     : "Save Changes"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reason Modal */}
+      {reasonModal.open && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
+            <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg text-gray-800">
+                {reasonModal.title}
+              </h3>
+              <button
+                onClick={closeReasonModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Please provide a reason:
+              </label>
+              <textarea
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[100px]"
+                placeholder="Type here..."
+                autoFocus
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
+              <button
+                onClick={closeReasonModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleReasonSubmit}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${
+                  reasonModal.status === "Cancelled"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+                type="button"
+              >
+                Confirm{" "}
+                {reasonModal.status === "Cancelled" ? "Cancel" : "Return"}
+              </button>
             </div>
           </div>
         </div>

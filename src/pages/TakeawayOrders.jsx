@@ -485,51 +485,43 @@ const downloadOrderInvoice = async (order) => {
 
   const element = wrapper.querySelector(".invoice-root");
   if (!element) {
-    document.body.removeChild(wrapper);
+    if (document.body.contains(wrapper)) {
+      document.body.removeChild(wrapper);
+    }
     alert("Failed to render invoice for download.");
     return;
   }
 
   try {
     const canvas = await html2canvas(element, {
-      scale: window.devicePixelRatio || 2,
+      scale: 2,
       useCORS: true,
       backgroundColor: "#ffffff",
     });
 
     const imageData = canvas.toDataURL("image/png");
+    
+    // Calculate dimensions
+    const pdfWidth = 80;
+    const margin = 5;
+    const usableWidth = pdfWidth - (margin * 2);
+    
+    const tempPdf = new jsPDF();
+    const imgProps = tempPdf.getImageProperties(imageData);
+    const imgRatio = imgProps.height / imgProps.width;
+    const imgHeight = usableWidth * imgRatio;
+    const pdfHeight = imgHeight + (margin * 2);
+
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
-      format: [80, "auto"],
+      format: [pdfWidth, pdfHeight],
     });
-    const pdfWidth = 80;
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const margin = 4;
-    const usableWidth = pdfWidth - margin * 2;
 
-    const imgProps = pdf.getImageProperties(imageData);
-    const imgRatio = imgProps.height / imgProps.width;
-    const imgHeight = usableWidth * imgRatio;
-
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= pdfHeight - margin * 2;
-
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin - heightLeft;
-      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= pdfHeight - margin * 2;
-    }
-
+    pdf.addImage(imageData, "PNG", margin, margin, usableWidth, imgHeight);
     pdf.save(`${buildInvoiceId(order)}.pdf`);
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.error("Failed to download invoice PDF", err);
-    }
+    console.error("Failed to download invoice PDF", err);
     alert("Failed to generate PDF. Please try again.");
   } finally {
     if (document.body.contains(wrapper)) {

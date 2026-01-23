@@ -24,7 +24,7 @@ const StatCard = ({
   return (
     <div
       onClick={onClick}
-      className={`p-5 bg-white rounded-xl shadow-md border ${
+      className={`p-3 sm:p-4 md:p-5 bg-white rounded-lg sm:rounded-xl shadow-md border ${
         colorClasses[color]
       } flex flex-col justify-between h-full ${
         clickable
@@ -32,13 +32,19 @@ const StatCard = ({
           : ""
       }`}
     >
-      <div className="flex items-center space-x-4">
-        <div className="text-3xl">{icon}</div>
-        <div>
-          <p className="text-sm font-medium text-[#6b4423]">{title}</p>
-          <p className="text-2xl font-bold text-[#4a2e1f]">{value}</p>
+      <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4">
+        <div className="text-xl sm:text-2xl md:text-3xl flex-shrink-0">{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-xs md:text-sm font-medium text-[#6b4423] truncate">
+            {title}
+          </p>
+          <p className="text-base sm:text-xl md:text-2xl font-bold text-[#4a2e1f] truncate">
+            {value}
+          </p>
           {subtitle && (
-            <p className="text-xs text-[#6b4423] mt-1">{subtitle}</p>
+            <p className="text-[9px] sm:text-[10px] md:text-xs text-[#6b4423] mt-0.5 sm:mt-1 truncate">
+              {subtitle}
+            </p>
           )}
         </div>
       </div>
@@ -494,44 +500,44 @@ const Dashboard = () => {
 
       {/* Cart-wise Orders Breakdown */}
       {cartOrderStats.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6 mb-4 md:mb-6">
-          <h2 className="text-base md:text-lg lg:text-xl font-bold text-[#4a2e1f] mb-3 md:mb-4">
+        <div className="bg-white rounded-lg sm:rounded-xl shadow-md border border-[#e2c1ac] p-3 sm:p-4 md:p-6 mb-4 md:mb-6">
+          <h2 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-[#4a2e1f] mb-2 sm:mb-3 md:mb-4">
             Orders by Cart
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
             {cartOrderStats.map((cart) => (
               <div
                 key={cart.cartId}
-                className="bg-[#fef4ec] rounded-lg p-4 border border-[#e2c1ac] hover:shadow-md transition-shadow"
+                className="bg-[#fef4ec] rounded-lg p-3 sm:p-4 border border-[#e2c1ac] hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
                     {cart.cartCode && (
-                      <span className="px-2 py-1 text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded">
+                      <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono font-bold bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded flex-shrink-0">
                         {cart.cartCode}
                       </span>
                     )}
-                    <span className="font-medium text-[#4a2e1f]">
+                    <span className="font-medium text-xs sm:text-sm text-[#4a2e1f] truncate">
                       {cart.cartName}
                     </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center mt-3">
-                  <div className="bg-white rounded p-2">
-                    <p className="text-xs text-[#6b4423]">Today</p>
-                    <p className="text-lg font-bold text-[#4a2e1f]">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-center mt-2 sm:mt-3">
+                  <div className="bg-white rounded p-1.5 sm:p-2">
+                    <p className="text-[9px] sm:text-xs text-[#6b4423]">Today</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-[#4a2e1f]">
                       {cart.todayOrders}
                     </p>
                   </div>
-                  <div className="bg-white rounded p-2">
-                    <p className="text-xs text-[#6b4423]">Total</p>
-                    <p className="text-lg font-bold text-[#4a2e1f]">
+                  <div className="bg-white rounded p-1.5 sm:p-2">
+                    <p className="text-[9px] sm:text-xs text-[#6b4423]">Total</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-[#4a2e1f]">
                       {cart.orders}
                     </p>
                   </div>
-                  <div className="bg-white rounded p-2">
-                    <p className="text-xs text-[#6b4423]">Revenue</p>
-                    <p className="text-sm font-bold text-green-600">
+                  <div className="bg-white rounded p-1.5 sm:p-2">
+                    <p className="text-[9px] sm:text-xs text-[#6b4423]">Revenue</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm font-bold text-green-600 truncate">
                       ₹{Number(cart.revenue || 0).toLocaleString()}
                     </p>
                   </div>
@@ -540,7 +546,7 @@ const Dashboard = () => {
             ))}
           </div>
           {cartOrderStats.length === 0 && (
-            <p className="text-center text-[#6b4423] py-4">
+            <p className="text-center text-[#6b4423] py-4 text-xs sm:text-sm">
               No carts with orders yet
             </p>
           )}
