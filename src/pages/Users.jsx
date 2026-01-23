@@ -161,10 +161,12 @@ const Users = () => {
           delete updateData.password;
         }
 
-        // Only super admin is allowed to change role or ownership fields,
-        // and even super admin cannot change the role of a super_admin user
+        // ALWAYS delete role field since there is no role selector in the form
+        // Role changes should not be allowed through this basic user edit form
+        delete updateData.role;
+
+        // Only super admin is allowed to change ownership fields
         if (!isSuperAdmin || editingUser.role === "super_admin") {
-          delete updateData.role;
           delete updateData.franchiseId;
           delete updateData.cartName;
           delete updateData.location;

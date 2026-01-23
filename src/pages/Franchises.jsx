@@ -606,18 +606,10 @@ const Franchises = () => {
       return;
     }
 
-    // Document validation for create mode only
+    // Document validation for create mode only (Aadhar and PAN are now optional)
     if (!editingFranchise) {
       if (!files.udyamCertificate) {
         setFormError("Udyam Certificate is required");
-        return;
-      }
-      if (!files.aadharCard) {
-        setFormError("Aadhar Card is required");
-        return;
-      }
-      if (!files.panCard) {
-        setFormError("PAN Card is required");
         return;
       }
     }
@@ -901,7 +893,8 @@ const Franchises = () => {
     const matchesStatus =
       filterStatus === "all" ||
       (filterStatus === "active" && franchise.isActive !== false) ||
-      (filterStatus === "inactive" && franchise.isActive === false);
+      (filterStatus === "inactive" && franchise.isActive === false) ||
+      (filterStatus === "pending" && (franchiseCarts[franchise._id]?.pendingApproval || 0) > 0);
 
     return matchesSearch && matchesStatus;
   });
@@ -1047,6 +1040,16 @@ const Franchises = () => {
           >
             Inactive Only
           </button>
+          <button
+            onClick={() => setFilterStatus("pending")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              filterStatus === "pending"
+                ? "bg-yellow-600 text-white shadow-sm"
+                : "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+            }`}
+          >
+            Pending Carts
+          </button>
         </div>
         
         {/* Search & View Toggle */}
@@ -1122,6 +1125,8 @@ const Franchises = () => {
                       filterStatus === "active" && !isActive ? "hidden" : ""
                     } ${
                       filterStatus === "inactive" && isActive ? "hidden" : ""
+                    } ${
+                      filterStatus === "pending" && !(cartStats.pendingApproval > 0) ? "hidden" : ""
                     }`}
                   >
                     <div className="p-3 sm:p-4">
@@ -1822,12 +1827,12 @@ const Franchises = () => {
                 <h3 className="text-xs font-semibold text-gray-700 mb-1">
                   {editingFranchise
                     ? "Documents (Optional)"
-                    : "Required Documents *"}
+                    : "Documents"}
                 </h3>
                 <p className="text-[11px] text-gray-500 mb-3">
                   {editingFranchise
                     ? "Update documents if needed. Leave blank to keep existing documents."
-                    : "Please upload all required compliance documents to complete franchise registration."}
+                    : "Udyam Certificate is required. Aadhar and PAN are optional."}
                 </p>
                 <div className="space-y-3">
                   <div>
@@ -1844,7 +1849,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.udyamCertificate}`
+                                }/${editingFranchise.udyamCertificate}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1858,9 +1863,15 @@ const Franchises = () => {
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file && file.size > 5 * 1024 * 1024) {
+                          alert("File size must be less than 5MB");
+                          e.target.value = "";
+                          return;
+                        }
                         setFiles({
                           ...files,
-                          udyamCertificate: e.target.files[0],
+                          udyamCertificate: file,
                         });
                         // Clear error when user selects file
                         if (formError) setFormError(null);
@@ -1886,7 +1897,7 @@ const Franchises = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Aadhar Card {!editingFranchise && "*"}
+                      Aadhar Card <span className="text-gray-400 text-xs">(Optional)</span>
                     </label>
                     {editingFranchise && editingFranchise.aadharCard && (
                       <p className="text-xs text-gray-600 mb-1">
@@ -1898,7 +1909,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.aadharCard}`
+                                }/${editingFranchise.aadharCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1912,7 +1923,13 @@ const Franchises = () => {
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => {
-                        setFiles({ ...files, aadharCard: e.target.files[0] });
+                        const file = e.target.files[0];
+                        if (file && file.size > 5 * 1024 * 1024) {
+                          alert("File size must be less than 5MB");
+                          e.target.value = "";
+                          return;
+                        }
+                        setFiles({ ...files, aadharCard: file });
                         // Clear error when user selects file
                         if (formError) setFormError(null);
                       }}
@@ -1937,7 +1954,7 @@ const Franchises = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      PAN Card {!editingFranchise && "*"}
+                      PAN Card <span className="text-gray-400 text-xs">(Optional)</span>
                     </label>
                     {editingFranchise && editingFranchise.panCard && (
                       <p className="text-xs text-gray-600 mb-1">
@@ -1949,7 +1966,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${editingFranchise.panCard}`
+                                }/${editingFranchise.panCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1963,7 +1980,13 @@ const Franchises = () => {
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => {
-                        setFiles({ ...files, panCard: e.target.files[0] });
+                        const file = e.target.files[0];
+                        if (file && file.size > 5 * 1024 * 1024) {
+                          alert("File size must be less than 5MB");
+                          e.target.value = "";
+                          return;
+                        }
+                        setFiles({ ...files, panCard: file });
                         // Clear error when user selects file
                         if (formError) setFormError(null);
                       }}
@@ -2156,14 +2179,8 @@ const Franchises = () => {
                   }
                 }
 
-                // Validate required documents only for create mode
+                // Validate required documents only for create mode (Aadhar and PAN are now optional)
                 if (!editingCart) {
-                  if (!cartFiles.aadharCard) {
-                    errors.aadharCard = "Aadhar Card is required";
-                  }
-                  if (!cartFiles.panCard) {
-                    errors.panCard = "PAN Card is required";
-                  }
                   if (!cartFiles.shopActLicense) {
                     errors.shopActLicense = "Shop Act License is required";
                   }
@@ -2762,24 +2779,19 @@ const Franchises = () => {
               {/* Documents Section */}
               <div className="border-b pb-4">
                 <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">
-                  Owner Documents{" "}
-                  {editingCart ? "" : <span className="text-red-500">*</span>}
+                  Owner Documents
                 </h3>
                 <p className="text-sm text-[#6b4423] mb-4">
                   📄{" "}
                   {editingCart
                     ? "Upload new files to update existing documents. Leave blank to keep current documents."
-                    : "All documents are required for cart registration."}
+                    : "Shop Act License and FSSAI License are required. Aadhar and PAN are optional."}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
                       Aadhar Card of Owner{" "}
-                      {editingCart ? (
-                        ""
-                      ) : (
-                        <span className="text-red-500">*</span>
-                      )}
+                      <span className="text-gray-400 text-xs">(Optional)</span>
                     </label>
                     {editingCart && cartExistingDocs.aadharCard && (
                       <p className="text-xs text-gray-600 mb-1">
@@ -2791,7 +2803,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.aadharCard}`
+                                }/${cartExistingDocs.aadharCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2808,12 +2820,12 @@ const Franchises = () => {
                       onChange={(e) => {
                         const file = e.target.files[0] || null;
                         if (file) {
-                          // Check file size (max 10MB)
-                          const maxSize = 10 * 1024 * 1024;
+                          // Check file size (max 5MB)
+                          const maxSize = 5 * 1024 * 1024;
                           if (file.size > maxSize) {
                             setCartFormErrors({
                               ...cartFormErrors,
-                              aadharCard: "File size must be less than 10MB",
+                              aadharCard: "File size must be less than 5MB",
                             });
                             e.target.value = "";
                             return;
@@ -2846,11 +2858,7 @@ const Franchises = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
                       PAN Card{" "}
-                      {editingCart ? (
-                        ""
-                      ) : (
-                        <span className="text-red-500">*</span>
-                      )}
+                      <span className="text-gray-400 text-xs">(Optional)</span>
                     </label>
                     {editingCart && cartExistingDocs.panCard && (
                       <p className="text-xs text-gray-600 mb-1">
@@ -2862,7 +2870,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.panCard}`
+                                }/${cartExistingDocs.panCard}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2879,12 +2887,12 @@ const Franchises = () => {
                       onChange={(e) => {
                         const file = e.target.files[0] || null;
                         if (file) {
-                          // Check file size (max 10MB)
-                          const maxSize = 10 * 1024 * 1024;
+                          // Check file size (max 5MB)
+                          const maxSize = 5 * 1024 * 1024;
                           if (file.size > maxSize) {
                             setCartFormErrors({
                               ...cartFormErrors,
-                              panCard: "File size must be less than 10MB",
+                              panCard: "File size must be less than 5MB",
                             });
                             e.target.value = "";
                             return;
@@ -2930,7 +2938,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.shopActLicense}`
+                                }/${cartExistingDocs.shopActLicense}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -2947,13 +2955,13 @@ const Franchises = () => {
                       onChange={(e) => {
                         const file = e.target.files[0] || null;
                         if (file) {
-                          // Check file size (max 10MB)
-                          const maxSize = 10 * 1024 * 1024;
+                          // Check file size (max 5MB)
+                          const maxSize = 5 * 1024 * 1024;
                           if (file.size > maxSize) {
                             setCartFormErrors({
                               ...cartFormErrors,
                               shopActLicense:
-                                "File size must be less than 10MB",
+                                "File size must be less than 5MB",
                             });
                             e.target.value = "";
                             return;
@@ -3016,7 +3024,7 @@ const Franchises = () => {
                               : `${
                                   import.meta.env.VITE_NODE_API_URL ||
                                   "http://localhost:5001"
-                                }${cartExistingDocs.fssaiLicense}`
+                                }/${cartExistingDocs.fssaiLicense}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"
@@ -3033,12 +3041,12 @@ const Franchises = () => {
                       onChange={(e) => {
                         const file = e.target.files[0] || null;
                         if (file) {
-                          // Check file size (max 10MB)
-                          const maxSize = 10 * 1024 * 1024;
+                          // Check file size (max 5MB)
+                          const maxSize = 5 * 1024 * 1024;
                           if (file.size > maxSize) {
                             setCartFormErrors({
                               ...cartFormErrors,
-                              fssaiLicense: "File size must be less than 10MB",
+                              fssaiLicense: "File size must be less than 5MB",
                             });
                             e.target.value = "";
                             return;
@@ -3087,7 +3095,7 @@ const Franchises = () => {
                   {editingCart
                     ? "Upload new files to update existing documents. "
                     : "All documents are required. "}
-                  Accepted formats: PDF, JPG, PNG, WEBP (Max 10MB per file)
+                  Accepted formats: PDF, JPG, PNG, WEBP (Max 5MB per file)
                 </p>
               </div>
             </form>

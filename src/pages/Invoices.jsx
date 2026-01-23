@@ -494,41 +494,42 @@ const Invoices = () => {
   const handleDownloadPdf = async () => {
     if (!printRef.current || !selected) return;
     const element = printRef.current;
-    const canvas = await html2canvas(element, {
-      scale: window.devicePixelRatio || 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
+    
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
 
-    const imageData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: [80, "auto"],
-    });
-    const pdfWidth = 80;
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const margin = 4;
-    const usableWidth = pdfWidth - margin * 2;
+      const imageData = canvas.toDataURL("image/png");
+      
+      // Calculate dimensions before creating the PDF
+      const pdfWidth = 80;
+      const margin = 5;
+      const usableWidth = pdfWidth - (margin * 2);
+      
+      // Create a temporary instance to measure image properties
+      const tempPdf = new jsPDF();
+      const imgProps = tempPdf.getImageProperties(imageData);
+      const imgRatio = imgProps.height / imgProps.width;
+      const imgHeight = usableWidth * imgRatio;
+      
+      // For thermal printer style, we want a single long page
+      const pdfHeight = imgHeight + (margin * 2);
 
-    const imgProps = pdf.getImageProperties(imageData);
-    const imgRatio = imgProps.height / imgProps.width;
-    const imgHeight = usableWidth * imgRatio;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [pdfWidth, pdfHeight],
+      });
 
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= pdfHeight - margin * 2;
-
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin - heightLeft;
-      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= pdfHeight - margin * 2;
+      pdf.addImage(imageData, "PNG", margin, margin, usableWidth, imgHeight);
+      pdf.save(`${getInvoiceNumber(selected)}.pdf`);
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      alert("Failed to generate PDF. Please try again or use the Print option.");
     }
-
-    pdf.save(`${getInvoiceNumber(selected)}.pdf`);
   };
 
   return (

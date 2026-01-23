@@ -129,12 +129,12 @@ const RegisterCart = () => {
   const handleFileChange = (e) => {
     const { name, files: fileList } = e.target;
     if (fileList && fileList[0]) {
-      // Check file size (max 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      // Check file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
       if (fileList[0].size > maxSize) {
         setFormErrors({
           ...formErrors,
-          [name]: "File size must be less than 10MB",
+          [name]: "File size must be less than 5MB",
         });
         // Clear the file input
         e.target.value = "";
@@ -157,8 +157,6 @@ const RegisterCart = () => {
       });
       // Set error if this is a required field
       const requiredFields = [
-        "aadharCard",
-        "panCard",
         "shopActLicense",
         "fssaiLicense",
       ];
@@ -166,11 +164,7 @@ const RegisterCart = () => {
         setFormErrors({
           ...formErrors,
           [name]: `${
-            name === "aadharCard"
-              ? "Aadhar Card"
-              : name === "panCard"
-              ? "PAN Card"
-              : name === "shopActLicense"
+            name === "shopActLicense"
               ? "Shop Act License"
               : "FSSAI License"
           } is required`,
@@ -253,13 +247,7 @@ const RegisterCart = () => {
        // For now, accepting it as is, or you could add strict length check.
     }
 
-    // Validate required documents
-    if (!files.aadharCard) {
-      errors.aadharCard = "Aadhar Card is required";
-    }
-    if (!files.panCard) {
-      errors.panCard = "PAN Card is required";
-    }
+    // Validate required documents (Aadhar and PAN are now optional)
     if (!files.shopActLicense) {
       errors.shopActLicense = "Shop Act License is required";
     }
@@ -812,13 +800,13 @@ const RegisterCart = () => {
             </div>
           </div>
 
-          {/* Document Upload Section - Required */}
+          {/* Document Upload Section */}
           <div className="mt-8 border-t border-[#e2c1ac] pt-6">
             <h3 className="text-lg font-semibold text-[#4a2e1f] mb-2">
-              Owner Documents <span className="text-red-500">*</span>
+              Owner Documents
             </h3>
             <p className="text-sm text-[#6b4423] mb-4">
-              📄 All documents are required for cart registration.
+              📄 Upload required documents. Aadhar and PAN are optional.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -826,7 +814,7 @@ const RegisterCart = () => {
                   htmlFor="aadharCard"
                   className="block text-sm font-medium text-[#4a2e1f]"
                 >
-                  Aadhar Card of Owner <span className="text-red-500">*</span>
+                  Aadhar Card of Owner <span className="text-gray-400 text-xs">(Optional)</span>
                 </label>
                 <input
                   id="aadharCard"
@@ -857,7 +845,7 @@ const RegisterCart = () => {
                   htmlFor="panCard"
                   className="block text-sm font-medium text-[#4a2e1f]"
                 >
-                  PAN Card <span className="text-red-500">*</span>
+                  PAN Card <span className="text-gray-400 text-xs">(Optional)</span>
                 </label>
                 <input
                   id="panCard"
@@ -966,8 +954,7 @@ const RegisterCart = () => {
               </div>
             </div>
             <p className="mt-4 text-xs text-[#6b4423]">
-              All documents are required. Accepted formats: PDF, JPG, PNG, WEBP
-              (Max 10MB per file)
+              Shop Act License and FSSAI License are required. Aadhar and PAN are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 5MB per file)
             </p>
           </div>
 

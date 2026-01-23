@@ -325,58 +325,258 @@ const StaffStatus = ({ staff, activeOrders }) => {
 
 
 
-const OrdersTimeline = ({ orders }) => {
-    // Recharts temporarily disabled due to 'forwardRef' error
-    return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex items-center justify-center">
-            <p className="text-gray-500">Orders Timeline Chart (Disabled for Debugging)</p>
+const LiveOrderList = ({ title, orders, navigate, icon: Icon }) => (
+  <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
+    <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold text-[#4a2e1f] flex items-center gap-2">
+            <Icon className="text-[#d86d2a]" size={20} /> {title}
+        </h3>
+        <span className="bg-orange-100 text-[#d86d2a] px-2 py-1 rounded-full text-xs font-bold">
+            {orders.length}
+        </span>
+    </div>
+    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[300px] max-h-[400px]">
+      {orders.length > 0 ? (
+        orders.map((order, idx) => {
+             const totalAmount = order.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
+             const itemsCount = order.kotLines?.reduce((acc, kot) => acc + (kot.items?.length || 0), 0) || 0;
+             return (
+              <div key={idx} className="p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-[#4a2e1f]">
+                            {order.tableNumber ? `Table ${order.tableNumber}` : (order.orderId || order._id).slice(-4)}
+                        </span>
+                        {order.customerName && <span className="text-xs text-gray-500">- {order.customerName}</span>}
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2">
+                       <FiClock size={10} />
+                       <span>{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 text-[10px] rounded font-semibold border ${
+                      order.status === 'Ready' ? 'bg-green-50 text-green-600 border-green-100' :
+                      order.status === 'Preparing' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                      order.status === 'Served' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                      'bg-gray-50 text-gray-600 border-gray-100'
+                  }`}>
+                    {order.status}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between border-t border-gray-50 pt-2 mt-2">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 font-medium">{itemsCount} Items</span>
+                        <span className="text-sm font-bold text-[#d86d2a]">₹{totalAmount.toLocaleString()}</span>
+                    </div>
+                     <button
+                        onClick={() => navigate('/orders')}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 rounded hover:bg-blue-100 transition"
+                      >
+                        View
+                      </button>
+                </div>
+              </div>
+            );
+        })
+      ) : (
+        <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+            <Icon size={40} className="mb-2" />
+            <p className="text-sm">No active orders</p>
         </div>
-    )
-}
+      )}
+    </div>
+  </div>
+);
 
-const BestSellingItems = ({ orders }) => {
-    const itemCounts = {};
-    orders.forEach(o => {
-        if(o.kotLines) {
-            o.kotLines.forEach(kot => {
-                if(kot.items) {
-                    kot.items.forEach(item => {
-                        const name = item.name;
-                        itemCounts[name] = (itemCounts[name] || 0) + item.quantity;
-                    });
-                }
-            });
-        }
-    });
+const OrdersTimeline = ({ orders }) => {
+    const data = useMemo(() => {
+        // Create array for 24 hours
+        const hours = Array.from({ length: 24 }, (_, i) => ({
+            name: i === 0 ? '12 AM' : i === 12 ? '12 PM' : i > 12 ? `${i-12} PM` : `${i} AM`,
+            hour: i,
+            orders: 0
+        }));
 
-    const sortedItems = Object.entries(itemCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
+        orders.forEach(o => {
+            if (!o.createdAt) return;
+            const hour = new Date(o.createdAt).getHours();
+            if (hours[hour]) {
+                hours[hour].orders += 1;
+            }
+        });
+
+        // Show typical operating hours (e.g. 8 AM to 11 PM) + any outlier hours if they have data
+        const startHour = 8;
+        const endHour = 23;
+        
+        return hours.filter(h => (h.hour >= startHour && h.hour <= endHour) || h.orders > 0);
+    }, [orders]);
 
     return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full">
-            <h3 className="text-lg font-bold text-[#4a2e1f] mb-4">Best Selling Items</h3>
-            <div className="space-y-3">
-                {sortedItems.length > 0 ? (
-                    sortedItems.map(([name, count], index) => (
-                        <div key={name} className="flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-gray-400 w-4">{index + 1}.</span>
-                                <span className="text-[#4a2e1f] font-medium">{name}</span>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
+            <h3 className="text-lg font-bold text-[#4a2e1f] mb-4">Orders Timeline</h3>
+            <div className="flex-1 w-full min-h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#d86d2a" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#d86d2a" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0e6dd" />
+                        <XAxis 
+                            dataKey="name" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fontSize: 10, fill: '#8b5e3c'}} 
+                            interval="preserveStartEnd"
+                            minTickGap={20}
+                        />
+                        <YAxis 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fontSize: 10, fill: '#8b5e3c'}} 
+                            allowDecimals={false}
+                        />
+                        <Tooltip 
+                            contentStyle={{backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2c1ac'}}
+                            itemStyle={{color: '#d86d2a'}}
+                            labelStyle={{color: '#4a2e1f', fontWeight: 'bold'}}
+                        />
+                        <Area 
+                            type="monotone" 
+                            dataKey="orders" 
+                            stroke="#d86d2a" 
+                            fillOpacity={1} 
+                            fill="url(#colorOrders)" 
+                            strokeWidth={2}
+                            animationDuration={1500}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};
+
+const RecentActivity = ({ orders, tables }) => {
+    // Helper to format time relative to now
+    const timeAgo = (dateStr) => {
+        const date = new Date(dateStr);
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " years ago";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " months ago";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days ago";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " hours ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " min ago";
+        return "Just now";
+    };
+
+    const events = useMemo(() => {
+        const evts = [];
+        
+        // 1. New Orders
+        orders.forEach(o => {
+            if(o.createdAt) {
+                evts.push({
+                    type: 'new_order',
+                    date: new Date(o.createdAt),
+                    title: `New order #${(o.orderId || o._id).slice(-4)} received`,
+                    amount: o.kotLines?.reduce((s, k) => s + (Number(k.totalAmount)||0), 0) || 0,
+                    icon: <FiShoppingBag size={16} />,
+                    color: 'bg-orange-100 text-[#d86d2a]'
+                });
+            }
+            // 2. Payments (for paid orders)
+            if(o.status === 'Paid' && (o.paidAt || o.updatedAt)) {
+                evts.push({
+                    type: 'payment',
+                    date: new Date(o.paidAt || o.updatedAt),
+                    title: `Payment received for Order #${(o.orderId || o._id).slice(-4)}`,
+                    amount: o.kotLines?.reduce((s, k) => s + (Number(k.totalAmount)||0), 0) || 0,
+                    icon: <FaMoneyBillWave size={16} />,
+                    color: 'bg-blue-100 text-blue-600'
+                });
+            }
+            // 3. Status Changes (generic "Completed" / "Served")
+            if(['Served', 'Ready', 'Completed'].includes(o.status) && o.updatedAt && o.status !== 'Paid') {
+                 evts.push({
+                    type: 'status',
+                    date: new Date(o.updatedAt),
+                    title: `Order #${(o.orderId || o._id).slice(-4)} marked as ${o.status.toLowerCase()}`,
+                    amount: o.kotLines?.reduce((s, k) => s + (Number(k.totalAmount)||0), 0) || 0,
+                    icon: <FiCheckCircle size={16} />,
+                    color: 'bg-green-100 text-green-600'
+                 });
+            }
+        });
+
+        // 4. Table Updates
+        tables.forEach(t => {
+            if(t.updatedAt) {
+                 evts.push({
+                    type: 'table',
+                    date: new Date(t.updatedAt),
+                    title: `Table ${t.tableNumber} marked as ${t.status.toLowerCase()}`,
+                    amount: null,
+                    icon: <MdTableRestaurant size={16} />,
+                    color: 'bg-purple-100 text-purple-600'
+                 });
+            }
+        });
+
+        // Filter last 24h and Sort
+        const now = new Date();
+        return evts
+            .filter(e => (now - e.date) < 24 * 60 * 60 * 1000 && (now - e.date) >= 0)
+            .sort((a,b) => b.date - a.date)
+            .slice(0, 10);
+
+    }, [orders, tables]);
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
+             <h3 className="text-lg font-bold text-[#4a2e1f] mb-6 flex items-center gap-2">
+                <FiActivity className="text-[#d86d2a]" /> Recent Activity
+             </h3>
+             <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                {events.length > 0 ? (
+                    events.map((e, i) => (
+                        <div key={i} className="flex gap-4 items-start">
+                            <div className={`p-3 rounded-2xl flex-shrink-0 ${e.color} flex items-center justify-center w-12 h-12`}>
+                                {e.icon}
                             </div>
-                            <span className="text-sm font-bold text-[#d86d2a]">{count}</span>
+                            <div className="flex-1 min-w-0 pt-1">
+                                <div className="flex justify-between items-start">
+                                    <p className="text-sm font-bold text-[#4a2e1f] truncate pr-2">{e.title}</p>
+                                    {e.amount > 0 && (
+                                        <span className="text-sm font-bold text-[#4a2e1f] whitespace-nowrap">
+                                            ₹{e.amount.toLocaleString()}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">{timeAgo(e.date)}</p>
+                            </div>
                         </div>
                     ))
                 ) : (
-                   <p className="text-sm text-gray-500">No data yet.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
+                         <FiActivity size={40} className="mb-2"/>
+                         <p className="text-sm">No activity yet</p>
+                    </div>
                 )}
-            </div>
-            <button className="w-full mt-4 bg-[#d86d2a] text-white py-2 rounded-lg font-bold hover:bg-[#bf5e22] transition flex items-center justify-center gap-2">
-                <BiDish /> New Order
-            </button>
+             </div>
         </div>
     );
-}
+};
 
 // --- Main Dashboard Component ---
 
@@ -512,8 +712,10 @@ const DashboardAdmin = () => {
       }));
   }, [orders]);
 
-  // Active Orders for Staff Status
-  const activeOrders = todayOrders.filter(o => !['Paid', 'Cancelled'].includes(o.status));
+  // Active Orders for Live Status
+  const activeOrders = todayOrders.filter(o => !['Paid', 'Cancelled', 'Returned'].includes(o.status));
+  const liveDineIn = activeOrders.filter(o => o.serviceType === 'DINE_IN');
+  const liveTakeaway = activeOrders.filter(o => ['TAKEAWAY', 'PICKUP', 'DELIVERY'].includes(o.serviceType));
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] p-4 md:p-6 lg:p-8 font-sans text-[#4a2e1f]">
@@ -543,16 +745,16 @@ const DashboardAdmin = () => {
         </div>
       </div>
 
-      {/* Bottom Section: Alerts & Detailed Stats */}
+      {/* Bottom Section: Live Orders */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-         <LiveAlerts alerts={alerts} navigate={navigate} />
-         <StaffStatus staff={employees} activeOrders={activeOrders} />
+         <LiveOrderList title="Live Dine-In Orders" orders={liveDineIn} navigate={navigate} icon={MdLocalDining} />
+         <LiveOrderList title="Live Takeaway Orders" orders={liveTakeaway} navigate={navigate} icon={MdDeliveryDining} />
       </div>
 
       {/* Final Row: Timeline & Best Selling */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
          <OrdersTimeline orders={todayOrders} />
-         <BestSellingItems orders={orders /* Use all orders for best selling stats or todayOrders? All orders better */} />
+         <RecentActivity orders={todayOrders} tables={tables} />
       </div>
 
     </div>
