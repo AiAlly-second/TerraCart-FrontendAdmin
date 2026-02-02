@@ -65,6 +65,7 @@ const Franchises = () => {
     location: "",
     phone: "",
     address: "",
+    address: "",
     fssaiNumber: "",
     shopActLicenseExpiry: "",
     fssaiLicenseExpiry: "",
@@ -1007,7 +1008,7 @@ const Franchises = () => {
       {/* Filters & Search */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
         {/* Filter Buttons */}
-        <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
           <FaFilter className="text-gray-400" size={14} />
           <span className="text-sm font-medium text-gray-700 mr-2">Filter:</span>
           <button
@@ -1258,149 +1259,142 @@ const Franchises = () => {
                 >
                   {/* Franchise Row */}
                   <div className="p-4 hover:bg-gray-50 transition-colors border-b last:border-b-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      {/* Top Section: Expand, Avatar, Info */}
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {/* Expand Button */}
-                        <button
-                          onClick={() => toggleFranchiseExpand(franchise._id)}
-                          className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0 mt-1 sm:mt-0"
-                        >
-                          {isExpanded ? (
-                            <FaChevronDown size={12} />
-                          ) : (
-                            <FaChevronRight size={12} />
-                          )}
-                        </button>
+                    <div className="flex items-center gap-3">
+                      {/* Expand Button */}
+                      <button
+                        onClick={() => toggleFranchiseExpand(franchise._id)}
+                        className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                      >
+                        {isExpanded ? (
+                          <FaChevronDown size={12} />
+                        ) : (
+                          <FaChevronRight size={12} />
+                        )}
+                      </button>
 
-                        {/* Avatar */}
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
-                            isActive
-                              ? "bg-gradient-to-br from-blue-500 to-blue-600"
-                              : "bg-gray-400"
-                          }`}
-                        >
-                          {franchise.name.charAt(0).toUpperCase()}
-                        </div>
-
-                        {/* Main Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {franchise.franchiseCode && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded whitespace-nowrap">
-                                {franchise.franchiseCode}
-                              </span>
-                            )}
-                            <span className="font-semibold text-gray-800 text-sm truncate">
-                              {franchise.name}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${
-                                isActive
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-gray-200 text-gray-600"
-                              }`}
-                            >
-                              {isActive ? "Active" : "Inactive"}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
-                            <span className="flex items-center gap-1 truncate min-w-0">
-                              <FaEnvelope size={10} className="flex-shrink-0" />
-                              <span className="truncate">{franchise.email}</span>
-                            </span>
-                            {franchise.mobile && (
-                              <span className="hidden sm:flex items-center gap-1">
-                                <FaPhone size={10} />
-                                {franchise.mobile}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Mobile Cart Stats */}
-                          <div className="flex items-center gap-2 mt-2 md:hidden text-[10px]">
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
-                              <FaStore size={9} />
-                              <span className="font-medium">
-                                {cartStats.totalCarts || 0}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-600 rounded">
-                              <FaCheckCircle size={9} />
-                              <span>{cartStats.activeCarts || 0}</span>
-                            </div>
-                            {(cartStats.pendingApproval || 0) > 0 && (
-                              <div className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-50 text-yellow-600 rounded">
-                                <FaClock size={9} />
-                                <span>{cartStats.pendingApproval}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                      {/* Avatar */}
+                      <div
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 ${
+                          isActive
+                            ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                            : "bg-gray-400"
+                        }`}
+                      >
+                        {franchise.name.charAt(0).toUpperCase()}
                       </div>
 
-                      {/* Desktop Stats & Actions Group */}
-                      <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-0 pt-3 sm:pt-0 border-gray-100">
-                        {/* Cart Stats - Desktop Only */}
-                        <div className="hidden md:flex items-center gap-3 text-xs mr-2">
-                          <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
-                            <FaStore size={10} />
+                      {/* Main Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          {franchise.franchiseCode && (
+                            <span className="px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded whitespace-nowrap">
+                              {franchise.franchiseCode}
+                            </span>
+                          )}
+                          <span className="font-semibold text-gray-800 text-xs sm:text-sm truncate">
+                            {franchise.name}
+                          </span>
+                          <span
+                            className={`px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
+                              isActive
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-200 text-gray-600"
+                            }`}
+                          >
+                            {isActive ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-3 mt-0.5 text-[10px] sm:text-xs text-gray-500 flex-wrap">
+                          <span className="flex items-center gap-1 truncate min-w-0">
+                            <FaEnvelope size={9} className="flex-shrink-0" />
+                            <span className="truncate">{franchise.email}</span>
+                          </span>
+                          {franchise.mobile && (
+                            <span className="hidden sm:flex items-center gap-1">
+                              <FaPhone size={9} />
+                              {franchise.mobile}
+                            </span>
+                          )}
+                        </div>
+                        {/* Mobile Cart Stats */}
+                        <div className="flex items-center gap-2 mt-1 sm:hidden text-[10px]">
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
+                            <FaStore size={9} />
                             <span className="font-medium">
                               {cartStats.totalCarts || 0}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded">
-                            <FaCheckCircle size={10} />
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-600 rounded">
+                            <FaCheckCircle size={9} />
                             <span>{cartStats.activeCarts || 0}</span>
                           </div>
                           {(cartStats.pendingApproval || 0) > 0 && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-600 rounded">
-                              <FaClock size={10} />
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-50 text-yellow-600 rounded">
+                              <FaClock size={9} />
                               <span>{cartStats.pendingApproval}</span>
                             </div>
                           )}
                         </div>
+                      </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-auto sm:ml-0">
-                          <button
-                            onClick={() => setViewDetails(franchise)}
-                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="View Details"
-                          >
-                            <FaEye size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleToggleStatus(franchise._id)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              isActive
-                                ? "text-emerald-600 hover:bg-emerald-50"
-                                : "text-gray-400 hover:bg-gray-100"
-                            }`}
-                            title={isActive ? "Deactivate" : "Activate"}
-                          >
-                            {isActive ? (
-                              <FaToggleOn size={20} />
-                            ) : (
-                              <FaToggleOff size={20} />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(franchise)}
-                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <FaEdit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(franchise._id)}
-                            className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <FaTrash size={18} />
-                          </button>
+                      {/* Cart Stats - Desktop */}
+                      <div className="hidden md:flex items-center gap-3 text-xs">
+                        <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
+                          <FaStore size={10} />
+                          <span className="font-medium">
+                            {cartStats.totalCarts || 0}
+                          </span>
                         </div>
+                        <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded">
+                          <FaCheckCircle size={10} />
+                          <span>{cartStats.activeCarts || 0}</span>
+                        </div>
+                        {(cartStats.pendingApproval || 0) > 0 && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-600 rounded">
+                            <FaClock size={10} />
+                            <span>{cartStats.pendingApproval}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setViewDetails(franchise)}
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <FaEye size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(franchise._id)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            isActive
+                              ? "text-emerald-600 hover:bg-emerald-50"
+                              : "text-gray-400 hover:bg-gray-100"
+                          }`}
+                          title={isActive ? "Deactivate" : "Activate"}
+                        >
+                          {isActive ? (
+                            <FaToggleOn size={20} />
+                          ) : (
+                            <FaToggleOff size={20} />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleEdit(franchise)}
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <FaEdit size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(franchise._id)}
+                          className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <FaTrash size={18} />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1408,7 +1402,7 @@ const Franchises = () => {
                   {/* Expanded Carts Section */}
                   {isExpanded && (
                     <div className="bg-gray-50 border-t border-gray-100 px-3 py-2">
-                      <div className="ml-2 sm:ml-8">
+                      <div className="ml-8">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs font-semibold text-gray-600 flex items-center gap-1">
                             <FaStore size={10} />
@@ -2729,41 +2723,40 @@ const Franchises = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      FSSAI Number <span className="text-red-500">*</span>
+                      GST Number
                     </label>
                     <input
                       type="text"
-                      name="fssaiNumber"
-                      value={cartFormData.fssaiNumber}
+                      name="gstNumber"
+                      value={cartFormData.gstNumber}
                       onChange={(e) => {
-                        const value = e.target.value;
-                        setCartFormData({ ...cartFormData, fssaiNumber: value });
-                        if (cartFormErrors.fssaiNumber)
+                        const value = e.target.value.toUpperCase();
+                        setCartFormData({ ...cartFormData, gstNumber: value });
+                        if (cartFormErrors.gstNumber)
                           setCartFormErrors({
                             ...cartFormErrors,
-                            fssaiNumber: "",
+                            gstNumber: "",
                           });
                       }}
                       className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                        cartFormErrors.fssaiNumber
+                        cartFormErrors.gstNumber
                           ? "border-red-500 focus:ring-red-500"
                           : "border-gray-300 focus:ring-blue-500"
                       }`}
-                      placeholder="e.g., 12345678901234"
-                      maxLength={14}
+                      placeholder="e.g., 29ABCDE1234F1Z5"
+                      maxLength={15}
                     />
-                    {cartFormErrors.fssaiNumber && (
+                    {cartFormErrors.gstNumber && (
                       <p className="mt-1 text-xs text-red-600">
-                        {cartFormErrors.fssaiNumber}
+                        {cartFormErrors.gstNumber}
                       </p>
                     )}
-                    {!cartFormErrors.fssaiNumber && (
-                      <p className="mt-1 text-xs text-gray-500">
-                         14-digit FSSAI number (Inherited from Franchise)
+                    {!cartFormErrors.gstNumber && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: 15-character GST number
                       </p>
                     )}
                   </div>
-
                   <div className="md:col-span-2">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Address
@@ -3150,4 +3143,3 @@ const Franchises = () => {
 };
 
 export default Franchises;
-  

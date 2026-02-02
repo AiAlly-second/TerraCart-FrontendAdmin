@@ -117,6 +117,11 @@ const Dashboard = () => {
           icon="📊"
         />
         <KPICard
+          title="Food Cost (COGS)"
+          value={`₹${dashboardData.cogs?.toLocaleString('en-IN') || '0'}`}
+          icon="🍲"
+        />
+        <KPICard
           title="Food Cost %"
           value={`${dashboardData.foodCostPercentage || '0'}%`}
           icon="🍽️"

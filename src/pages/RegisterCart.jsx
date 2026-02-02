@@ -17,7 +17,7 @@ const RegisterCart = () => {
     location: "",
     phone: "",
     address: "",
-    gstNumber: "",
+    fssaiNumber: "",
     shopActLicenseExpiry: "",
     fssaiLicenseExpiry: "",
   });
@@ -36,7 +36,7 @@ const RegisterCart = () => {
   const [formErrors, setFormErrors] = useState({});
 
   // Load franchises for super admin so they can assign cart to a franchise
-  // Also, for franchise admins, pre-fill GST number from their own profile (editable)
+  // Also, for franchise admins, pre-fill FSSAI number from their own profile (editable)
   useEffect(() => {
     const initData = async () => {
       try {
@@ -49,13 +49,16 @@ const RegisterCart = () => {
           );
           setFranchises(franchiseAdmins);
         } else {
-          // Franchise admin: get own GST number so we can show it by default
+          // Franchise admin: get own FSSAI number so we can show it by default
           const meRes = await api.get("/users/me");
           const meUser = meRes.data?.user;
-          if (meUser?.gstNumber) {
+          // Prefer fssaiNumber, fallback to gstNumber if old data exists
+          const prefillNumber = meUser?.fssaiNumber || meUser?.gstNumber || "";
+          
+          if (prefillNumber) {
             setFormData((prev) => ({
               ...prev,
-              gstNumber: prev.gstNumber || meUser.gstNumber,
+              fssaiNumber: prefillNumber,
             }));
           }
         }
@@ -70,6 +73,22 @@ const RegisterCart = () => {
 
     initData();
   }, [isSuperAdmin]);
+
+  // Effect to pre-fill FSSAI number when a franchise is selected (Super Admin)
+  useEffect(() => {
+    if (isSuperAdmin && franchiseId && franchises.length > 0) {
+      const selected = franchises.find(f => f._id === franchiseId);
+      if (selected) {
+        const prefill = selected.fssaiNumber || selected.gstNumber || "";
+        if (prefill) {
+           setFormData(prev => ({
+             ...prev,
+             fssaiNumber: prefill
+           }));
+        }
+      }
+    }
+  }, [franchiseId, franchises, isSuperAdmin]);
 
   // Validation functions
   const validateEmail = (email) => {
@@ -104,13 +123,11 @@ const RegisterCart = () => {
     if (password.length < 6) return "Password must be at least 6 characters";
     return "";
   };
-
-  const validateGSTNumber = (gst) => {
-    if (!gst) return true; // Optional field
-    // GST format: 15 characters, alphanumeric (e.g., 29ABCDE1234F1Z5)
-    const gstRegex =
-      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    return gstRegex.test(gst.toUpperCase());
+  
+  // Revised validation for FSSAI number (14 digits)
+  const validateFSSAINumber = (num) => {
+    if (!num) return true; // Optional field
+    return /^\d{14}$/.test(num);
   };
 
   const handleChange = (e) => {
@@ -190,7 +207,7 @@ const RegisterCart = () => {
       location: formData.location.trim(),
       phone: formData.phone.trim(),
       address: formData.address.trim(),
-      gstNumber: formData.gstNumber.trim().toUpperCase(),
+      fssaiNumber: formData.fssaiNumber.trim(),
       shopActLicenseExpiry: formData.shopActLicenseExpiry,
       fssaiLicenseExpiry: formData.fssaiLicenseExpiry,
     };
@@ -241,10 +258,11 @@ const RegisterCart = () => {
       if (phoneError) errors.phone = phoneError;
     }
 
-    // GST/FSSAI number validation - relaxed or switched to FSSAI
-    if (trimmedData.gstNumber && trimmedData.gstNumber.length !== 14) {
-       // Optional: validate FSSAI format (14 digits) if strictly needed.
-       // For now, accepting it as is, or you could add strict length check.
+    // FSSAI number validation (Mandatory, 14 digits)
+    if (!trimmedData.fssaiNumber) {
+       errors.fssaiNumber = "FSSAI Number is required";
+    } else if (!validateFSSAINumber(trimmedData.fssaiNumber)) {
+       errors.fssaiNumber = "FSSAI Number must be 14 digits";
     }
 
     // Validate required documents (Aadhar and PAN are now optional)
@@ -288,8 +306,8 @@ const RegisterCart = () => {
       if (formData.phone) formDataToSend.append("phone", formData.phone.trim());
       if (formData.address)
         formDataToSend.append("address", formData.address.trim());
-      if (trimmedData.gstNumber)
-        formDataToSend.append("gstNumber", trimmedData.gstNumber);
+      if (trimmedData.fssaiNumber)
+        formDataToSend.append("fssaiNumber", trimmedData.fssaiNumber);
 
       // Append expiry dates if provided (only for documents that can expire)
       if (formData.shopActLicenseExpiry)
@@ -333,7 +351,7 @@ const RegisterCart = () => {
         location: "",
         phone: "",
         address: "",
-        gstNumber: "",
+        fssaiNumber: "",
         shopActLicenseExpiry: "",
         fssaiLicenseExpiry: "",
       });
@@ -746,21 +764,14 @@ const RegisterCart = () => {
                 htmlFor="fssaiNumber"
                 className="block text-sm font-medium text-[#4a2e1f]"
               >
-                FSSAI Number
+                FSSAI Number <span className="text-red-500">*</span>
               </label>
               <input
                 id="fssaiNumber"
                 name="fssaiNumber"
                 type="text"
-                value={formData.fssaiNumber || formData.gstNumber || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData((prev) => ({ ...prev, fssaiNumber: value, gstNumber: value }));
-                  if (formErrors.fssaiNumber) {
-                    setFormErrors((prev) => ({ ...prev, fssaiNumber: "" }));
-                  }
-                  setError("");
-                }}
+                value={formData.fssaiNumber}
+                onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border rounded-lg placeholder-[#6b4423] text-[#4a2e1f] bg-[#fef4ec] focus:outline-none focus:ring-2 ${
                   formErrors.fssaiNumber
                     ? "border-red-500 focus:ring-red-500 focus:border-red-500"
@@ -776,7 +787,7 @@ const RegisterCart = () => {
               )}
               {!formErrors.fssaiNumber && (
                 <p className="mt-1 text-xs text-[#6b4423]">
-                  Optional: 14-digit FSSAI number
+                  14-digit FSSAI number (Inherited from Franchise)
                 </p>
               )}
             </div>

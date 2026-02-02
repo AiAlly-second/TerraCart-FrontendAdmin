@@ -326,12 +326,15 @@ const EmployeeManagement = () => {
     }
 
     // Disability type validation (if disability is checked)
+    // Disability type is optional now
+    /*
     if (
       trimmedData.disability.hasDisability &&
       !trimmedData.disability.type?.trim()
     ) {
       errors.disabilityType = "Please specify the type of disability";
     }
+    */
 
     // If there are errors, display them and stop submission
     if (Object.keys(errors).length > 0) {
@@ -1063,7 +1066,7 @@ const EmployeeManagement = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="p-6 space-y-4">
+        <div className="p-4 md:p-6 space-y-4">
           {filteredHierarchy.length === 0 &&
           filteredOrphanEmployees.length === 0 &&
           !loading ? (
@@ -1114,7 +1117,7 @@ const EmployeeManagement = () => {
                 ) : (
                   // Franchise Admin / Super Admin View: Show franchise header
                   <div
-                    className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                    className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer gap-3 md:gap-0"
                     onClick={() => toggleFranchise(franchise._id)}
                   >
                     <div className="flex items-center space-x-3">
@@ -1133,7 +1136,7 @@ const EmployeeManagement = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-wrap items-center gap-4">
                       <span className="text-sm text-gray-600">
                         {franchise.cafes?.length || 0} Carts,{" "}
                         {franchise.employees?.length || 0} Franchise Employees
@@ -1268,7 +1271,7 @@ const EmployeeManagement = () => {
                               // Franchise Admin / Super Admin: Show expandable cart
                               <>
                                 <div
-                                  className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                                  className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer gap-3 md:gap-0"
                                   onClick={() => toggleCafe(cafe._id)}
                                 >
                                   <div className="flex items-center space-x-3">
@@ -1287,7 +1290,7 @@ const EmployeeManagement = () => {
                                       </p>
                                     </div>
                                   </div>
-                                  <div className="flex items-center space-x-4">
+                                  <div className="flex flex-wrap items-center gap-4">
                                     <span className="text-sm text-gray-600">
                                       {cafe.employees?.length || 0} Employees
                                     </span>
@@ -1418,7 +1421,7 @@ const EmployeeManagement = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Name *
@@ -1626,7 +1629,7 @@ const EmployeeManagement = () => {
                     )}
                   </div>
                 )}
-                {editingEmployee && formData.password && (
+                {editingEmployee && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       New Password (leave blank to keep current)
@@ -1802,6 +1805,63 @@ const EmployeeManagement = () => {
                   />
                   <span className="text-sm text-gray-700">Active</span>
                 </label>
+              </div>
+
+              {/* Disability Section */}
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <h3 className="text-sm font-medium text-gray-800 mb-2">Additional Information</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="hasDisability"
+                      checked={formData.disability?.hasDisability || false}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          disability: {
+                            ...formData.disability,
+                            hasDisability: e.target.checked,
+                            // Clear type if unchecked, otherwise keep existing
+                            type: e.target.checked ? (formData.disability?.type || "") : "",
+                          },
+                        })
+                      }
+                      className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="hasDisability" className="text-sm text-gray-700 font-medium">
+                      Person with Disability (PWD)
+                    </label>
+                  </div>
+                  
+                  {formData.disability?.hasDisability && (
+                    <div className="pl-6 animate-fadeIn">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Type of Disability <span className="text-gray-500 font-normal text-xs">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.disability?.type || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            disability: {
+                              ...formData.disability,
+                              type: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="e.g. Visual, Hearing, Physical, etc."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                      {formErrors.disabilityType && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {formErrors.disabilityType}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-gray-200 mt-4 sm:mt-6">

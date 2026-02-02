@@ -4,7 +4,10 @@ import ConfirmModal from '../../components/costing/ConfirmModal';
 import DateRangePicker from '../../components/costing/DateRangePicker';
 import FileUploader from '../../components/costing/FileUploader';
 
+import { useAuth } from '../../context/AuthContext';
+
 const InventoryCosting = () => {
+  const { user } = useAuth();
   const [ingredients, setIngredients] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +15,12 @@ const InventoryCosting = () => {
   const [purchases, setPurchases] = useState([]);
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [deletePurchaseModal, setDeletePurchaseModal] = useState({ isOpen: false, id: null });
+  
+  // Determine user roles
+  const isCartAdmin = user?.role === 'admin' || user?.role === 'cart_admin';
+  const isFranchiseAdmin = user?.role === 'franchise_admin';
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const [purchaseFormData, setPurchaseFormData] = useState({
     cartId: '',
     franchiseId: '',
@@ -238,8 +247,8 @@ const InventoryCosting = () => {
             <button
               onClick={() => {
                 setPurchaseFormData({
-                  cartId: '',
-                  franchiseId: '',
+                  cartId: isCartAdmin ? (user._id) : '',
+                  franchiseId: isFranchiseAdmin ? (user._id) : '',
                   ingredientId: '',
                   qtyPurchased: '',
                   unit: 'kg',
@@ -762,7 +771,8 @@ const InventoryCosting = () => {
                     required
                     value={purchaseFormData.cartId}
                     onChange={(e) => setPurchaseFormData({ ...purchaseFormData, cartId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] ${isCartAdmin ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={isCartAdmin}
                   />
                 </div>
                 <div>
@@ -771,8 +781,9 @@ const InventoryCosting = () => {
                     type="text"
                     value={purchaseFormData.franchiseId}
                     onChange={(e) => setPurchaseFormData({ ...purchaseFormData, franchiseId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a]"
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d86d2a] ${isFranchiseAdmin ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     placeholder="Optional"
+                    disabled={isFranchiseAdmin}
                   />
                 </div>
                 <div>

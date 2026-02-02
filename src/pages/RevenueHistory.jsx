@@ -1022,8 +1022,11 @@ const RevenueHistory = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
-                          onClick={() => setSelectedPeriod(record)}
-                          className="text-[#d86d2a] hover:text-[#c75b1a] text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#d86d2a]/30 hover:bg-[#d86d2a]/5 transition-all opacity-0 group-hover:opacity-100"
+                          onClick={() => {
+                            console.log("View Report clicked for:", record);
+                            setSelectedPeriod(record);
+                          }}
+                          className="text-[#d86d2a] hover:text-[#c75b1a] text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#d86d2a]/30 hover:bg-[#d86d2a]/5 transition-all"
                         >
                           View Report
                         </button>
@@ -1039,7 +1042,7 @@ const RevenueHistory = () => {
 
       {/* ==================== DETAIL MODAL ==================== */}
       {selectedPeriod && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-[100] p-3 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl border border-[#e2c1ac] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col my-auto">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] p-3 sm:p-4 md:p-6 text-white flex-shrink-0">

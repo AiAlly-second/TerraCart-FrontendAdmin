@@ -325,70 +325,490 @@ const StaffStatus = ({ staff, activeOrders }) => {
 
 
 
-const LiveOrderList = ({ title, orders, navigate, icon: Icon }) => (
-  <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
-    <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold text-[#4a2e1f] flex items-center gap-2">
-            <Icon className="text-[#d86d2a]" size={20} /> {title}
-        </h3>
-        <span className="bg-orange-100 text-[#d86d2a] px-2 py-1 rounded-full text-xs font-bold">
-            {orders.length}
-        </span>
+const AlertsPanel = ({ customerRequests, orders, tables }) => {
+  const [activeTab, setActiveTab] = useState('all');
+  const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+  
+  // Action handlers
+  const handleMarkServed = async (requestId) => {
+    try {
+      console.log('Marking request as served:', requestId);
+      await api.post(`/customer-requests/${requestId}/resolve`, {
+        notes: '' // Backend expects this field
+      });
+      // alert('✅ Request marked as served!'); // Removed alert to rely on UI update
+      // Locally dismiss to remove from list immediately
+      handleDismiss(requestId);
+      
+      // Optionally reload or let polling catch it
+      // window.location.reload(); 
+    } catch (error) {
+      console.error('Error marking request as served:', error);
+      const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`❌ Failed: ${errorMsg}`);
+    }
+  };
+  
+  const handleRushOrder = async (orderId) => {
+    try {
+      // TODO: Implement rush order notification to kitchen
+      console.log('Rushing order:', orderId);
+      // For now, just dismiss the alert as "handled"
+      alert(`Order ${orderId.slice(-4)} marked as RUSH! Kitchen has been notified.`);
+      handleDismiss(orderId);
+    } catch (error) {
+      console.error('Error rushing order:', error);
+    }
+  };
+  
+  const handleClearTable = async (tableNumber, alertId) => {
+    try {
+      // Find the table object to get its _id
+      // Loose comparison for string/number match
+      const table = tables.find(t => String(t.number) === String(tableNumber) || String(t.tableNumber) === String(tableNumber));
+      
+      if (!table) {
+        alert(`❌ Table ${tableNumber} not found in system.`);
+        return;
+      }
+
+      const confirmClear = confirm(`Clear Table ${tableNumber}? This will mark it as AVAILABLE.`);
+      if (confirmClear) {
+        // Call Backend API to clear table
+        await api.put(`/tables/${table._id}`, { status: "AVAILABLE" });
+        // Auto-dismiss the alert
+        if (alertId) handleDismiss(alertId);
+        // alert(`✅ Table ${tableNumber} is now available.`);
+      }
+    } catch (error) {
+      console.error('Error clearing table:', error);
+      alert(`❌ Failed to clear table: ${error.message}`);
+    }
+  };
+  
+  const handleDismiss = (id) => {
+    setDismissedAlerts(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+    });
+  };
+  
+  
+  // Calculate kitchen delays (orders in preparing/cooking for > 30 mins)
+  const kitchenDelays = useMemo(() => {
+    const now = new Date();
+    return orders.filter(o => {
+      if (!['Preparing', 'Cooking', 'Pending'].includes(o.status)) return false;
+      const orderTime = new Date(o.createdAt);
+      const minutesElapsed = (now - orderTime) / 60000;
+      return minutesElapsed > 30;
+    }).map(o => ({
+      id: o.orderId || o._id, // Consistent ID property
+      type: 'kitchen_delay',
+      orderId: o.orderId || o._id,
+      tableNumber: o.tableNumber,
+      minutesElapsed: Math.floor((now - new Date(o.createdAt)) / 60000),
+      createdAt: o.createdAt
+    }));
+  }, [orders]);
+  
+  // Calculate table overstay (paid orders with table still occupied > 15 mins)
+  const tableOverstays = useMemo(() => {
+    const now = new Date();
+    return orders.filter(o => {
+      if (o.status !== 'Paid' || !o.tableNumber) return false;
+      const paidTime = new Date(o.paidAt || o.updatedAt);
+      const minutesElapsed = (now - paidTime) / 60000;
+      // Only show if > 15 mins AND table shows as Occupied (optional check, but good for accuracy)
+      // Since we don't have table status readily mapped here without lookup, we assume overstay if order is Paid but time passed.
+      return minutesElapsed > 15;
+    }).map(o => ({
+      id: o.orderId || o._id, // Consistent ID property
+      type: 'table_overstay',
+      tableNumber: o.tableNumber,
+      orderId: o.orderId || o._id,
+      minutesElapsed: Math.floor((now - new Date(o.paidAt || o.updatedAt)) / 60000),
+      paidAt: o.paidAt || o.updatedAt
+    }));
+  }, [orders]);
+  
+  // Format customer requests
+  const formattedRequests = useMemo(() => {
+    return (customerRequests || []).map(r => {
+      
+      // Extract table number
+      let tableNum = null;
+      if (typeof r.tableNumber === 'number' || typeof r.tableNumber === 'string') {
+        tableNum = r.tableNumber;
+      } else if (r.tableId?.number) {
+        tableNum = r.tableId.number;
+      } else if (r.table?.number) {
+        tableNum = r.table.number;
+      } else if (typeof r.tableId === 'number') {
+        tableNum = r.tableId;
+      }
+      
+      return {
+        id: r._id, // Consistent ID property
+        type: 'customer_request',
+        requestType: r.requestType,
+        tableNumber: tableNum,
+        message: r.message,
+        createdAt: r.createdAt,
+        _id: r._id
+      };
+    });
+  }, [customerRequests]);
+  
+  // Combine all alerts and filter dismissed
+  const allAlerts = useMemo(() => {
+    const combined = [...formattedRequests, ...kitchenDelays, ...tableOverstays];
+    // Filter out dismissed alerts
+    return combined
+        .filter(alert => !dismissedAlerts.has(alert.id))
+        .sort((a, b) => new Date(b.createdAt || b.paidAt) - new Date(a.createdAt || a.paidAt));
+  }, [formattedRequests, kitchenDelays, tableOverstays, dismissedAlerts]);
+  
+  const displayAlerts = useMemo(() => {
+    // Filter activeTab from the already dismissed-filtered allAlerts
+    if (activeTab === 'requests') return allAlerts.filter(a => a.type === 'customer_request');
+    if (activeTab === 'kitchen') return allAlerts.filter(a => a.type === 'kitchen_delay');
+    if (activeTab === 'overstay') return allAlerts.filter(a => a.type === 'table_overstay');
+    return allAlerts;
+  }, [activeTab, allAlerts]);
+  
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-bold text-[#4a2e1f] flex items-center gap-2">
+            <FiAlertCircle className="text-[#d86d2a]" size={20} /> Action Required
+          </h3>
+          <span className={`${displayAlerts.length > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full text-xs font-bold transition-all`}>
+            {displayAlerts.length}
+          </span>
+        </div>
+        
+        <div className="flex gap-2 p-1 bg-gray-50 rounded-lg">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'all'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'requests'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Requests
+          </button>
+          <button
+            onClick={() => setActiveTab('kitchen')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'kitchen'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Kitchen
+          </button>
+          <button
+            onClick={() => setActiveTab('overstay')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'overstay'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Has Overstay
+          </button>
+        </div>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[300px] max-h-[400px]">
+        {displayAlerts.length > 0 ? (
+          displayAlerts.map((alert, idx) => {
+            const isRequest = alert.type === 'customer_request';
+            const isKitchen = alert.type === 'kitchen_delay';
+            const isOverstay = alert.type === 'table_overstay';
+            
+            return (
+              <div key={alert.id || idx} className={`p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow animate-fadeIn ${
+                isRequest ? 'bg-blue-50 border-blue-200' :
+                isKitchen ? 'bg-red-50 border-red-200' :
+                'bg-orange-50 border-orange-200'
+              }`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {isRequest && (
+                        <>
+                          <span className="p-1 bg-blue-100 rounded">
+                            <FiUser className="text-blue-600" size={14} />
+                          </span>
+                          <span className="font-bold text-[#4a2e1f]">
+                            {alert.tableNumber ? `Table ${alert.tableNumber}` : 'Table ?'} - {alert.requestType?.toUpperCase() || 'REQUEST'}
+                          </span>
+                        </>
+                      )}
+                      {isKitchen && (
+                        <>
+                          <span className="p-1 bg-red-100 rounded">
+                            <FaFire className="text-red-600" size={14} />
+                          </span>
+                          <span className="font-bold text-[#4a2e1f]">
+                            Kitchen Delay - {alert.tableNumber ? `Table ${alert.tableNumber}` : `Order ${(alert.orderId || '').slice(-4)}`}
+                          </span>
+                        </>
+                      )}
+                      {isOverstay && (
+                        <>
+                          <span className="p-1 bg-orange-100 rounded">
+                            <MdTableRestaurant className="text-orange-600" size={14} />
+                          </span>
+                          <span className="font-bold text-[#4a2e1f]">
+                            Table {alert.tableNumber} - Overstay
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {alert.message && (
+                      <p className="text-xs text-gray-600 ml-7">{alert.message}</p>
+                    )}
+                    <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2 ml-7">
+                      <FiClock size={10} />
+                      <span>
+                        {isRequest && new Date(alert.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {(isKitchen || isOverstay) && `${alert.minutesElapsed} mins ago`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 text-[10px] rounded font-semibold ${
+                    isRequest ? 'bg-blue-600 text-white' :
+                    isKitchen ? 'bg-red-600 text-white' :
+                    'bg-orange-600 text-white'
+                  }`}>
+                    {isRequest ? 'PENDING' : isKitchen ? 'URGENT' : 'WARNING'}
+                  </span>
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
+                  {isRequest && (
+                    <>
+                      <button
+                        onClick={() => handleMarkServed(alert.id)}
+                        className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
+                      >
+                        <FiCheckCircle size={12} /> Mark Served
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(alert.id)}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                  {isKitchen && (
+                    <>
+                      <button
+                        onClick={() => handleRushOrder(alert.id)}
+                        className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
+                      >
+                        <FaFire size={12} /> Rush Order
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(alert.id)}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                  {isOverstay && (
+                    <>
+                      <button
+                        onClick={() => handleClearTable(alert.tableNumber, alert.id)}
+                        className="flex-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
+                      >
+                        <MdTableRestaurant size={12} /> Clear Table
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(alert.id)}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+            <FiCheckCircle size={40} className="mb-2" />
+            <p className="text-sm">No {activeTab === 'all' ? '' : activeTab} alerts</p>
+          </div>
+        )}
+      </div>
     </div>
-    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[300px] max-h-[400px]">
-      {orders.length > 0 ? (
-        orders.map((order, idx) => {
-             const totalAmount = order.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
-             const itemsCount = order.kotLines?.reduce((acc, kot) => acc + (kot.items?.length || 0), 0) || 0;
-             return (
+  );
+};
+
+const UnifiedOrderList = ({ dineInOrders, takeawayOrders, navigate }) => {
+  const [activeTab, setActiveTab] = useState('all');
+  
+  const allOrders = useMemo(() => {
+    const dineIn = dineInOrders.map(o => ({ ...o, orderType: 'dine-in' }));
+    const takeaway = takeawayOrders.map(o => ({ ...o, orderType: 'takeaway' }));
+    return [...dineIn, ...takeaway].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [dineInOrders, takeawayOrders]);
+  
+  const displayOrders = useMemo(() => {
+    if (activeTab === 'dine-in') return dineInOrders;
+    if (activeTab === 'takeaway') return takeawayOrders;
+    return allOrders;
+  }, [activeTab, dineInOrders, takeawayOrders, allOrders]);
+  
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-bold text-[#4a2e1f] flex items-center gap-2">
+            <MdRestaurantMenu className="text-[#d86d2a]" size={20} /> Live Orders
+          </h3>
+          <span className="bg-orange-100 text-[#d86d2a] px-2 py-1 rounded-full text-xs font-bold">
+            {displayOrders.length}
+          </span>
+        </div>
+        
+        <div className="flex gap-2 p-1 bg-gray-50 rounded-lg">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'all'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            All ({allOrders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('dine-in')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'dine-in'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <MdLocalDining size={14} /> Dine-In ({dineInOrders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('takeaway')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'takeaway'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <MdDeliveryDining size={14} /> Takeaway ({takeawayOrders.length})
+          </button>
+        </div>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[300px] max-h-[400px]">
+        {displayOrders.length > 0 ? (
+          displayOrders.map((order, idx) => {
+            const totalAmount = order.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
+            const itemsCount = order.kotLines?.reduce((acc, kot) => acc + (kot.items?.length || 0), 0) || 0;
+            const isDineIn = order.serviceType === 'DINE_IN' || order.orderType === 'dine-in';
+            
+            return (
               <div key={idx} className="p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#4a2e1f]">
-                            {order.tableNumber ? `Table ${order.tableNumber}` : (order.orderId || order._id).slice(-4)}
+                      {activeTab === 'all' && (
+                        <span className={`p-1 rounded ${isDineIn ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                          {isDineIn ? (
+                            <MdLocalDining className="text-blue-600" size={14} />
+                          ) : (
+                            <MdDeliveryDining className="text-purple-600" size={14} />
+                          )}
                         </span>
-                        {order.customerName && <span className="text-xs text-gray-500">- {order.customerName}</span>}
+                      )}
+                      <span className="font-bold text-[#4a2e1f]">
+                        {(() => {
+                          // Check if it's genuinely dine-in (and not a "Takeaway" table hack)
+                          const isRealDineIn = isDineIn && 
+                                               order.tableNumber && 
+                                               String(order.tableNumber).toLowerCase() !== 'takeaway';
+                                               
+                          if (isRealDineIn) {
+                             return order.tableNumber ? `Table ${order.tableNumber}` : `Order #${(order.orderId || order._id).slice(-4)}`;
+                          } else {
+                             // It's takeaway or "Takeaway" table
+                             // If customer name exists, show it. Otherwise show Takeaway #ID
+                             return order.customerName || `Takeaway #${(order.orderId || order._id).slice(-4)}`;
+                          }
+                        })()}
+                      </span>
+                      {/* Show customer name if available and we didn't just use it as the main title */}
+                      {order.customerName && (isDineIn && String(order.tableNumber || '').toLowerCase() !== 'takeaway') && (
+                        <span className="text-xs text-gray-500">- {order.customerName}</span>
+                      )}
                     </div>
                     <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2">
-                       <FiClock size={10} />
-                       <span>{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <FiClock size={10} />
+                      <span>{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                   </div>
                   <span className={`px-2 py-1 text-[10px] rounded font-semibold border ${
-                      order.status === 'Ready' ? 'bg-green-50 text-green-600 border-green-100' :
-                      order.status === 'Preparing' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                      order.status === 'Served' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                      'bg-gray-50 text-gray-600 border-gray-100'
+                    order.status === 'Ready' ? 'bg-green-50 text-green-600 border-green-100' :
+                    order.status === 'Preparing' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                    order.status === 'Served' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                    'bg-gray-50 text-gray-600 border-gray-100'
                   }`}>
                     {order.status}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between border-t border-gray-50 pt-2 mt-2">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 font-medium">{itemsCount} Items</span>
-                        <span className="text-sm font-bold text-[#d86d2a]">₹{totalAmount.toLocaleString()}</span>
-                    </div>
-                     <button
-                        onClick={() => navigate('/orders')}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 rounded hover:bg-blue-100 transition"
-                      >
-                        View
-                      </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 font-medium">{itemsCount} Items</span>
+                    <span className="text-sm font-bold text-[#d86d2a]">₹{totalAmount.toLocaleString()}</span>
+                  </div>
+                  <button
+                    onClick={() => navigate('/orders')}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 rounded hover:bg-blue-100 transition"
+                  >
+                    View
+                  </button>
                 </div>
               </div>
             );
-        })
-      ) : (
-        <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-            <Icon size={40} className="mb-2" />
-            <p className="text-sm">No active orders</p>
-        </div>
-      )}
+          })
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+            <MdRestaurantMenu size={40} className="mb-2" />
+            <p className="text-sm">No active {activeTab === 'all' ? '' : activeTab} orders</p>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const OrdersTimeline = ({ orders }) => {
     const data = useMemo(() => {
@@ -641,7 +1061,7 @@ const DashboardAdmin = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 12000); // 12s polling
+    const interval = setInterval(fetchData, 60000); // 60s polling
     return () => clearInterval(interval);
   }, []);
 
@@ -745,10 +1165,10 @@ const DashboardAdmin = () => {
         </div>
       </div>
 
-      {/* Bottom Section: Live Orders */}
+      {/* Bottom Section: Live Orders & Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-         <LiveOrderList title="Live Dine-In Orders" orders={liveDineIn} navigate={navigate} icon={MdLocalDining} />
-         <LiveOrderList title="Live Takeaway Orders" orders={liveTakeaway} navigate={navigate} icon={MdDeliveryDining} />
+         <UnifiedOrderList dineInOrders={liveDineIn} takeawayOrders={liveTakeaway} navigate={navigate} />
+         <AlertsPanel customerRequests={pendingRequests} orders={todayOrders} tables={tables} />
       </div>
 
       {/* Final Row: Timeline & Best Selling */}

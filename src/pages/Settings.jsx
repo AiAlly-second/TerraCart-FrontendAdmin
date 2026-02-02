@@ -402,6 +402,34 @@ const Settings = () => {
     }
   };
 
+  const handleTestPrint = async () => {
+    setError('');
+    setSuccess('');
+    
+    try {
+      setSaving(true);
+      
+      const response = await api.post('/print/test', {
+        printerIP: printerSettings.ip,
+        printerPort: printerSettings.port
+      });
+      
+      if (response.data.success) {
+        setSuccess('✅ Test print sent successfully! Check your printer.');
+        setTimeout(() => setSuccess(''), 5000);
+      } else {
+        setError('❌ Test print failed. Check printer connection.');
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to send test print';
+      setError(`❌ ${errorMsg}`);
+      console.error('Test print error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setError('');

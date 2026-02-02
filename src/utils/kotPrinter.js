@@ -6,6 +6,8 @@
 
 
 
+import { printMobileKOT } from "./mobilePrintAgent";
+
 // Inline formatMoney helper if not available
 const formatMoneyHelper = (value) => {
   const num = Number(value);
@@ -13,8 +15,19 @@ const formatMoneyHelper = (value) => {
   return num.toFixed(2);
 };
 
+// Simple mobile detection
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 export const printKOT = (order, kot, kotIndex = 0) => {
   if (!order || !kot) return;
+
+  // If on mobile, use the RawBT native handler
+  // You can also toggle this via a specific localStorage flag if needed
+  if (isMobile) {
+    printMobileKOT(order, kot, kotIndex);
+    return;
+  }
+
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";

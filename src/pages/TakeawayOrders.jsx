@@ -1461,7 +1461,7 @@ const TakeawayOrders = () => {
               // Validate order exists before processing
               if (!order) return null;
 
-              const orderDate = new Date(order.createdAt);
+              const orderDate = new Date(order.updatedAt || order.createdAt);
               const formattedDate = orderDate.toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "short",
