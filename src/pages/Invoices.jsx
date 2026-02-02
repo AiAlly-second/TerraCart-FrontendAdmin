@@ -303,7 +303,7 @@ const Invoices = () => {
         // Handle if franchiseId is an object or string
         const franchiseId = typeof order.franchiseId === 'object' ? order.franchiseId._id : order.franchiseId;
         if (franchiseId) {
-             const fRes = await api.get(`/users/${franchiseId}`);
+             const fRes = await api.get(`/users/${franchiseId}`, { skipErrorLogging: true });
              setFranchiseData(fRes.data);
         }
       }
@@ -313,12 +313,15 @@ const Invoices = () => {
         // Handle if cartId is an object or string
         const cartId = typeof order.cartId === 'object' ? order.cartId._id : order.cartId;
         if (cartId) {
-            const cRes = await api.get(`/users/${cartId}`);
+            const cRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
             setCartData(cRes.data);
         }
       }
     } catch (err) {
-      console.warn("Failed to fetch franchise/cart data for invoice:", err);
+      // Ignore 404s (deleted users), warn for other errors
+      if (err.response?.status !== 404) {
+        console.warn("Failed to fetch franchise/cart data for invoice:", err);
+      }
       // We do not set error state here to avoid blocking the UI
       // The invoice will just render with placeholders ("—")
     }
@@ -493,30 +496,35 @@ const Invoices = () => {
 
   const handleDownloadPdf = async () => {
     if (!printRef.current || !selected) return;
-    const element = printRef.current;
+    
+    // Target the inner invoice-root to capture only the receipt content, 
+    // avoiding the outer container's borders, shadows, and padding.
+    const element = printRef.current.querySelector('.invoice-root') || printRef.current;
     
     try {
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 2, // Higher scale for better quality
         useCORS: true,
+        logging: false,
         backgroundColor: "#ffffff",
       });
 
       const imageData = canvas.toDataURL("image/png");
       
-      // Calculate dimensions before creating the PDF
+      // Calculate dimensions based on the canvas
+      // PDF Width = 80mm (Standard thermal receipt width)
       const pdfWidth = 80;
-      const margin = 5;
+      const margin = 2; // Small margin
       const usableWidth = pdfWidth - (margin * 2);
       
-      // Create a temporary instance to measure image properties
-      const tempPdf = new jsPDF();
-      const imgProps = tempPdf.getImageProperties(imageData);
-      const imgRatio = imgProps.height / imgProps.width;
-      const imgHeight = usableWidth * imgRatio;
+      // Calculate height maintaining aspect ratio
+      const imgWidthPx = canvas.width;
+      const imgHeightPx = canvas.height;
+      const ratio = imgHeightPx / imgWidthPx;
+      const imgHeightMm = usableWidth * ratio;
       
-      // For thermal printer style, we want a single long page
-      const pdfHeight = imgHeight + (margin * 2);
+      // Total PDF height (image height + margins)
+      const pdfHeight = imgHeightMm + (margin * 2);
 
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -524,7 +532,7 @@ const Invoices = () => {
         format: [pdfWidth, pdfHeight],
       });
 
-      pdf.addImage(imageData, "PNG", margin, margin, usableWidth, imgHeight);
+      pdf.addImage(imageData, "PNG", margin, margin, usableWidth, imgHeightMm);
       pdf.save(`${getInvoiceNumber(selected)}.pdf`);
     } catch (err) {
       console.error("Failed to generate PDF:", err);

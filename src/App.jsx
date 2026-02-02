@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { AlertProvider } from "./context/AlertContext";
 import { ConfirmProvider } from "./context/ConfirmContext";
+import { LanguageProvider } from "./i18n/LanguageContext";
 import AlertInitializer from "./components/AlertInitializer";
 import ConfirmInitializer from "./components/ConfirmInitializer";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -101,7 +102,8 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <AlertProvider>
+      <LanguageProvider>
+        <AlertProvider>
         <ConfirmProvider>
           <AlertInitializer />
           <ConfirmInitializer />
@@ -416,6 +418,7 @@ function App() {
           </div>
         </ConfirmProvider>
       </AlertProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }

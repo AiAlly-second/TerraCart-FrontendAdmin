@@ -254,7 +254,28 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 400) {
+    if (error.response?.status === 404) {
+      // Resource Not Found - Log specific URL for debugging (User Management)
+      if (!error.config?.skipErrorLogging) {
+        console.warn(`[API 404] Resource not found: ${error.config?.url}`);
+      }
+      
+      const isUsersEndpoint = error.config?.url?.includes("/users/");
+      if (isUsersEndpoint) {
+        // Only log detailed debug info if not explicitly skipped
+        if (!error.config?.skipErrorLogging) {
+          console.error(
+            `[User Management Debug] Failed to fetch user data. ID may be invalid or user deleted.\n` +
+            `URL: ${error.config?.url}`
+          );
+        }
+        // Do NOT alert for 404s on users/ fetch, as it might be a background check or deleted item
+        // Just log it. Use return Promise.reject(error) to let caller handle it.
+      } else if (import.meta.env.DEV && !error.config?.skipErrorAlert && !error.config?.skipErrorLogging) {
+        // Only alert for non-user 404s in DEV, or let the caller handle it
+        // console.warn("404 Error for:", error.config?.url);
+      }
+    } else if (error.response?.status === 400) {
       // Bad Request - log detailed error
       const responseData = error.response?.data || {};
       let requestData = error.config?.data;

@@ -154,10 +154,10 @@ const Dashboard = () => {
     fetchDashboardData();
 
     // HTTP polling for real-time updates (replaces Socket.IO)
-    // Poll dashboard data every 12 seconds to check for new/updated orders and payments
+    // Poll dashboard data every 60 seconds to check for new/updated orders and payments
     const pollingInterval = setInterval(() => {
       fetchDashboardData();
-    }, 12000); // 12 seconds polling interval
+    }, 60000); // 60 seconds polling interval
 
     return () => {
       clearInterval(pollingInterval);
@@ -166,7 +166,9 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
+      // Don't set loading to true for background polling to avoid UI flickering
+      // Only set for initial load or manual refresh if desired, but here we just update data
+      // setLoading(true); 
 
       // Fetch cart statistics
       let cartStats = {
@@ -179,7 +181,6 @@ const Dashboard = () => {
       try {
         const cartStatsResponse = await api.get("/users/stats/carts");
         cartStats = cartStatsResponse.data || cartStats;
-        console.log("[Dashboard] Cart stats:", cartStats);
       } catch (err) {
         console.error("Error fetching cart statistics:", err);
       }
@@ -189,7 +190,6 @@ const Dashboard = () => {
       try {
         const usersResponse = await api.get("/users");
         allCarts = (usersResponse.data || []).filter((u) => u.role === "admin");
-        console.log("[Dashboard] Carts fetched:", allCarts.length);
       } catch (err) {
         console.error("Error fetching users:", err);
       }
@@ -202,12 +202,6 @@ const Dashboard = () => {
         fetchedOrders = ordersResponse.data || [];
         setOrders(fetchedOrders);
         revenueData = calculateRevenue(fetchedOrders);
-        console.log(
-          "[Dashboard] Orders:",
-          fetchedOrders.length,
-          "Revenue:",
-          revenueData
-        );
       } catch (err) {
         console.error("Failed to fetch orders:", err);
       }
@@ -251,7 +245,6 @@ const Dashboard = () => {
         todayOrders: revenueData.todayOrders,
         totalOrders: fetchedOrders.length,
       };
-      console.log("[Dashboard] Setting stats:", newStats);
       setStats(newStats);
       setRecentCarts(recent);
 
@@ -298,10 +291,10 @@ const Dashboard = () => {
         (a, b) => b.orders - a.orders
       );
       setCartOrderStats(cartStats2);
-      console.log("[Dashboard] Cart order stats:", cartStats2);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
+      // Only set loading false if it was true (initial load)
       setLoading(false);
     }
   };
@@ -376,58 +369,72 @@ const Dashboard = () => {
           {franchiseName} Dashboard
         </h1>
 
-        {/* Franchise ID Quick Access */}
-        <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 shadow-lg">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-sm sm:text-base md:text-xl">🏢</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70 font-medium">
-                {franchiseCode ? "Franchise Code" : "Franchise ID"}
-              </p>
-              <span
-                className={`font-mono font-bold text-white tracking-wider block truncate ${
-                  franchiseCode
-                    ? "text-xs sm:text-sm md:text-xl"
-                    : "text-[10px] sm:text-xs md:text-base"
-                }`}
-              >
-                {getDisplayId()}
-              </span>
-              {!franchiseCode && franchiseId && (
-                <p className="text-[10px] text-yellow-300/80 mt-0.5">
-                  Legacy ID format
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchDashboardData();
+            }}
+            className="p-2 sm:px-4 sm:py-2 bg-white border border-[#e2c1ac] text-[#8b5e3c] rounded-lg hover:bg-[#fef4ec] transition-colors flex items-center gap-2 shadow-sm"
+            title="Refresh Data"
+          >
+            <span className={`text-lg ${loading ? 'animate-spin' : ''}`}>↻</span>
+            <span className="hidden sm:inline text-sm font-medium">Refresh</span>
+          </button>
+
+          {/* Franchise ID Quick Access */}
+          <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 shadow-lg">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-sm sm:text-base md:text-xl">🏢</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70 font-medium">
+                  {franchiseCode ? "Franchise Code" : "Franchise ID"}
                 </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            {!franchiseCode && franchiseId && (
-              <button
-                onClick={generateFranchiseCode}
-                disabled={generatingCode}
-                className="px-2 md:px-3 py-1 md:py-2 bg-yellow-500/80 hover:bg-yellow-500 text-white rounded-lg transition-colors text-[10px] md:text-xs font-semibold whitespace-nowrap"
-                title="Generate a proper franchise code"
-              >
-                {generatingCode ? (
-                  "..."
-                ) : (
-                  <>
-                    <span className="hidden sm:inline">⚡ Generate Code</span>
-                    <span className="sm:hidden">⚡</span>
-                  </>
+                <span
+                  className={`font-mono font-bold text-white tracking-wider block truncate ${
+                    franchiseCode
+                      ? "text-xs sm:text-sm md:text-xl"
+                      : "text-[10px] sm:text-xs md:text-base"
+                  }`}
+                >
+                  {getDisplayId()}
+                </span>
+                {!franchiseCode && franchiseId && (
+                  <p className="text-[10px] text-yellow-300/80 mt-0.5">
+                    Legacy ID format
+                  </p>
                 )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+              {!franchiseCode && franchiseId && (
+                <button
+                  onClick={generateFranchiseCode}
+                  disabled={generatingCode}
+                  className="px-2 md:px-3 py-1 md:py-2 bg-yellow-500/80 hover:bg-yellow-500 text-white rounded-lg transition-colors text-[10px] md:text-xs font-semibold whitespace-nowrap"
+                  title="Generate a proper franchise code"
+                >
+                  {generatingCode ? (
+                    "..."
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline">⚡ Generate Code</span>
+                      <span className="sm:hidden">⚡</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={copyToClipboard}
+                className="px-2 md:px-3 py-1 md:py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-[10px] md:text-xs font-semibold whitespace-nowrap border border-white/30"
+                disabled={!franchiseCode && !franchiseId}
+                title="Copy Franchise ID"
+              >
+                {copied ? "✓" : "📋"}
               </button>
-            )}
-            <button
-              onClick={copyToClipboard}
-              className="px-2 md:px-3 py-1 md:py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-[10px] md:text-xs font-semibold whitespace-nowrap border border-white/30"
-              disabled={!franchiseCode && !franchiseId}
-              title="Copy Franchise ID"
-            >
-              {copied ? "✓" : "📋"}
-            </button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  base: "/",
   plugins: [react(), tailwindcss()],
   build: {
     outDir: "dist",
@@ -13,34 +14,8 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes("node_modules")) {
-            if (id.includes("react") || id.includes("react-dom")) {
-              return "vendor-react";
-            }
-            if (id.includes("react-router")) {
-              return "vendor-router";
-            }
-            if (id.includes("socket.io-client")) {
-              return "vendor-socket";
-            }
-            if (
-              id.includes("react-icons") ||
-              id.includes("@heroicons") ||
-              id.includes("lucide-react")
-            ) {
-              return "vendor-icons";
-            }
-            // All other node_modules
             return "vendor";
           }
-          // Page chunks for better code splitting
-          if (id.includes("/pages/")) {
-            const pageName = id.split("/pages/")[1]?.split("/")[0];
-            if (pageName) {
-              return `page-${pageName}`;
-            }
-          }
-          // Return undefined for other files (no chunk splitting)
-          return undefined;
         },
       },
     },

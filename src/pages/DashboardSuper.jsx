@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   FaBuilding,
   FaUsers,
@@ -10,9 +11,86 @@ import {
   FaArrowRight,
   FaChartBar,
 } from "react-icons/fa";
-import { useRef } from "react";
 import api from "../utils/api";
-// Removed socket import - using HTTP polling instead
+
+// Revenue Timeline Graph Component
+const RevenueTimeline = ({ orders }) => {
+    const data = useMemo(() => {
+        // Create array for 24 hours
+        const hours = Array.from({ length: 24 }, (_, i) => ({
+            name: i === 0 ? '12 AM' : i === 12 ? '12 PM' : i > 12 ? `${i-12} PM` : `${i} AM`,
+            hour: i,
+            revenue: 0
+        }));
+
+        orders.forEach(o => {
+            if (!o.createdAt) return;
+            // Only count PAID orders for revenue
+            if (o.status !== 'Paid') return;
+
+            const hour = new Date(o.createdAt).getHours();
+            if (hours[hour]) {
+                const orderTotal = o.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
+                hours[hour].revenue += orderTotal;
+            }
+        });
+
+        // Show typical operating hours (e.g. 8 AM to 11 PM) + any outlier hours if they have data
+        const startHour = 8;
+        const endHour = 23;
+        
+        return hours.filter(h => (h.hour >= startHour && h.hour <= endHour) || h.revenue > 0);
+    }, [orders]);
+
+    return (
+        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm h-full flex flex-col">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Revenue Timeline (Today)</h3>
+            <div className="flex-1 w-full min-h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0e6dd" />
+                        <XAxis 
+                            dataKey="name" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fontSize: 10, fill: '#8b5e3c'}} 
+                            interval="preserveStartEnd"
+                            minTickGap={20}
+                        />
+                        <YAxis 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fontSize: 10, fill: '#8b5e3c'}} 
+                            allowDecimals={false}
+                            tickFormatter={(value) => `₹${value}`}
+                        />
+                        <Tooltip 
+                            formatter={(value) => [`₹${value.toLocaleString()}`, "Revenue"]}
+                            contentStyle={{backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2c1ac'}}
+                            itemStyle={{color: '#15803d'}}
+                            labelStyle={{color: '#4a2e1f', fontWeight: 'bold'}}
+                        />
+                        <Area 
+                            type="monotone" 
+                            dataKey="revenue" 
+                            stroke="#16a34a" 
+                            fillOpacity={1} 
+                            fill="url(#colorRevenue)" 
+                            strokeWidth={2}
+                            animationDuration={1500}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -109,7 +187,7 @@ const Dashboard = () => {
           console.error("Failed to poll orders:", err);
         }
       }
-    }, 12000); // 12 seconds polling interval
+    }, 60000); // 60 seconds polling interval
 
     return () => {
       clearInterval(pollingInterval);
@@ -185,7 +263,7 @@ const Dashboard = () => {
       const todayOrders = activeOrders.filter(order => {
         if (!order.createdAt) return false;
         const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-        return orderDate === todayStr && order.status === 'Paid';
+        return orderDate === todayStr && order.status === 'Paid'; // Filter for PAID orders
       });
 
       const todayRev = todayOrders.reduce((sum, order) => {
@@ -484,6 +562,11 @@ const Dashboard = () => {
             <FaRupeeSign className="w-8 h-8 text-purple-600 opacity-50" />
           </div>
         </div>
+      </div>
+
+      {/* Revenue Timeline Graph - Replaces Orders Timeline */}
+      <div className="h-[400px]">
+        <RevenueTimeline orders={orders} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">

@@ -337,7 +337,7 @@ const printOrderInvoice = async (order) => {
   try {
     // Fetch franchise data if franchiseId exists
     if (order.franchiseId) {
-      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`, { skipErrorLogging: true });
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
@@ -349,7 +349,7 @@ const printOrderInvoice = async (order) => {
 
     // Fetch cart data if cartId exists
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`);
+      const cartRes = await api.get(`/users/${order.cartId}`, { skipErrorLogging: true });
       if (cartRes.data) {
         cartData = {
           address: cartRes.data.address || cartRes.data.location || null,
@@ -358,7 +358,7 @@ const printOrderInvoice = async (order) => {
       }
     }
   } catch (err) {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && err.response?.status !== 404) {
       console.error("Failed to load franchise/cart data:", err);
     }
   }
@@ -442,7 +442,7 @@ const downloadOrderInvoice = async (order) => {
   try {
     // Fetch franchise data if franchiseId exists
     if (order.franchiseId) {
-      const franchiseRes = await api.get(`/users/${order.franchiseId}`);
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`, { skipErrorLogging: true });
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
@@ -454,7 +454,7 @@ const downloadOrderInvoice = async (order) => {
 
     // Fetch cart data if cartId exists
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`);
+      const cartRes = await api.get(`/users/${order.cartId}`, { skipErrorLogging: true });
       if (cartRes.data) {
         cartData = {
           address: cartRes.data.address || cartRes.data.location || null,
@@ -463,7 +463,7 @@ const downloadOrderInvoice = async (order) => {
       }
     }
   } catch (err) {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && err.response?.status !== 404) {
       console.error("Failed to load franchise/cart data:", err);
     }
   }
@@ -736,7 +736,8 @@ const Orders = () => {
 
   // Render order row (reusable for both grouped and flat views)
   const renderOrderRow = (order) => {
-    const orderDate = new Date(order.createdAt);
+    // INFO: Use updatedAt to show the time of the latest activity (e.g. KOT 2, KOT 3)
+    const orderDate = new Date(order.updatedAt || order.createdAt);
     const formattedDate = orderDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -784,7 +785,8 @@ const Orders = () => {
                     {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
                   </span>
                 </div>
-                {order.cancellationReason && (
+                {order.cancellationReason && 
+                 (order.status === "Cancelled" || order.status === "Returned") && (
                    <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100">
                      Reason: {order.cancellationReason}
                    </div>
@@ -1027,7 +1029,7 @@ const Orders = () => {
       if (filterCafeId) {
         // Fetch cart info for the filter
         try {
-          const cafeRes = await api.get(`/users/${filterCafeId}`);
+          const cafeRes = await api.get(`/users/${filterCafeId}`, { skipErrorLogging: true });
           setCafeInfo(cafeRes.data);
         } catch (err) {
           if (import.meta.env.DEV) {
@@ -1128,6 +1130,19 @@ const Orders = () => {
     };
 
     fetchData();
+
+    // Join the appropriate socket room for real-time updates
+    if (socket && user) {
+      if (user.role === "admin") {
+        // Cafe admin joins their own room
+        socket.emit("join:cafe", user._id);
+        console.log(`[Orders] Joined socket room: cafe:${user._id}`);
+      } else if (filterCafeId) {
+        // Franchise admin viewing specific cafe joins that cafe's room
+        socket.emit("join:cafe", filterCafeId);
+        console.log(`[Orders] Joined socket room: cafe:${filterCafeId}`);
+      }
+    }
 
     socket.on("newOrder", (order) => {
       // Only add if it matches the filter (if any)
@@ -1594,7 +1609,7 @@ const Orders = () => {
       ).map(async (cartId) => {
         if (!cartId) return null;
         try {
-          const cartRes = await api.get(`/users/${cartId}`);
+          const cartRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
           if (cartRes.data) {
             const cartInfo = {
               _id: cartId,
@@ -2559,8 +2574,9 @@ const Orders = () => {
                       </div>
                     </div>
 
-                    {/* Cancellation/Return Reason Display */}
-                    {currentOrder?.cancellationReason && (
+                    {/* Cancellation/Return Reason Display - Only for Cancelled or Returned orders */}
+                    {currentOrder?.cancellationReason && 
+                     (currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned") && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
                          <h4 className="text-sm font-bold text-red-800 mb-1">
                            Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
