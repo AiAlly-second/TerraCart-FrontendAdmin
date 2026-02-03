@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FaCog, FaUser, FaBell, FaLock, FaSave, FaSpinner, FaCheck, FaEye, FaEyeSlash, FaPrint } from 'react-icons/fa';
+import { FaCog, FaUser, FaBell, FaLock, FaSave, FaSpinner, FaCheck, FaEye, FaEyeSlash, FaPrint, FaSignOutAlt } from 'react-icons/fa';
 import api from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
   
   // Profile State
   const [profile, setProfile] = useState({
@@ -536,6 +541,34 @@ const Settings = () => {
     setTimeout(() => setSuccess(''), 3000);
   };
 
+  const handleLogoutFromAllDevices = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to logout from all devices? This will invalidate all your active sessions and you will need to login again on all devices.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLoggingOutAll(true);
+      setError('');
+      
+      await api.post('/admin/logout-all');
+      
+      setSuccess('Successfully logged out from all devices. You will be redirected to login page.');
+      
+      // Clear local storage and logout
+      setTimeout(() => {
+        logout();
+        navigate('/login');
+      }, 2000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to logout from all devices');
+      setLoggingOutAll(false);
+    }
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'security', label: 'Security', icon: FaLock },
@@ -640,8 +673,10 @@ const Settings = () => {
 
               {/* Security Tab */}
               {activeTab === 'security' && (
-                <form onSubmit={handlePasswordChange} className="max-w-lg space-y-4 sm:space-y-6">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Change Password</h2>
+                <div className="max-w-lg space-y-6 sm:space-y-8">
+                  {/* Change Password Section */}
+                  <form onSubmit={handlePasswordChange} className="space-y-4 sm:space-y-6">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Change Password</h2>
                   
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Current Password</label>
@@ -703,17 +738,43 @@ const Settings = () => {
                     </div>
                   </div>
 
-                  <div className="pt-4">
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                      >
+                        {saving ? <FaSpinner className="animate-spin" /> : <FaLock />}
+                        Update Password
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Logout from All Devices Section */}
+                  <div className="pt-6 border-t border-gray-200">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">Session Management</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-4">
+                      Logout from all devices and invalidate all active sessions. You will need to login again on all devices.
+                    </p>
                     <button
-                      type="submit"
-                      disabled={saving}
-                      className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                      onClick={handleLogoutFromAllDevices}
+                      disabled={loggingOutAll}
+                      className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {saving ? <FaSpinner className="animate-spin" /> : <FaLock />}
-                      Update Password
+                      {loggingOutAll ? (
+                        <>
+                          <FaSpinner className="animate-spin" />
+                          Logging out...
+                        </>
+                      ) : (
+                        <>
+                          <FaSignOutAlt />
+                          Logout from All Devices
+                        </>
+                      )}
                     </button>
                   </div>
-                </form>
+                </div>
               )}
 
               {/* Notifications Tab */}

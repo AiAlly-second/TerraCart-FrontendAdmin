@@ -44,7 +44,8 @@ const Reports = () => {
           break;
 
         case "price-history":
-          const priceRes = await getSupplierPriceHistory();
+          // Pass outlet filter (cartId) for franchise/super admin; for cart admin backend auto-filters
+          const priceRes = await getSupplierPriceHistory(params);
           if (priceRes.data.success) setPriceHistoryData(priceRes.data.data);
           break;
         case "pnl":

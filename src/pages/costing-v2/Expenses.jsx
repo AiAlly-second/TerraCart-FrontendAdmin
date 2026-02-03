@@ -146,6 +146,7 @@ const Expenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [savingExpense, setSavingExpense] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -204,7 +205,9 @@ const Expenses = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingExpense) return;
     try {
+      setSavingExpense(true);
       const submitData = { ...formData, amount: parseFloat(formData.amount) || 0 };
       if (editingExpense) {
         await updateExpense(editingExpense._id, submitData);
@@ -218,6 +221,8 @@ const Expenses = () => {
       fetchData();
     } catch (error) {
       alert(`Failed to save expense: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setSavingExpense(false);
     }
   };
 
@@ -721,9 +726,12 @@ const Expenses = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a]"
+                  disabled={savingExpense}
+                  className="px-6 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {editingExpense ? "Update" : "Create"} Expense
+                  {savingExpense
+                    ? "Saving..."
+                    : `${editingExpense ? "Update" : "Create"} Expense`}
                 </button>
               </div>
             </form>
