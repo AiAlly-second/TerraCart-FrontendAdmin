@@ -35,6 +35,7 @@ const Recipes = () => {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [savingRecipe, setSavingRecipe] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     yieldPercent: 100,
@@ -126,10 +127,13 @@ const Recipes = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingRecipe) return; // prevent double submit / duplicate creation
     try {
+      setSavingRecipe(true);
       // Enforce linking to a default menu item (mandatory)
       if (!selectedMenuItemId) {
         alert("Please select a Default Menu item for this BOM.");
+        setSavingRecipe(false);
         return;
       }
 
@@ -182,6 +186,8 @@ const Recipes = () => {
           error.response?.data?.message || error.message
         }`
       );
+    } finally {
+      setSavingRecipe(false);
     }
   };
 
@@ -209,11 +215,28 @@ const Recipes = () => {
       yieldPercent: recipe.yieldPercent,
       portions: recipe.portions,
       instructions: recipe.instructions || "",
-      ingredients: recipe.ingredients
-        ? recipe.ingredients.map((ing) => ({
-            ...ing,
-            qty: ing.qty || "",
-          }))
+      ingredients: recipe.ingredients && recipe.ingredients.length > 0
+        ? recipe.ingredients.map((ing) => {
+            // Handle populated ingredientId (object) or plain ID (string)
+            let ingredientId = "";
+            if (ing.ingredientId) {
+              if (typeof ing.ingredientId === "object" && ing.ingredientId._id) {
+                // Populated object - extract _id
+                ingredientId = ing.ingredientId._id.toString();
+              } else if (typeof ing.ingredientId === "string") {
+                // Already a string ID
+                ingredientId = ing.ingredientId;
+              } else {
+                // Try to convert to string if it's an ObjectId
+                ingredientId = String(ing.ingredientId);
+              }
+            }
+            return {
+              ingredientId: ingredientId,
+              qty: ing.qty || "",
+              uom: ing.uom || "kg",
+            };
+          })
         : [{ ingredientId: "", qty: "", uom: "kg" }],
       isActive: recipe.isActive !== undefined ? recipe.isActive : true,
     });
@@ -836,9 +859,10 @@ const Recipes = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded-lg hover:shadow-lg font-medium transition-all"
+                  disabled={savingRecipe}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#d86d2a] to-[#c75b1a] text-white rounded-lg hover:shadow-lg font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {editing ? "Update" : "Create"}
+                  {savingRecipe ? "Saving..." : editing ? "Update" : "Create"}
                 </button>
               </div>
             </form>
