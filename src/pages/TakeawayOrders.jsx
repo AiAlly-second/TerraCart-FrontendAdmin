@@ -8,6 +8,8 @@ import {
   canAccept,
   nextStatusOnAccept,
   getNextStatus,
+  getNextStatusTakeaway,
+  canAcceptTakeaway,
   canCancel,
   canReturn,
 } from "../domain/orderLogic";
@@ -967,6 +969,20 @@ const TakeawayOrders = () => {
     }
   };
 
+  const acceptOrderTakeaway = async (orderId) => {
+    try {
+      const response = await api.patch(`/orders/${orderId}/accept`);
+      upsertOrder(response.data);
+    } catch (e) {
+      if (import.meta.env.DEV) {
+        console.error("Accept order failed:", e);
+      }
+      const errorMessage =
+        e.response?.data?.message || e.message || "Failed to accept order";
+      alert(errorMessage);
+    }
+  };
+
   const handleNewTakeawayOrder = () => {
     setDraftSelections({});
     setCurrentOrder({
@@ -1203,6 +1219,13 @@ const TakeawayOrders = () => {
         return "📋";
       case "Pending":
         return "⏳";
+      case "Accepted":
+        return "✅";
+      case "Being Prepared":
+      case "BeingPrepared":
+        return "🔥";
+      case "Completed":
+        return "📦";
       case "Cancelled":
         return "❌";
       case "Returned":
@@ -1234,10 +1257,14 @@ const TakeawayOrders = () => {
   const statusBadgeClass = (status) => {
     switch (status) {
       case "Paid":
+      case "Completed":
         return "border-green-200 text-green-700 bg-green-50";
       case "Confirmed":
+      case "Accepted":
         return "border-yellow-200 text-yellow-700 bg-yellow-50";
       case "Preparing":
+      case "Being Prepared":
+      case "BeingPrepared":
         return "border-blue-200 text-blue-700 bg-blue-50";
       case "Ready":
         return "border-purple-200 text-purple-700 bg-purple-50";
@@ -1294,7 +1321,9 @@ const TakeawayOrders = () => {
   ]);
 
   const tryAccept = (order) => {
-    if (canAccept(order.status)) {
+    if (canAcceptTakeaway(order.status) && (order.serviceType === "TAKEAWAY" || order.serviceType === "PICKUP" || order.serviceType === "DELIVERY")) {
+      acceptOrderTakeaway(order._id);
+    } else if (canAccept(order.status)) {
       changeStatus(order._id, nextStatusOnAccept);
     }
   };
@@ -1408,6 +1437,12 @@ const TakeawayOrders = () => {
               <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
                 {status === "Pending"
                   ? "⏳"
+                  : status === "Accepted"
+                  ? "✅"
+                  : status === "Being Prepared" || status === "BeingPrepared"
+                  ? "🔥"
+                  : status === "Completed"
+                  ? "📦"
                   : status === "Confirmed"
                   ? "👨‍🍳"
                   : status === "Preparing"
@@ -1739,15 +1774,33 @@ const TakeawayOrders = () => {
                           </span>
                           <span className="truncate">{order.status}</span>
                         </span>
+                        {order.acceptedBy?.employeeName && (
+                          <div className="text-[9px] sm:text-[10px] text-green-700 mt-0.5 font-medium">
+                            Accepted by {order.acceptedBy.employeeName}
+                            {order.acceptedBy.disability?.hasDisability && order.acceptedBy.disability?.type && (
+                              <span className="text-gray-500 ml-1">({order.acceptedBy.disability.type})</span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                           {(() => {
-                            const nextStatus = getNextStatus(
-                              order.status,
-                              order.serviceType
-                            );
+                            const isTakeaway = ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(order.serviceType);
+                            const nextStatus = isTakeaway
+                              ? getNextStatusTakeaway(order.status)
+                              : getNextStatus(order.status, order.serviceType);
                             const buttons = [];
 
-                            if (canAccept(order.status)) {
+                            if (canAcceptTakeaway(order.status) && isTakeaway) {
+                              buttons.push(
+                                <button
+                                  key="accept-takeaway"
+                                  onClick={() => acceptOrderTakeaway(order._id)}
+                                  className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
+                                >
+                                  ✅ Accept Order
+                                </button>
+                              );
+                            } else if (canAccept(order.status)) {
                               buttons.push(
                                 <button
                                   key="accept"
@@ -1762,8 +1815,8 @@ const TakeawayOrders = () => {
                               );
                             }
 
-                            // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
-                            if (nextStatus && !canAccept(order.status)) {
+                            // Show next sequential step button (but skip if canAccept/canAcceptTakeaway is true)
+                            if (nextStatus && !canAccept(order.status) && !(canAcceptTakeaway(order.status) && isTakeaway)) {
                               buttons.push(
                                 <button
                                   key="next"
@@ -2189,6 +2242,9 @@ const TakeawayOrders = () => {
                         className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
                         <option value="Pending">⏳ Pending</option>
+                        <option value="Accepted">✅ Accepted</option>
+                        <option value="Being Prepared">🔥 Being Prepared</option>
+                        <option value="Completed">📦 Completed</option>
                         <option value="Confirmed">👨‍🍳 Confirmed</option>
                         <option value="Preparing">🔥 Preparing</option>
                         <option value="Ready">🍽️ Ready</option>

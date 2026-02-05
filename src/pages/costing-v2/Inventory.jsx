@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   getInventoryTransactions,
   consumeInventory,
   returnToInventory,
   getIngredients,
 } from "../../services/costingV2Api";
-import { FaPlus, FaFilter, FaSearch, FaExclamationTriangle, FaUndo } from "react-icons/fa";
+import { FaPlus, FaFilter, FaSearch, FaExclamationTriangle, FaUndo, FaShoppingCart } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { formatUnit, convertUnit } from "../../utils/unitConverter";
 
@@ -203,6 +204,24 @@ const Inventory = () => {
 
   return (
     <div className="p-3 sm:p-4 md:p-6">
+      {/* Info banner: Add stock via Purchase Orders */}
+      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-blue-800 font-medium">
+            To add new stock from suppliers, create a Purchase Order and mark it as received.
+          </p>
+          <p className="text-sm text-blue-600 mt-1">
+            The &quot;Return to Inventory&quot; option below is for returning unused ingredients from previous consumption only.
+          </p>
+        </div>
+        <Link
+          to="/costing-v2/purchases"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium whitespace-nowrap"
+        >
+          <FaShoppingCart /> Go to Purchases
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4 mb-4">
@@ -220,8 +239,9 @@ const Inventory = () => {
             <button
               onClick={handleReturnClick}
               className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm sm:text-base"
+              title="Return unused ingredients from previous consumption. For new stock, use Purchase Orders."
             >
-              <FaUndo /> <span className="whitespace-nowrap">Return to Inventory</span>
+              <FaUndo /> <span className="whitespace-nowrap">Return Unused Ingredients</span>
             </button>
           </div>
         </div>
@@ -668,7 +688,7 @@ const Inventory = () => {
           <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl sm:text-2xl font-bold mb-4">Return Unused Ingredients to Inventory</h2>
             <p className="text-xs sm:text-sm text-gray-600 mb-4">
-              Return unused ingredients back to inventory stock. Items will be valued at current weighted average cost.
+              Return unused ingredients from previous consumption back to inventory. For adding new stock from suppliers, use <Link to="/costing-v2/purchases" className="text-blue-600 hover:underline font-medium">Purchase Orders</Link> instead.
             </p>
             <form onSubmit={handleReturnSubmit} className="space-y-4">
               <div>
