@@ -43,3 +43,21 @@ export const ORDER_TRANSITIONS = {
 
 export const canAccept = (status) => status === 'Confirmed';
 export const nextStatusOnAccept = 'Preparing';
+
+// Takeaway: first-come-first-serve accept when Pending
+export const canAcceptTakeaway = (status) => status === 'Pending';
+
+// Takeaway flow: Pending -> Accepted -> Being Prepared -> Completed -> Paid
+export const getNextStatusTakeaway = (status) => {
+  const map = {
+    Pending: 'Accepted',      // via accept API, not direct status change
+    Accepted: 'Being Prepared',
+    'Being Prepared': 'Completed',
+    BeingPrepared: 'Completed',
+    Completed: 'Paid',
+    Paid: null,
+    Cancelled: null,
+    Returned: null,
+  };
+  return map[status] || null;
+};
