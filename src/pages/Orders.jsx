@@ -58,8 +58,10 @@ const paiseToRupees = (value) => {
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 
-// Aggregate all items from all KOTs, separating takeaway items
-const aggregateKotItems = (kotLines = []) => {
+// Aggregate all items from all KOTs and selected addons, separating takeaway items
+const aggregateKotItems = (order) => {
+  const kotLines = order?.kotLines || [];
+  const selectedAddons = order?.selectedAddons || [];
   const dineInItems = [];
   const takeawayItems = [];
 
@@ -85,6 +87,30 @@ const aggregateKotItems = (kotLines = []) => {
       } else {
         dineInItems.push(itemData);
       }
+    });
+  });
+
+  // Process Addons - always treated as dine-in unless strictly takeaway order
+  selectedAddons.forEach((addon) => {
+    if (!addon) return;
+    const name = `(+) ${addon.name || "Addon"}`;
+    const quantity = 1; // Addons usually have quantity 1 in the current model
+    // Addons price is in Rupees, no need to convert from paise
+    const unitPrice = Number(addon.price || 0);
+    const amount = unitPrice * quantity;
+    
+    // Addons follow the main order service type roughly,
+    // but in this view we typically group them with dine-in items
+    // unless the whole order is takeaway (which this view handles by filtering).
+    // For visual consistency, we'll put them in dineInItems for now as they are part of the main "plate"
+    // or logically associated with the main items.
+    dineInItems.push({
+      name,
+      unitPrice,
+      quantity,
+      amount,
+      isTakeaway: false,
+      isAddon: true
     });
   });
 
@@ -114,11 +140,11 @@ const computeKotTotals = (_kotLines = [], aggregatedItems = []) => {
   // Round subtotal to 2 decimal places
   const subtotalRounded = Number(subtotal.toFixed(2));
 
-  // Calculate GST (5%)
-  const gst = Number((subtotalRounded * 0.05).toFixed(2));
+  // GST removed - set to 0
+  const gst = 0;
 
-  // Calculate total amount
-  const totalAmount = Number((subtotalRounded + gst).toFixed(2));
+  // Total amount equals subtotal (no GST)
+  const totalAmount = subtotalRounded;
 
   return {
     subtotal: subtotalRounded,
@@ -131,7 +157,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   if (!order) return "";
   const invoiceNumber = buildInvoiceId(order);
   const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
-  const { dineInItems, takeawayItems } = aggregateKotItems(kotLines);
+  const { dineInItems, takeawayItems } = aggregateKotItems(order);
   const allItems = [...dineInItems, ...takeawayItems];
   const totals = computeKotTotals(kotLines, allItems);
 
@@ -305,10 +331,6 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           <div class="invoice-line">
             <span>Subtotal</span>
             <span>₹${formatMoney(totals.subtotal)}</span>
-          </div>
-          <div class="invoice-line">
-            <span>GST (5%)</span>
-            <span>₹${formatMoney(totals.gst)}</span>
           </div>
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
@@ -546,6 +568,7 @@ const Orders = () => {
   const [menuError, setMenuError] = useState("");
   const [menuItems, setMenuItems] = useState([]);
   const [menuCategories, setMenuCategories] = useState([]);
+  const [currentMenuCartId, setCurrentMenuCartId] = useState(null); // Track cartId for menu loading (for retry)
   const [tables, setTables] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [draftSelections, setDraftSelections] = useState({});
@@ -555,9 +578,9 @@ const Orders = () => {
   const [draftServiceType, setDraftServiceType] = useState("DINE_IN");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
-  // Auto-print preference (default: true for best kitchen experience)
-  // Auto-print preference (read-only from storage, default: true)
-  const autoPrintEnabled = localStorage.getItem("autoPrintKOT") !== "false";
+  // Auto-print preference (default: false - disabled to prevent automatic popups)
+  // Auto-print preference (read-only from storage, default: false)
+  const autoPrintEnabled = localStorage.getItem("autoPrintKOT") === "true";
 
   // Reason Modal State
   const [reasonModal, setReasonModal] = useState({
@@ -816,6 +839,13 @@ const Orders = () => {
                 {order.tableNumber || "N/A"}
               </span>
             </div>
+            {order.specialInstructions && (
+              <div className="mt-1">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                  <span className="mr-1">📝</span> {order.specialInstructions}
+                </span>
+              </div>
+            )}
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
             <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
@@ -901,8 +931,9 @@ const Orders = () => {
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
             <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
-              {/* Modify Order button - only show for unpaid orders */}
-              {order.status !== "Paid" &&
+              {/* Modify Order button - only show for unpaid orders and NOT for franchise_admin */}
+              {user?.role !== "franchise_admin" &&
+                order.status !== "Paid" &&
                 order.status !== "Cancelled" &&
                 order.status !== "Returned" && (
                   <button
@@ -913,13 +944,16 @@ const Orders = () => {
                     ➕ <span className="hidden sm:inline">Modify</span>
                   </button>
                 )}
-              <button
-                onClick={() => handleEdit(order)}
-                className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50 whitespace-nowrap"
-                title="Edit order"
-              >
-                ✏️ <span className="hidden sm:inline">Edit</span>
-              </button>
+              {/* Edit Order button - only show for cart admin (NOT for franchise_admin) */}
+              {user?.role !== "franchise_admin" && (
+                <button
+                  onClick={() => handleEdit(order)}
+                  className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50 whitespace-nowrap"
+                  title="Edit order"
+                >
+                  ✏️ <span className="hidden sm:inline">Edit</span>
+                </button>
+              )}
               {user?.role !== "admin" && user?.role !== "franchise_admin" && (
                 <button
                   type="button"
@@ -1234,14 +1268,15 @@ const Orders = () => {
 
   const handleEdit = (order) => {
     setCurrentOrder(order);
-    // Reset draft selections when opening edit modal
     setDraftSelections({});
     setDraftSearch("");
     setDraftCategory("all");
-    // Ensure menu is loaded
-    if (menuItems.length === 0) {
-      loadMenu();
+    // Load menu for this order's outlet so franchise admin sees correct items (not mixed from all outlets)
+    const orderCartId = order?.cartId ? (typeof order.cartId === "object" ? order.cartId._id : order.cartId) : null;
+    if (import.meta.env.DEV) {
+      console.log("[Orders] handleEdit - Loading menu for cartId:", orderCartId, "Order:", order._id);
     }
+    loadMenu(orderCartId || undefined);
     setIsModalOpen(true);
   };
 
@@ -1609,7 +1644,7 @@ const Orders = () => {
       ).map(async (cartId) => {
         if (!cartId) return null;
         try {
-          const cartRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          const cartRes = await api.get(`/users/${cartId}`, { skipErrorAlert: true, skipErrorLogging: true });
           if (cartRes.data) {
             const cartInfo = {
               _id: cartId,
@@ -1631,7 +1666,8 @@ const Orders = () => {
             return { cartId, cartInfo };
           }
         } catch (err) {
-          if (import.meta.env.DEV) {
+          // Only log non-404 errors (404 means cart was deleted, which is normal)
+          if (import.meta.env.DEV && err.response?.status !== 404) {
             console.warn(
               `[Orders] Failed to fetch cart info for ${cartId}:`,
               err.message
@@ -1757,18 +1793,27 @@ const Orders = () => {
     setExpandedCarts((prev) => ({ ...prev, [cartId]: !prev[cartId] }));
   };
 
-  const loadMenu = useCallback(async () => {
+  const loadMenu = useCallback(async (outletCartId = null) => {
     try {
       setMenuLoading(true);
       setMenuError("");
-      // Use authenticated API endpoint which automatically filters by cartId for cart admins
-      const res = await api.get("/menu");
+      setCurrentMenuCartId(outletCartId); // Store for retry
+      // For franchise/super admin, pass outletCartId to load that outlet's menu (e.g. when editing that outlet's order)
+      const params = outletCartId ? { cartId: outletCartId } : {};
+      if (import.meta.env.DEV) {
+        console.log("[Orders] loadMenu - Fetching menu with params:", params);
+      }
+      const res = await api.get("/menu", { params });
       const payload = res.data || [];
 
       if (!Array.isArray(payload) || payload.length === 0) {
-        setMenuError("No menu items found. Please add menu items first.");
+        const errorMsg = `No menu items found${outletCartId ? ` for outlet ${outletCartId}` : ''}. Please add menu items first.`;
+        setMenuError(errorMsg);
         setMenuCategories([{ id: "all", label: "All" }]);
         setMenuItems([]);
+        if (import.meta.env.DEV) {
+          console.warn("[Orders] loadMenu -", errorMsg);
+        }
         return;
       }
 
@@ -3124,7 +3169,7 @@ const Orders = () => {
                             Menu not loaded.{" "}
                             <button
                               type="button"
-                              onClick={loadMenu}
+                              onClick={() => loadMenu(currentMenuCartId)}
                               className="text-blue-600 hover:text-blue-800 underline"
                             >
                               Click here to load menu
@@ -3177,7 +3222,7 @@ const Orders = () => {
                                 {menuError}
                                 <button
                                   type="button"
-                                  onClick={loadMenu}
+                                  onClick={() => loadMenu(currentMenuCartId)}
                                   className="ml-2 text-blue-600 hover:text-blue-800 underline"
                                 >
                                   Retry

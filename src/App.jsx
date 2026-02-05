@@ -23,6 +23,7 @@ import TakeawayOrders from "./pages/TakeawayOrders";
 import Invoices from "./pages/Invoices";
 import Tables from "./pages/Tables";
 import MenuManager from "./pages/MenuManager";
+import GlobalAddons from "./pages/GlobalAddons";
 import Staff from "./pages/Staff";
 import EmployeeManagement from "./pages/EmployeeManagement";
 import TableDashboard from "./pages/TableDashboard";
@@ -165,6 +166,14 @@ function App() {
                     element={
                       <ProtectedRoute allowedRoles={["admin"]}>
                         <MenuManager />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/addons"
+                    element={
+                      <ProtectedRoute allowedRoles={["admin"]}>
+                        <GlobalAddons />
                       </ProtectedRoute>
                     }
                   />

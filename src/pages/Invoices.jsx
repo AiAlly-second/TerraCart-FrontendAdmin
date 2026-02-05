@@ -9,14 +9,18 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import api from "../utils/api";
 
-const aggregateKotItems = (kotLines = []) => {
+const aggregateKotItems = (order) => {
+  if (!order) return [];
   const map = new Map();
-  (kotLines || []).forEach((kot) => {
+  const kotLines = order.kotLines || [];
+  
+  // Process KOT Items
+  kotLines.forEach((kot) => {
     (kot?.items || []).forEach((item) => {
       if (!item) return;
       const name = item.name || "Item";
       const quantity = Number(item.quantity) || 0;
-      const unitPrice = Number(item.price || 0) / 100;
+      const unitPrice = Number(item.price || 0) / 100; // Items are in Paise
       const returned = Boolean(item.returned);
       if (!map.has(name)) {
         map.set(name, {
@@ -41,11 +45,35 @@ const aggregateKotItems = (kotLines = []) => {
       }
     });
   });
+
+  // Process Selected Add-ons
+  const addons = order.selectedAddons || [];
+  addons.forEach(addon => {
+     const name = `(+) ${addon.name}`;
+     const quantity = 1; // Assuming 1 per entry in array
+     const unitPrice = Number(addon.price) || 0; // Addons are in Rupees
+     
+     if (!map.has(name)) {
+       map.set(name, {
+         name,
+         unitPrice,
+         quantity: 0,
+         returnedQuantity: 0,
+         returned: false,
+         amount: 0,
+       });
+     }
+     const entry = map.get(name);
+     entry.quantity += quantity;
+     entry.amount += unitPrice * quantity;
+  });
+
   return Array.from(map.values());
 };
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
-const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
+// Calculate totals from actual items (to avoid rounding errors)
+const computeKotTotals = (aggregatedItems = []) => {
   // Calculate subtotal from non-returned items (amount is already in rupees)
   const subtotal = aggregatedItems.reduce((sum, item) => {
     const amount = Number(item.amount) || 0;
@@ -55,11 +83,11 @@ const computeKotTotals = (kotLines = [], aggregatedItems = []) => {
   // Round subtotal to 2 decimal places
   const subtotalRounded = Number(subtotal.toFixed(2));
 
-  // Calculate GST (5%)
-  const gst = Number((subtotalRounded * 0.05).toFixed(2));
+  // GST removed - set to 0
+  const gst = 0;
 
-  // Calculate total amount
-  const totalAmount = Number((subtotalRounded + gst).toFixed(2));
+  // Total amount equals subtotal (no GST)
+  const totalAmount = subtotalRounded;
 
   return {
     subtotal: subtotalRounded,
@@ -225,10 +253,6 @@ const buildInvoiceMarkup = (
             <span>Subtotal</span>
             <span>₹${formatMoney(totals.subtotal)}</span>
           </div>
-          <div class="invoice-line">
-            <span>GST (5%)</span>
-            <span>₹${formatMoney(totals.gst)}</span>
-          </div>
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
@@ -262,13 +286,13 @@ const Invoices = () => {
   const printRef = useRef(null);
 
   const selectedInvoiceItems = useMemo(
-    () => aggregateKotItems(selected?.kotLines || []),
+    () => aggregateKotItems(selected),
     [selected]
   );
 
   const selectedTotals = useMemo(
-    () => computeKotTotals(selected?.kotLines || [], selectedInvoiceItems),
-    [selected, selectedInvoiceItems]
+    () => computeKotTotals(selectedInvoiceItems),
+    [selectedInvoiceItems]
   );
 
   const loadOrders = useCallback(async () => {
