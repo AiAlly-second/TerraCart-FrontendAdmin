@@ -233,7 +233,7 @@ const Recipes = () => {
             }
             return {
               ingredientId: ingredientId,
-              qty: ing.qty || "",
+            qty: ing.qty || "",
               uom: ing.uom || "kg",
             };
           })

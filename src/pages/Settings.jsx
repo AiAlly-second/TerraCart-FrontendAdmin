@@ -676,7 +676,7 @@ const Settings = () => {
                 <div className="max-w-lg space-y-6 sm:space-y-8">
                   {/* Change Password Section */}
                   <form onSubmit={handlePasswordChange} className="space-y-4 sm:space-y-6">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Change Password</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Change Password</h2>
                   
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Current Password</label>
@@ -738,17 +738,17 @@ const Settings = () => {
                     </div>
                   </div>
 
-                    <div className="pt-4">
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                      >
-                        {saving ? <FaSpinner className="animate-spin" /> : <FaLock />}
-                        Update Password
-                      </button>
-                    </div>
-                  </form>
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? <FaSpinner className="animate-spin" /> : <FaLock />}
+                      Update Password
+                    </button>
+                  </div>
+                </form>
 
                   {/* Logout from All Devices Section */}
                   <div className="pt-6 border-t border-gray-200">

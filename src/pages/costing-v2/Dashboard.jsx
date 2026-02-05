@@ -63,16 +63,35 @@ const Dashboard = () => {
           }
         }
       } else {
-        // Other roles get regular dashboard data
-        const [lowStockRes, foodCostRes, pnlRes] = await Promise.all([
-          getLowStock(),
-          getFoodCostReport(params),
-          getPnLReport(params),
-        ]);
-
-        if (lowStockRes.data.success) setLowStock(lowStockRes.data.data);
-        if (foodCostRes.data.success) setFoodCost(foodCostRes.data.data);
-        if (pnlRes.data.success) setPnl(pnlRes.data.data);
+        // Other roles get regular dashboard data (food cost from BOM/consumption + order sales)
+        const defaultFoodCost = {
+          totalFoodCost: 0,
+          totalSales: 0,
+          foodCostPercent: 0,
+          period: { from: dateRange.from, to: dateRange.to },
+        };
+        let lowStockRes = { data: {} };
+        let foodCostRes = { data: {} };
+        let pnlRes = { data: {} };
+        try {
+          [lowStockRes, foodCostRes, pnlRes] = await Promise.all([
+            getLowStock(),
+            getFoodCostReport(params),
+            getPnLReport(params),
+          ]);
+        } catch (apiErr) {
+          if (import.meta.env.DEV) console.error("Dashboard API error:", apiErr);
+        }
+        if (lowStockRes.data?.success) setLowStock(lowStockRes.data.data);
+        if (foodCostRes.data?.success && foodCostRes.data?.data) {
+          setFoodCost({
+            ...defaultFoodCost,
+            ...foodCostRes.data.data,
+          });
+        } else {
+          setFoodCost(defaultFoodCost);
+        }
+        if (pnlRes.data?.success) setPnl(pnlRes.data.data);
       }
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -635,8 +654,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
+      {/* KPI Cards - Food cost from BOM/consumption + order sales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
         <div className="bg-white rounded-lg shadow p-4 sm:p-5 md:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
@@ -650,7 +669,19 @@ const Dashboard = () => {
             <FaChartLine className="text-2xl sm:text-3xl md:text-4xl text-[#d86d2a] opacity-50 flex-shrink-0 ml-2" />
           </div>
         </div>
-
+        <div className="bg-white rounded-lg shadow p-4 sm:p-5 md:p-6">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-600 text-xs sm:text-sm mb-1">
+                Food Cost (₹)
+              </p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 break-words">
+                ₹{Number(foodCost?.totalFoodCost ?? 0).toLocaleString("en-IN")}
+              </p>
+            </div>
+            <FaRupeeSign className="text-2xl sm:text-3xl md:text-4xl text-orange-600 opacity-50 flex-shrink-0 ml-2" />
+          </div>
+        </div>
         <div className="bg-white rounded-lg shadow p-4 sm:p-5 md:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
@@ -665,7 +696,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-4 sm:p-5 md:p-6 sm:col-span-2 md:col-span-1">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-5 md:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-gray-600 text-xs sm:text-sm mb-1">

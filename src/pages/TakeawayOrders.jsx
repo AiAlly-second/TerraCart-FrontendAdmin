@@ -78,16 +78,16 @@ const computeKotTotals = (kotLines = [], aggregatedItems = [], order = null) => 
   // Round subtotal to 2 decimal places
   const subtotalRounded = Number(subtotal.toFixed(2));
 
-  // Calculate GST (5%)
-  const gst = Number((subtotalRounded * 0.05).toFixed(2));
+  // GST removed - set to 0
+  const gst = 0;
 
   // Add delivery charge if applicable
   const deliveryCharge = order?.orderType === "DELIVERY" && order?.deliveryInfo?.deliveryCharge
     ? Number(order.deliveryInfo.deliveryCharge) || 0
     : 0;
 
-  // Calculate total amount (subtotal + GST + delivery charge)
-  const totalAmount = Number((subtotalRounded + gst + deliveryCharge).toFixed(2));
+  // Calculate total amount (subtotal + delivery charge, no GST)
+  const totalAmount = Number((subtotalRounded + deliveryCharge).toFixed(2));
 
   return {
     subtotal: subtotalRounded,
@@ -304,10 +304,6 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           <div class="invoice-line">
             <span>Subtotal</span>
             <span>₹${formatMoney(totals.subtotal)}</span>
-          </div>
-          <div class="invoice-line">
-            <span>GST (5%)</span>
-            <span>₹${formatMoney(totals.gst)}</span>
           </div>
           ${
             totals.deliveryCharge > 0
@@ -548,9 +544,9 @@ const TakeawayOrders = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
 
-  // Auto-print preference (default: true)
+  // Auto-print preference (default: false - disabled to prevent automatic popups)
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
-    return localStorage.getItem("autoPrintTakeawayKOT") !== "false";
+    return localStorage.getItem("autoPrintTakeawayKOT") === "true";
   });
   
   // Toggle auto-print
@@ -1212,8 +1208,9 @@ const TakeawayOrders = () => {
     }
   };
 
+  // Details open by default; toggle only stores explicitly collapsed (false) vs expanded (true)
   const toggleExpand = (id) => {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpanded((prev) => ({ ...prev, [id]: prev[id] === false }));
   };
 
   const statusSummary = useMemo(() => {
@@ -1355,9 +1352,10 @@ const TakeawayOrders = () => {
             <button
               type="button"
               onClick={handleNewTakeawayOrder}
-              className="flex-1 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm md:text-base hover:bg-blue-700 whitespace-nowrap"
+              className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
             >
-              ➕ <span className="hidden xs:inline">New Order</span>
+              <span className="text-lg">+</span>
+              Add Order
             </button>
           </div>
         </div>
@@ -1500,7 +1498,7 @@ const TakeawayOrders = () => {
                           </span>
                         )}
                       </button>
-                      {expanded[order._id] && (
+                      {expanded[order._id] !== false && (
                         <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
                           <div className="truncate">
                             Created:{" "}
@@ -1846,7 +1844,7 @@ const TakeawayOrders = () => {
                     </td>
                   </tr>
 
-                  {expanded[order._id] && (
+                  {expanded[order._id] !== false && (
                     <tr className="bg-gray-50">
                       <td colSpan="5" className="px-6 py-4">
                         <div className="space-y-4">
@@ -2160,10 +2158,6 @@ const TakeawayOrders = () => {
                                 <span>
                                   ₹{formatMoney(draftTotals.subtotal)}
                                 </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>GST (5%)</span>
-                                <span>₹{formatMoney(draftTotals.gst)}</span>
                               </div>
                               <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                                 <span>Total</span>
@@ -2501,10 +2495,6 @@ const TakeawayOrders = () => {
                                     <span>
                                       ₹{formatMoney(draftTotals.subtotal)}
                                     </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>GST (5%)</span>
-                                    <span>₹{formatMoney(draftTotals.gst)}</span>
                                   </div>
                                   <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                                     <span>Total</span>

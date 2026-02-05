@@ -8,8 +8,12 @@ import { FaDownload, FaFileCsv, FaFilePdf } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { formatUnit } from "../../utils/unitConverter";
+import { useAuth } from "../../context/AuthContext";
 
 const Reports = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
+
   const [activeReport, setActiveReport] = useState("food-cost");
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -23,6 +27,13 @@ const Reports = () => {
   const [pnlData, setPnlData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
+
+  // Super admin: do not show price history; ensure active report is never price-history
+  useEffect(() => {
+    if (isSuperAdmin && activeReport === "price-history") {
+      setActiveReport("food-cost");
+    }
+  }, [isSuperAdmin, activeReport]);
 
   useEffect(() => {
     fetchReport();
@@ -44,9 +55,10 @@ const Reports = () => {
           break;
 
         case "price-history":
-          // Pass outlet filter (cartId) for franchise/super admin; for cart admin backend auto-filters
-          const priceRes = await getSupplierPriceHistory(params);
-          if (priceRes.data.success) setPriceHistoryData(priceRes.data.data);
+          if (!isSuperAdmin) {
+            const priceRes = await getSupplierPriceHistory(params);
+            if (priceRes.data.success) setPriceHistoryData(priceRes.data.data);
+          }
           break;
         case "pnl":
           const pnlRes = await getPnLReport(params);
@@ -156,8 +168,8 @@ const Reports = () => {
       XLSX.writeFile(wb, fileName);
       
 
-    } else if (activeReport === "price-history" && priceHistoryData.length > 0) {
-      // ========== COMPREHENSIVE PRICE HISTORY EXPORT ==========
+    } else if (activeReport === "price-history" && !isSuperAdmin && priceHistoryData.length > 0) {
+      // ========== COMPREHENSIVE PRICE HISTORY EXPORT (hidden for super admin) ==========
       const priceExportData = [];
       
       // Header
@@ -260,7 +272,7 @@ const Reports = () => {
       </div>
 
       <div className="mb-3 sm:mb-4 flex flex-wrap gap-1 sm:gap-2 border-b overflow-x-auto">
-        {["food-cost", "price-history", "pnl"].map(
+        {(isSuperAdmin ? ["food-cost", "pnl"] : ["food-cost", "price-history", "pnl"]).map(
           (report) => (
             <button
               key={report}
@@ -349,7 +361,7 @@ const Reports = () => {
 
 
 
-        {activeReport === "price-history" && (
+        {activeReport === "price-history" && !isSuperAdmin && (
           <div>
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
               Supplier Price History

@@ -386,12 +386,28 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
     }
   };
   
-  const handleDismiss = (id) => {
-    setDismissedAlerts(prev => {
+  
+  const handleDismiss = async (id) => {
+    try {
+      // Add to local state immediately for instant UI feedback
+      setDismissedAlerts(prev => {
         const next = new Set(prev);
         next.add(id);
         return next;
-    });
+      });
+      
+      // CRITICAL: Also call backend API to persist the dismissal
+      // by resolving the request with "Dismissed" note
+      await api.post(`/customer-requests/${id}/resolve`, {
+        notes: 'Dismissed by admin'
+      });
+      
+      console.log(`✅ Request ${id} dismissed and saved to database`);
+    } catch (error) {
+      console.error('Error dismissing request:', error);
+      // If API call fails, the local state will still hide it temporarily
+      // but it may reappear on next fetch if the API didn't save it
+    }
   };
   
   
@@ -835,9 +851,9 @@ const OrdersTimeline = ({ orders }) => {
     }, [orders]);
 
     return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
-            <h3 className="text-lg font-bold text-[#4a2e1f] mb-4">Orders Timeline</h3>
-            <div className="flex-1 w-full min-h-[300px]">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col min-h-0">
+            <h3 className="text-lg font-bold text-[#4a2e1f] mb-4 flex-shrink-0">Orders Timeline</h3>
+            <div className="flex-1 w-full min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
@@ -963,11 +979,11 @@ const RecentActivity = ({ orders, tables }) => {
     }, [orders, tables]);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col">
-             <h3 className="text-lg font-bold text-[#4a2e1f] mb-6 flex items-center gap-2">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-[#e2c1ac] h-full flex flex-col min-h-0">
+             <h3 className="text-lg font-bold text-[#4a2e1f] mb-6 flex items-center gap-2 flex-shrink-0">
                 <FiActivity className="text-[#d86d2a]" /> Recent Activity
              </h3>
-             <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+             <div className="space-y-6 flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                 {events.length > 0 ? (
                     events.map((e, i) => (
                         <div key={i} className="flex gap-4 items-start">
@@ -1171,10 +1187,14 @@ const DashboardAdmin = () => {
          <AlertsPanel customerRequests={pendingRequests} orders={todayOrders} tables={tables} />
       </div>
 
-      {/* Final Row: Timeline & Best Selling */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         <OrdersTimeline orders={todayOrders} />
-         <RecentActivity orders={todayOrders} tables={tables} />
+      {/* Final Row: Timeline & Recent Activity - fixed height to prevent page expansion */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[400px] min-h-[320px]">
+         <div className="min-h-0">
+            <OrdersTimeline orders={todayOrders} />
+         </div>
+         <div className="min-h-0">
+            <RecentActivity orders={todayOrders} tables={tables} />
+         </div>
       </div>
 
     </div>

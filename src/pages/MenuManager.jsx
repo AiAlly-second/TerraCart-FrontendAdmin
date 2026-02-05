@@ -83,6 +83,14 @@ const MenuManager = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userRole = user?.role;
+  
+  // Debug: Log user role to verify it's being read correctly
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[MenuManager] User role:", userRole, "User:", user);
+    }
+  }, [userRole, user]);
+  
   const [menu, setMenu] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -501,16 +509,26 @@ const MenuManager = () => {
                     >
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCategory(e, category);
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-100"
-                    >
-                      Delete
-                    </button>
+                    {/* Hide delete button for cart admin (role: "admin") */}
+                    {userRole !== "admin" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCategory(e, category);
+                        }}
+                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-100"
+                        title={`Delete category (visible to ${userRole || 'unknown role'})`}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {/* Debug indicator - remove after verification */}
+                    {import.meta.env.DEV && userRole === "admin" && (
+                      <span className="text-[10px] text-gray-400 italic">
+                        (delete hidden)
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

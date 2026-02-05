@@ -221,8 +221,8 @@ api.interceptors.response.use(
       data: error.response?.data,
     };
 
-    // Enhanced error logging (only in development)
-    if (error.response && import.meta.env.DEV) {
+    // Enhanced error logging (only in development; skip when caller set skipErrorLogging, e.g. 404 for deleted users)
+    if (error.response && import.meta.env.DEV && !error.config?.skipErrorLogging) {
       console.error("[API Error]", errorDetails);
 
       // Log full response for debugging
@@ -232,7 +232,7 @@ api.interceptors.response.use(
       } catch (e) {
         console.error("[API Error - Response Data]:", error.response.data);
       }
-    } else {
+    } else if (!error.response) {
       // Network error - log with context but don't spam console
       const isNetworkError =
         error.code === "ERR_NETWORK" ||

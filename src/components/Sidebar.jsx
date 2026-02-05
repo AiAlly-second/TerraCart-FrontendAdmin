@@ -152,6 +152,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/takeaway-orders", icon: "🥡", label: "Takeaway Orders" },
         { path: "/invoices", icon: "🧾", label: "Invoices" },
         { path: "/menu", icon: "📋", label: "Menu", showStats: true },
+        { path: "/addons", icon: "➕", label: "Global Add-ons" },
         { path: "/payments", icon: "💳", label: "Payments" },
         { path: "/tables", icon: "🍽️", label: "Tables" },
         { path: "/employees", icon: "👥", label: "Employees" },
