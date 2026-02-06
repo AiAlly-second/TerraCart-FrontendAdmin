@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from "../utils/api";
@@ -27,6 +27,7 @@ import {
 } from "react-icons/md";
 import { BiDish, BiReceipt } from "react-icons/bi";
 import { FaMoneyBillWave, FaFire, FaUserCircle } from "react-icons/fa";
+import { getIngredients } from "../services/costingV2Api";
 
 // --- Components ---
 
@@ -325,88 +326,90 @@ const StaffStatus = ({ staff, activeOrders }) => {
 
 
 
-const AlertsPanel = ({ customerRequests, orders, tables }) => {
+/** Compute days remaining until expiry from lastReceivedAt + shelfTimeDays. Returns null if no start date. */
+function getShelfDaysRemaining(ing) {
+  const shelfDays = ing.shelfTimeDays != null && ing.shelfTimeDays !== "" ? Number(ing.shelfTimeDays) : null;
+  const startDate = ing.lastReceivedAt ? new Date(ing.lastReceivedAt) : null;
+  if (shelfDays == null || !startDate || isNaN(startDate.getTime())) return null;
+  const expiry = new Date(startDate);
+  expiry.setDate(expiry.getDate() + shelfDays);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor((expiry - today) / msPerDay);
+}
+
+const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
-  
+
+  const addToDismissed = (id) => {
+    setDismissedAlerts(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
   // Action handlers
   const handleMarkServed = async (requestId) => {
     try {
-      console.log('Marking request as served:', requestId);
       await api.post(`/customer-requests/${requestId}/resolve`, {
-        notes: '' // Backend expects this field
+        notes: 'Marked as served'
       });
-      // alert('✅ Request marked as served!'); // Removed alert to rely on UI update
-      // Locally dismiss to remove from list immediately
-      handleDismiss(requestId);
-      
-      // Optionally reload or let polling catch it
-      // window.location.reload(); 
+      addToDismissed(requestId);
+      onCustomerRequestResolved?.();
     } catch (error) {
       console.error('Error marking request as served:', error);
       const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
       alert(`❌ Failed: ${errorMsg}`);
     }
   };
-  
+
   const handleRushOrder = async (orderId) => {
     try {
-      // TODO: Implement rush order notification to kitchen
       console.log('Rushing order:', orderId);
-      // For now, just dismiss the alert as "handled"
-      alert(`Order ${orderId.slice(-4)} marked as RUSH! Kitchen has been notified.`);
-      handleDismiss(orderId);
+      alert(`Order ${String(orderId).slice(-4)} marked as RUSH! Kitchen has been notified.`);
+      addToDismissed(orderId);
     } catch (error) {
       console.error('Error rushing order:', error);
     }
   };
-  
-  const handleClearTable = async (tableNumber, alertId) => {
+
+  const handleClearTable = async (tableNumber, alertId, alertType) => {
     try {
-      // Find the table object to get its _id
-      // Loose comparison for string/number match
       const table = tables.find(t => String(t.number) === String(tableNumber) || String(t.tableNumber) === String(tableNumber));
-      
       if (!table) {
         alert(`❌ Table ${tableNumber} not found in system.`);
         return;
       }
-
       const confirmClear = confirm(`Clear Table ${tableNumber}? This will mark it as AVAILABLE.`);
       if (confirmClear) {
-        // Call Backend API to clear table
         await api.put(`/tables/${table._id}`, { status: "AVAILABLE" });
-        // Auto-dismiss the alert
-        if (alertId) handleDismiss(alertId);
-        // alert(`✅ Table ${tableNumber} is now available.`);
+        if (alertId) handleDismiss(alertId, alertType);
       }
     } catch (error) {
       console.error('Error clearing table:', error);
       alert(`❌ Failed to clear table: ${error.message}`);
     }
   };
-  
-  
-  const handleDismiss = async (id) => {
-    try {
-      // Add to local state immediately for instant UI feedback
-      setDismissedAlerts(prev => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-      
-      // CRITICAL: Also call backend API to persist the dismissal
-      // by resolving the request with "Dismissed" note
-      await api.post(`/customer-requests/${id}/resolve`, {
-        notes: 'Dismissed by admin'
-      });
-      
-      console.log(`✅ Request ${id} dismissed and saved to database`);
-    } catch (error) {
-      console.error('Error dismissing request:', error);
-      // If API call fails, the local state will still hide it temporarily
-      // but it may reappear on next fetch if the API didn't save it
+
+  // id = alert.id, alertType = 'customer_request' | 'kitchen_delay' | 'table_overstay' | 'shelf_*'
+  // Only call resolve API for customer_request; others are local-only dismiss
+  const handleDismiss = async (id, alertType) => {
+    addToDismissed(id);
+    if (alertType === 'customer_request') {
+      try {
+        await api.post(`/customer-requests/${id}/resolve`, {
+          notes: 'Dismissed by admin'
+        });
+        onCustomerRequestResolved?.();
+      } catch (error) {
+        console.error('Error dismissing request:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+        alert(`❌ Failed to dismiss: ${errorMsg}`);
+      }
     }
   };
   
@@ -449,6 +452,27 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
     }));
   }, [orders]);
   
+  // Shelf life alerts: expired or near expiry (≤3 days)
+  const shelfAlerts = useMemo(() => {
+    const list = [];
+    (ingredients || []).forEach((ing) => {
+      const daysRemaining = getShelfDaysRemaining(ing);
+      if (daysRemaining === null) return; // no start date
+      if (daysRemaining < 0 || daysRemaining <= 3) {
+        list.push({
+          id: `shelf_${ing._id}`,
+          type: daysRemaining < 0 ? 'shelf_expired' : 'shelf_near_expiry',
+          ingredientId: ing._id,
+          name: ing.name,
+          daysRemaining,
+          shelfTimeDays: ing.shelfTimeDays,
+          createdAt: ing.lastReceivedAt,
+        });
+      }
+    });
+    return list.sort((a, b) => a.daysRemaining - b.daysRemaining);
+  }, [ingredients]);
+
   // Format customer requests
   const formattedRequests = useMemo(() => {
     return (customerRequests || []).map(r => {
@@ -479,18 +503,19 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
   
   // Combine all alerts and filter dismissed
   const allAlerts = useMemo(() => {
-    const combined = [...formattedRequests, ...kitchenDelays, ...tableOverstays];
+    const combined = [...formattedRequests, ...kitchenDelays, ...tableOverstays, ...shelfAlerts];
     // Filter out dismissed alerts
     return combined
         .filter(alert => !dismissedAlerts.has(alert.id))
-        .sort((a, b) => new Date(b.createdAt || b.paidAt) - new Date(a.createdAt || a.paidAt));
-  }, [formattedRequests, kitchenDelays, tableOverstays, dismissedAlerts]);
+        .sort((a, b) => new Date(b.createdAt || b.paidAt || 0) - new Date(a.createdAt || a.paidAt || 0));
+  }, [formattedRequests, kitchenDelays, tableOverstays, shelfAlerts, dismissedAlerts]);
   
   const displayAlerts = useMemo(() => {
     // Filter activeTab from the already dismissed-filtered allAlerts
     if (activeTab === 'requests') return allAlerts.filter(a => a.type === 'customer_request');
     if (activeTab === 'kitchen') return allAlerts.filter(a => a.type === 'kitchen_delay');
     if (activeTab === 'overstay') return allAlerts.filter(a => a.type === 'table_overstay');
+    if (activeTab === 'shelf') return allAlerts.filter(a => a.type === 'shelf_expired' || a.type === 'shelf_near_expiry');
     return allAlerts;
   }, [activeTab, allAlerts]);
   
@@ -547,6 +572,16 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
           >
             Has Overstay
           </button>
+          <button
+            onClick={() => setActiveTab('shelf')}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              activeTab === 'shelf'
+                ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Shelf ({shelfAlerts.length})
+          </button>
         </div>
       </div>
       
@@ -556,12 +591,16 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
             const isRequest = alert.type === 'customer_request';
             const isKitchen = alert.type === 'kitchen_delay';
             const isOverstay = alert.type === 'table_overstay';
+            const isShelfExpired = alert.type === 'shelf_expired';
+            const isShelfNear = alert.type === 'shelf_near_expiry';
             
             return (
               <div key={alert.id || idx} className={`p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow animate-fadeIn ${
                 isRequest ? 'bg-blue-50 border-blue-200' :
                 isKitchen ? 'bg-red-50 border-red-200' :
-                'bg-orange-50 border-orange-200'
+                isOverstay ? 'bg-orange-50 border-orange-200' :
+                isShelfExpired ? 'bg-red-50 border-red-200' :
+                'bg-amber-50 border-amber-200'
               }`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
@@ -596,24 +635,41 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
                           </span>
                         </>
                       )}
+                      {(isShelfExpired || isShelfNear) && (
+                        <>
+                          <span className={`p-1 rounded ${isShelfExpired ? 'bg-red-100' : 'bg-amber-100'}`}>
+                            <BiDish className={isShelfExpired ? 'text-red-600' : 'text-amber-600'} size={14} />
+                          </span>
+                          <span className="font-bold text-[#4a2e1f]">
+                            {alert.name} — {isShelfExpired ? 'Expired' : 'Near expiry'}
+                          </span>
+                        </>
+                      )}
                     </div>
                     {alert.message && (
                       <p className="text-xs text-gray-600 ml-7">{alert.message}</p>
+                    )}
+                    {(isShelfExpired || isShelfNear) && (
+                      <p className="text-xs text-gray-600 ml-7">
+                        {isShelfExpired ? 'Shelf life passed.' : `${alert.daysRemaining} day(s) left.`} Shelf: {alert.shelfTimeDays} day(s).
+                      </p>
                     )}
                     <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2 ml-7">
                       <FiClock size={10} />
                       <span>
                         {isRequest && new Date(alert.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         {(isKitchen || isOverstay) && `${alert.minutesElapsed} mins ago`}
+                        {(isShelfExpired || isShelfNear) && (alert.createdAt ? `Received ${new Date(alert.createdAt).toLocaleDateString()}` : '')}
                       </span>
                     </div>
                   </div>
                   <span className={`px-2 py-1 text-[10px] rounded font-semibold ${
                     isRequest ? 'bg-blue-600 text-white' :
                     isKitchen ? 'bg-red-600 text-white' :
-                    'bg-orange-600 text-white'
+                    isOverstay ? 'bg-orange-600 text-white' :
+                    isShelfExpired ? 'bg-red-600 text-white' : 'bg-amber-600 text-white'
                   }`}>
-                    {isRequest ? 'PENDING' : isKitchen ? 'URGENT' : 'WARNING'}
+                    {isRequest ? 'PENDING' : isKitchen ? 'URGENT' : isOverstay ? 'WARNING' : isShelfExpired ? 'EXPIRED' : 'NEAR EXPIRY'}
                   </span>
                 </div>
                 
@@ -628,7 +684,7 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
                         <FiCheckCircle size={12} /> Mark Served
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id)}
+                        onClick={() => handleDismiss(alert.id, 'customer_request')}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -644,7 +700,7 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
                         <FaFire size={12} /> Rush Order
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id)}
+                        onClick={() => handleDismiss(alert.id, 'kitchen_delay')}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -654,13 +710,35 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
                   {isOverstay && (
                     <>
                       <button
-                        onClick={() => handleClearTable(alert.tableNumber, alert.id)}
+                        onClick={() => handleClearTable(alert.tableNumber, alert.id, 'table_overstay')}
                         className="flex-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
                       >
                         <MdTableRestaurant size={12} /> Clear Table
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id)}
+                        onClick={() => handleDismiss(alert.id, 'table_overstay')}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                  {(isShelfExpired || isShelfNear) && navigate && (
+                    <>
+                      <button
+                        onClick={() => navigate('/costing-v2/inventory')}
+                        className="flex-1 px-3 py-1.5 bg-[#d86d2a] hover:bg-[#c75b1a] text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
+                      >
+                        <FiShoppingBag size={12} /> Add Stock
+                      </button>
+                      <button
+                        onClick={() => navigate('/costing-v2/purchases')}
+                        className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
+                      >
+                        <BiReceipt size={12} /> Purchase
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(alert.id, alert.type)}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -674,7 +752,7 @@ const AlertsPanel = ({ customerRequests, orders, tables }) => {
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
             <FiCheckCircle size={40} className="mb-2" />
-            <p className="text-sm">No {activeTab === 'all' ? '' : activeTab} alerts</p>
+            <p className="text-sm">No {activeTab === 'all' ? '' : activeTab === 'shelf' ? 'shelf' : activeTab} alerts</p>
           </div>
         )}
       </div>
@@ -1026,6 +1104,7 @@ const DashboardAdmin = () => {
   // Data State
   const [todayOrders, setTodayOrders] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [ingredients, setIngredients] = useState([]);
   
   // Fetch Data
   useEffect(() => {
@@ -1064,11 +1143,20 @@ const DashboardAdmin = () => {
         // Fetch Pending Customer Requests (Bill, Water, etc.)
         try {
             const reqRes = await api.get("/customer-requests/pending");
-            const reqData = Array.isArray(reqRes.data) ? reqRes.data : 
+            const reqData = Array.isArray(reqRes.data) ? reqRes.data :
                            (reqRes.data?.requests || reqRes.data?.data || []);
             setPendingRequests(reqData);
         } catch (reqErr) {
             console.warn("Failed to fetch customer requests:", reqErr);
+        }
+
+        // Fetch Ingredients (for shelf-life alerts on Action Required panel)
+        try {
+            const ingRes = await getIngredients();
+            const ingData = ingRes?.data?.data ?? ingRes?.data ?? [];
+            setIngredients(Array.isArray(ingData) ? ingData : []);
+        } catch (ingErr) {
+            if (import.meta.env.DEV) console.warn("Failed to fetch ingredients for shelf alerts:", ingErr);
         }
 
       } catch (err) {
@@ -1079,6 +1167,17 @@ const DashboardAdmin = () => {
     fetchData();
     const interval = setInterval(fetchData, 60000); // 60s polling
     return () => clearInterval(interval);
+  }, []);
+
+  const refetchPendingRequests = useCallback(async () => {
+    try {
+      const reqRes = await api.get("/customer-requests/pending");
+      const reqData = Array.isArray(reqRes.data) ? reqRes.data :
+                     (reqRes.data?.requests || reqRes.data?.data || []);
+      setPendingRequests(reqData);
+    } catch (reqErr) {
+      console.warn("Failed to fetch customer requests:", reqErr);
+    }
   }, []);
 
   // Helper to calculate total amount from KOT lines
@@ -1163,13 +1262,7 @@ const DashboardAdmin = () => {
         <TotalOrdersCard preparing={prepCount} served={servedCount} paid={paidCount} cartId={user?.cartCode} />
       </div>
 
-      {/* Secondary Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <SimpleStatCard title="Avg. Turnaround" value={avgTurnaround} subtext="Today" icon={FiClock} />
-        <SimpleStatCard title="Avg. Prep Time" value={(activeItemsCount * 2) + " mins"} subtext="Estimated" icon={FiActivity} />
-        <SimpleStatCard title="New Customers" value={newCust} subtext="Today" icon={FiUsers} />
-        <SimpleStatCard title="Total Staff" value={employees.length} subtext={`${employees.length} Registered`} icon={MdAssignmentInd} />
-      </div>
+      {/* Secondary Stats Row - removed as per request */}
 
       {/* Middle Section: Tables & Kitchen */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -1184,7 +1277,7 @@ const DashboardAdmin = () => {
       {/* Bottom Section: Live Orders & Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
          <UnifiedOrderList dineInOrders={liveDineIn} takeawayOrders={liveTakeaway} navigate={navigate} />
-         <AlertsPanel customerRequests={pendingRequests} orders={todayOrders} tables={tables} />
+         <AlertsPanel customerRequests={pendingRequests} orders={todayOrders} tables={tables} ingredients={ingredients} navigate={navigate} onCustomerRequestResolved={refetchPendingRequests} />
       </div>
 
       {/* Final Row: Timeline & Recent Activity - fixed height to prevent page expansion */}

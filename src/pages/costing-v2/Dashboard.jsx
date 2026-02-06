@@ -69,6 +69,7 @@ const Dashboard = () => {
           totalSales: 0,
           foodCostPercent: 0,
           period: { from: dateRange.from, to: dateRange.to },
+          meta: { transactionCount: 0 },
         };
         let lowStockRes = { data: {} };
         let foodCostRes = { data: {} };
@@ -675,9 +676,26 @@ const Dashboard = () => {
               <p className="text-gray-600 text-xs sm:text-sm mb-1">
                 Food Cost (₹)
               </p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 break-words">
-                ₹{Number(foodCost?.totalFoodCost ?? 0).toLocaleString("en-IN")}
-              </p>
+              <div>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 break-words">
+                  ₹{Number(foodCost?.totalFoodCost ?? 0).toLocaleString("en-IN")}
+                </p>
+                {foodCost?.totalSales > 0 && 
+                 foodCost?.meta?.transactionCount === 0 && (
+                  <p className="text-[10px] sm:text-xs text-red-500 mt-1 flex items-center font-medium" title="Link menu items in Finances → Ingredients/Menu and add BOM (recipes) in Finances → BOM so orders consume ingredients and food cost is recorded.">
+                    <FaExclamationTriangle className="mr-1" /> 
+                    No consumption data — add menu items and link recipes in Finances → BOM
+                  </p>
+                )}
+                {foodCost?.totalSales > 0 && 
+                 foodCost?.meta?.transactionCount > 0 && 
+                 foodCost?.meta?.zeroCostCount === foodCost?.meta?.transactionCount && (
+                  <p className="text-[10px] sm:text-xs text-orange-500 mt-1 flex items-center font-medium">
+                    <FaExclamationTriangle className="mr-1" /> 
+                    Zero cost recorded (Check Inventory Prices)
+                  </p>
+                )}
+              </div>
             </div>
             <FaRupeeSign className="text-2xl sm:text-3xl md:text-4xl text-orange-600 opacity-50 flex-shrink-0 ml-2" />
           </div>

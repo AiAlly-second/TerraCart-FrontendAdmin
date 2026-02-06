@@ -47,14 +47,22 @@ export const nextStatusOnAccept = 'Preparing';
 // Takeaway: first-come-first-serve accept when Pending
 export const canAcceptTakeaway = (status) => status === 'Pending';
 
-// Takeaway flow: Pending -> Accepted -> Being Prepared -> Completed -> Paid
+// Takeaway flow: supports both naming conventions
+// 1) Pending -> Accepted -> Being Prepared -> Completed -> Paid
+// 2) Confirmed -> Preparing -> Ready -> Paid (same as dine-in but skip Served, or include Served/Finalized if used)
 export const getNextStatusTakeaway = (status) => {
   const map = {
-    Pending: 'Accepted',      // via accept API, not direct status change
+    Pending: 'Accepted',       // via accept API, not direct status change
     Accepted: 'Being Prepared',
     'Being Prepared': 'Completed',
     BeingPrepared: 'Completed',
     Completed: 'Paid',
+    // Dine-in style statuses (used by some takeaway orders)
+    Confirmed: 'Preparing',
+    Preparing: 'Ready',
+    Ready: 'Paid',             // takeaway: Ready -> Paid (skip Served)
+    Served: 'Paid',
+    Finalized: 'Paid',
     Paid: null,
     Cancelled: null,
     Returned: null,

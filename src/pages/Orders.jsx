@@ -578,9 +578,7 @@ const Orders = () => {
   const [draftServiceType, setDraftServiceType] = useState("DINE_IN");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
-  // Auto-print preference (default: false - disabled to prevent automatic popups)
-  // Auto-print preference (read-only from storage, default: false)
-  const autoPrintEnabled = localStorage.getItem("autoPrintKOT") === "true";
+
 
   // Reason Modal State
   const [reasonModal, setReasonModal] = useState({
@@ -614,28 +612,7 @@ const Orders = () => {
     changeStatus(reasonModal.orderId, reasonModal.status, reasonInput);
   };
 
-  // Helper to handle auto-printing for incoming orders
-  const handleAutoPrint = useCallback((order) => {
-    if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return;
-    
-    // For new orders (just created), print the last KOT (usually the only one, or index 0)
-    // Actually, backend appends new KOTs.
-    // If it's a "newOrder" event, we assume KOT index 0 (or all KOTs if it's a fresh order).
-    // If it's "orderUpdated", we check if a NEW KOT was added.
-    
-    // Simplified logic: Print the *latest* KOT if it exists.
-    // We need to be careful not to re-print old KOTs on page reload.
-    // But this function is only called on *socket events* which represent *new* actions.
-    const latestKotIndex = order.kotLines.length - 1;
-    if (latestKotIndex >= 0) {
-      const latestKot = order.kotLines[latestKotIndex];
-      // Check if this KOT has items
-      if (latestKot.items && latestKot.items.length > 0) {
-        console.log(`[AutoPrint] Printing KOT #${latestKotIndex + 1} for Order ${order._id}`);
-        printKOT(order, latestKot, latestKotIndex);
-      }
-    }
-  }, []);
+
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
     // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
     if (!incoming || incoming.serviceType !== "DINE_IN") {
@@ -1183,9 +1160,7 @@ const Orders = () => {
       if (!filterCafeId) {
         upsertOrder(order, { prepend: true });
         // Auto-print new order if enabled
-        if (autoPrintEnabled) {
-          handleAutoPrint(order);
-        }
+
       } else {
         let orderCafeId = order.cafeId;
         if (orderCafeId && typeof orderCafeId === "object") {
@@ -1194,10 +1169,7 @@ const Orders = () => {
         if (orderCafeId && orderCafeId.toString() === filterCafeId) {
           upsertOrder(order, { prepend: true });
           
-          // Auto-print new order if enabled
-          if (autoPrintEnabled) {
-            handleAutoPrint(order);
-          }
+
         }
       }
     });
@@ -1216,25 +1188,7 @@ const Orders = () => {
       }
 
       if (matches) {
-        // Check if KOT count increased compared to our current local state
-        // This prevents printing on status changes (like "Paying" -> "Paid")
-        // We only want to print when NEW ITEMS are added (which adds a new KOT line)
-        setOrders(prevOrders => {
-          const prevOrder = prevOrders.find(o => o._id === updatedOrder._id);
-          // If we have previous order data, check if kotLines length increased
-          if (autoPrintEnabled && prevOrder && updatedOrder.kotLines && prevOrder.kotLines) {
-            if (updatedOrder.kotLines.length > prevOrder.kotLines.length) {
-               // New KOT added!
-               handleAutoPrint(updatedOrder);
-            }
-          } else if (autoPrintEnabled && !prevOrder) {
-             // We didn't have this order before (maybe?), or just receiving it. 
-             // Safest not to print to avoid duplicates on refresh/re-connect, 
-             // unless we are sure it's a "AddItem" event. 
-             // But "newOrder" handles the first print.
-          }
-          return prevOrders; // We don't mutate state here, just reading properly for logic
-        });
+
         
         upsertOrder(updatedOrder);
       } else {
@@ -1254,7 +1208,7 @@ const Orders = () => {
       socket.off("orderUpdated");
       socket.off("orderDeleted");
     };
-  }, [upsertOrder, filterCafeId, user, autoPrintEnabled, handleAutoPrint]);
+  }, [upsertOrder, filterCafeId, user]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -1485,6 +1439,7 @@ const Orders = () => {
           draftServiceType === "TAKEAWAY" ? "TAKEAWAY" : tableNumber || null, // TAKEAWAY orders use "TAKEAWAY" as table number
         sessionToken:
           draftServiceType === "TAKEAWAY" ? undefined : sessionToken, // TAKEAWAY orders don't need sessionToken
+        cartId: currentMenuCartId || filterCafeId || (user.role === 'admin' ? user._id : undefined), // Explicitly send cartId for admin-created orders
         items: itemsPayload,
       };
 

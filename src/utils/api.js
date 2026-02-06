@@ -229,7 +229,7 @@ api.interceptors.response.use(
       try {
         const fullResponse = JSON.stringify(error.response.data, null, 2);
         console.error("[API Error - Full Response]:", fullResponse);
-      } catch (e) {
+      } catch {
         console.error("[API Error - Response Data]:", error.response.data);
       }
     } else if (!error.response) {

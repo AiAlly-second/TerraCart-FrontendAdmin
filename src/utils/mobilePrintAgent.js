@@ -1,4 +1,4 @@
-/* eslint-disable no-control-regex */
+ 
 /**
  * Mobile Print Agent (Browser Compatible)
  * Converts the Node.js "Local Print Agent" logic to work in the browser
@@ -45,7 +45,7 @@ class EscPosBuilder {
     return this;
   }
 
-  font(type) {
+  font() {
     this.buffer += COMMANDS.TEXT_FORMAT.NORMAL;
     return this;
   }
@@ -213,4 +213,4 @@ export const printMobileKOT = (order, kot, kotIndex) => {
     console.error("Mobile Print Error:", err);
   }
 };
-/* eslint-enable no-control-regex */
+ 
