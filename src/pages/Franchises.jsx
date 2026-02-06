@@ -1243,351 +1243,398 @@ const Franchises = () => {
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {filteredFranchises.map((franchise) => {
-              const isActive = franchise.isActive !== false;
-              const isExpanded = expandedFranchises.has(franchise._id);
-              const cartStats = franchiseCarts[franchise._id] || {};
-              const carts = franchiseCarts[franchise._id]?.carts || [];
-              const isLoadingCarts = loadingCarts[franchise._id];
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50/80 text-gray-500 text-xs uppercase font-semibold tracking-wider border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 w-10"></th>
+                  <th className="px-4 py-3">Franchise Details</th>
+                  <th className="px-4 py-3">Contact Info</th>
+                  <th className="px-4 py-3 text-center">Carts</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredFranchises.map((franchise) => {
+                  const isActive = franchise.isActive !== false;
+                  const isExpanded = expandedFranchises.has(franchise._id);
+                  const cartStats = franchiseCarts[franchise._id] || {};
+                  const carts = franchiseCarts[franchise._id]?.carts || [];
+                  const isLoadingCarts = loadingCarts[franchise._id];
 
-              return (
-                <div
-                  key={franchise._id}
-                  className={`${!isActive && "bg-gray-50"}`}
-                >
-                  {/* Franchise Row */}
-                  <div className="p-4 hover:bg-gray-50 transition-colors border-b last:border-b-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      {/* Top Section: Expand, Avatar, Info */}
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {/* Expand Button */}
-                        <button
-                          onClick={() => toggleFranchiseExpand(franchise._id)}
-                          className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0 mt-1 sm:mt-0"
-                        >
-                          {isExpanded ? (
-                            <FaChevronDown size={12} />
-                          ) : (
-                            <FaChevronRight size={12} />
-                          )}
-                        </button>
-
-                        {/* Avatar */}
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
-                            isActive
-                              ? "bg-gradient-to-br from-blue-500 to-blue-600"
-                              : "bg-gray-400"
-                          }`}
-                        >
-                          {franchise.name.charAt(0).toUpperCase()}
-                        </div>
-
-                        {/* Main Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {franchise.franchiseCode && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded whitespace-nowrap">
-                                {franchise.franchiseCode}
-                              </span>
+                  return (
+                    <React.Fragment key={franchise._id}>
+                      {/* Franchise Row */}
+                      <tr
+                        className={`hover:bg-gray-50/80 transition-colors group ${
+                          !isActive ? "bg-gray-50/50" : "bg-white"
+                        } ${isExpanded ? "bg-blue-50/30" : ""}`}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <button
+                            onClick={() => toggleFranchiseExpand(franchise._id)}
+                            className={`p-1.5 rounded-md transition-colors ${
+                              isExpanded
+                                ? "bg-blue-100 text-blue-600"
+                                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            }`}
+                          >
+                            {isExpanded ? (
+                              <FaChevronDown size={12} />
+                            ) : (
+                              <FaChevronRight size={12} />
                             )}
-                            <span className="font-semibold text-gray-800 text-sm truncate">
-                              {franchise.name}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm ${
                                 isActive
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-gray-200 text-gray-600"
+                                  ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                                  : "bg-gray-400"
                               }`}
                             >
-                              {isActive ? "Active" : "Inactive"}
-                            </span>
+                              {franchise.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900 text-sm">
+                                  {franchise.name}
+                                </span>
+                                {franchise.franchiseCode && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100 text-gray-600 rounded border border-gray-200">
+                                    {franchise.franchiseCode}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                Created:{" "}
+                                {new Date(franchise.createdAt).toLocaleDateString(
+                                  "en-IN"
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
-                            <span className="flex items-center gap-1 truncate min-w-0">
-                              <FaEnvelope size={10} className="flex-shrink-0" />
-                              <span className="truncate">{franchise.email}</span>
-                            </span>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <FaEnvelope size={12} className="text-gray-400" />
+                              <span className="truncate max-w-[180px]" title={franchise.email}>{franchise.email}</span>
+                            </div>
                             {franchise.mobile && (
-                              <span className="hidden sm:flex items-center gap-1">
-                                <FaPhone size={10} />
-                                {franchise.mobile}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Mobile Cart Stats */}
-                          <div className="flex items-center gap-2 mt-2 md:hidden text-[10px]">
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
-                              <FaStore size={9} />
-                              <span className="font-medium">
-                                {cartStats.totalCarts || 0}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-600 rounded">
-                              <FaCheckCircle size={9} />
-                              <span>{cartStats.activeCarts || 0}</span>
-                            </div>
-                            {(cartStats.pendingApproval || 0) > 0 && (
-                              <div className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-50 text-yellow-600 rounded">
-                                <FaClock size={9} />
-                                <span>{cartStats.pendingApproval}</span>
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <FaPhone size={12} className="text-gray-400" />
+                                <span>{franchise.mobile}</span>
                               </div>
                             )}
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Desktop Stats & Actions Group */}
-                      <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-0 pt-3 sm:pt-0 border-gray-100">
-                        {/* Cart Stats - Desktop Only */}
-                        <div className="hidden md:flex items-center gap-3 text-xs mr-2">
-                          <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
-                            <FaStore size={10} />
-                            <span className="font-medium">
-                              {cartStats.totalCarts || 0}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded">
-                            <FaCheckCircle size={10} />
-                            <span>{cartStats.activeCarts || 0}</span>
-                          </div>
-                          {(cartStats.pendingApproval || 0) > 0 && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-600 rounded">
-                              <FaClock size={10} />
-                              <span>{cartStats.pendingApproval}</span>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center justify-center gap-2">
+                            <div
+                              className="flex flex-col items-center px-3 py-1 bg-gray-50 rounded-lg border border-gray-100 min-w-[60px]"
+                              title="Total Carts"
+                            >
+                              <span className="text-xs font-bold text-gray-700">
+                                {cartStats.totalCarts || 0}
+                              </span>
+                              <span className="text-[10px] text-gray-400 uppercase font-medium">
+                                Total
+                              </span>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-auto sm:ml-0">
-                          <button
-                            onClick={() => setViewDetails(franchise)}
-                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="View Details"
-                          >
-                            <FaEye size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleToggleStatus(franchise._id)}
-                            className={`p-2 rounded-lg transition-colors ${
+                            <div
+                              className="flex flex-col items-center px-3 py-1 bg-green-50 rounded-lg border border-green-100 min-w-[60px]"
+                              title="Active Carts"
+                            >
+                              <span className="text-xs font-bold text-green-700">
+                                {cartStats.activeCarts || 0}
+                              </span>
+                              <span className="text-[10px] text-green-600/70 uppercase font-medium">
+                                Active
+                              </span>
+                            </div>
+                            {(cartStats.pendingApproval || 0) > 0 && (
+                              <div
+                                className="flex flex-col items-center px-3 py-1 bg-yellow-50 rounded-lg border border-yellow-100 min-w-[60px]"
+                                title="Pending Approval"
+                              >
+                                <span className="text-xs font-bold text-yellow-700">
+                                  {cartStats.pendingApproval}
+                                </span>
+                                <span className="text-[10px] text-yellow-600/70 uppercase font-medium">
+                                  Pending
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
                               isActive
-                                ? "text-emerald-600 hover:bg-emerald-50"
-                                : "text-gray-400 hover:bg-gray-100"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : "bg-rose-50 text-rose-700 border-rose-100"
                             }`}
-                            title={isActive ? "Deactivate" : "Activate"}
                           >
                             {isActive ? (
-                              <FaToggleOn size={20} />
+                              <FaCheckCircle size={10} />
                             ) : (
-                              <FaToggleOff size={20} />
+                              <FaTimesCircle size={10} />
                             )}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(franchise)}
-                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <FaEdit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(franchise._id)}
-                            className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <FaTrash size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                            {isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => setViewDetails(franchise)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                              title="View Details"
+                            >
+                              <FaEye size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleToggleStatus(franchise._id)}
+                              className={`p-1.5 rounded-lg transition-colors border border-transparent ${
+                                isActive
+                                  ? "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100"
+                                  : "text-gray-400 hover:bg-gray-100 hover:border-gray-200"
+                              }`}
+                              title={isActive ? "Deactivate" : "Activate"}
+                            >
+                              {isActive ? (
+                                <FaToggleOn size={18} />
+                              ) : (
+                                <FaToggleOff size={18} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleEdit(franchise)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                              title="Edit"
+                            >
+                              <FaEdit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(franchise._id)}
+                              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
+                              title="Delete"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                  {/* Expanded Carts Section */}
-                  {isExpanded && (
-                    <div className="bg-gray-50 border-t border-gray-100 px-3 py-2">
-                      <div className="ml-2 sm:ml-8">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs font-semibold text-gray-600 flex items-center gap-1">
-                            <FaStore size={10} />
-                            Carts ({carts.length})
-                          </p>
-                          <button
-                            onClick={() => {
-                              setSelectedFranchiseForCart(franchise);
-                              // Pre-fill GST number from franchise admin (editable in the cart form)
-                              setCartFormData({
-                                name: "",
-                                email: "",
-                                password: "",
-                                confirmPassword: "",
-                                cartName: "",
-                                location: "",
-                                phone: "",
-                                address: "",
-                                fssaiNumber: franchise.fssaiNumber || franchise.gstNumber || "",
-                                shopActLicenseExpiry: "",
-                                fssaiLicenseExpiry: "",
-                              });
-                              setCartFiles({
-                                aadharCard: null,
-                                panCard: null,
-                                shopActLicense: null,
-                                fssaiLicense: null,
-                              });
-                              setCartFormError(null);
-                              setCartFormErrors({});
-                              setIsSubmittingCart(false);
-                              setShowCartModal(true);
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            <FaPlus size={10} />
-                            Add Cart
-                          </button>
-                        </div>
-                        {isLoadingCarts ? (
-                          <div className="flex justify-center py-4">
-                            <FaSpinner
-                              className="animate-spin text-gray-400"
-                              size={14}
-                            />
-                          </div>
-                        ) : carts.length === 0 ? (
-                          <p className="text-xs text-gray-400 py-3 text-center bg-white rounded border border-dashed border-gray-200">
-                            No carts under this franchise
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {carts.map((cart) => {
-                              const cartIsActive =
-                                cart.isActive !== false &&
-                                cart.isApproved === true &&
-                                isActive;
-                              return (
-                                <div
-                                  key={cart._id}
-                                  className={`bg-white border rounded-lg p-2.5 ${
-                                    cartIsActive
-                                      ? "border-gray-200"
-                                      : "border-amber-200 bg-amber-50"
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        {cart.cartCode && (
-                                          <span className="px-1 py-0.5 text-[9px] font-mono font-bold bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded">
-                                            {cart.cartCode}
-                                          </span>
-                                        )}
-                                        <span className="font-medium text-xs text-gray-800 truncate">
-                                          {cart.cartName ||
-                                            cart.cafeName ||
-                                            cart.name}
-                                        </span>
-                                      </div>
-                                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                                        {cart.email}
-                                      </p>
-                                      <div className="flex items-center gap-1 mt-1">
-                                        <span
-                                          className={`px-1.5 py-0.5 text-[9px] font-medium rounded ${
-                                            cart.isApproved === false
-                                              ? "bg-yellow-100 text-yellow-700"
-                                              : cartIsActive
-                                              ? "bg-green-100 text-green-700"
-                                              : "bg-red-100 text-red-700"
-                                          }`}
-                                        >
-                                          {cart.isApproved === false
-                                            ? "Pending"
-                                            : cartIsActive
-                                            ? "Active"
-                                            : "Inactive"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-0.5">
-                                      {cart.isApproved ? (
-                                        <button
-                                          onClick={() =>
-                                            handleToggleCartStatus(
-                                              cart._id,
-                                              cartIsActive
-                                            )
-                                          }
-                                          disabled={!isActive && !cartIsActive}
-                                          className={`p-1 rounded ${
-                                            !isActive && !cartIsActive
-                                              ? "text-gray-300 cursor-not-allowed"
-                                              : cartIsActive
-                                              ? "text-green-500 hover:bg-green-50"
-                                              : "text-gray-400 hover:bg-gray-100"
-                                          }`}
-                                        >
-                                          {cartIsActive ? (
-                                            <FaToggleOn size={14} />
-                                          ) : (
-                                            <FaToggleOff size={14} />
-                                          )}
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={() =>
-                                            handleToggleCartStatus(
-                                              cart._id,
-                                              cartIsActive
-                                            )
-                                          }
-                                          className="p-1 text-yellow-600 hover:bg-yellow-50 rounded"
-                                          title="Approve"
-                                        >
-                                          <FaCheckCircle size={12} />
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          handleEditCart(cart);
-                                        }}
-                                        className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded"
-                                        title="Edit Cart"
-                                      >
-                                        <FaEdit size={10} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          handleDeleteCart(
-                                            cart._id,
-                                            cart.cafeName || cart.name
-                                          );
-                                        }}
-                                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
-                                        title="Delete Cart"
-                                      >
-                                        <FaTrash size={10} />
-                                      </button>
-                                    </div>
-                                  </div>
+                      {/* Expanded Section (Child Table) */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan="6" className="p-0 border-b border-gray-100 bg-gray-50/60">
+                            <div className="px-4 py-4 sm:px-10">
+                              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                {/* Child Header */}
+                                <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                  <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                    <FaStore className="text-blue-500" />
+                                    Managed Carts
+                                    <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-medium">
+                                      {carts.length}
+                                    </span>
+                                  </h4>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedFranchiseForCart(franchise);
+                                      setCartFormData({
+                                        name: "",
+                                        email: "",
+                                        password: "",
+                                        confirmPassword: "",
+                                        cartName: "",
+                                        location: "",
+                                        phone: "",
+                                        address: "",
+                                        fssaiNumber: franchise.fssaiNumber || franchise.gstNumber || "",
+                                        shopActLicenseExpiry: "",
+                                        fssaiLicenseExpiry: "",
+                                      });
+                                      setCartFiles({
+                                        aadharCard: null,
+                                        panCard: null,
+                                        shopActLicense: null,
+                                        fssaiLicense: null,
+                                      });
+                                      setCartFormError(null);
+                                      setCartFormErrors({});
+                                      setIsSubmittingCart(false);
+                                      setShowCartModal(true);
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                  >
+                                    <FaPlus size={10} />
+                                    Add New Cart
+                                  </button>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+
+                                {/* Child Content */}
+                                {isLoadingCarts ? (
+                                  <div className="flex justify-center py-8">
+                                    <FaSpinner className="animate-spin text-blue-500" size={24} />
+                                  </div>
+                                ) : carts.length === 0 ? (
+                                  <div className="py-8 text-center text-gray-500">
+                                    <p className="text-sm">No carts found under this franchise.</p>
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                      <thead className="bg-white text-gray-500 text-xs border-b border-gray-100">
+                                        <tr>
+                                          <th className="px-5 py-2.5 font-medium w-12 text-center">#</th>
+                                          <th className="px-5 py-2.5 font-medium">Cart Name</th>
+                                          <th className="px-5 py-2.5 font-medium">Location</th>
+                                          <th className="px-5 py-2.5 font-medium">Contact</th>
+                                          <th className="px-5 py-2.5 font-medium text-center">Status</th>
+                                          <th className="px-5 py-2.5 font-medium text-right">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-50">
+                                        {carts.map((cart, idx) => {
+                                          const cartIsActive =
+                                            cart.isActive !== false &&
+                                            cart.isApproved === true &&
+                                            isActive;
+                                          
+                                          return (
+                                            <tr key={cart._id} className="hover:bg-gray-50 transition-colors">
+                                              <td className="px-5 py-3 text-center text-xs text-gray-400">
+                                                {idx + 1}
+                                              </td>
+                                              <td className="px-5 py-3">
+                                                <div className="flex items-center gap-2">
+                                                  <div className="font-medium text-gray-900">
+                                                    {cart.cartName || cart.cafeName || cart.name}
+                                                  </div>
+                                                  {cart.cartCode && (
+                                                    <span className="px-1.5 py-0.5 text-[10px] font-mono bg-orange-100 text-orange-700 rounded border border-orange-200">
+                                                      {cart.cartCode}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                {cart.isApproved === false && (
+                                                   <span className="mt-1 inline-flex items-center text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">
+                                                     Waiting Approval
+                                                   </span>
+                                                )}
+                                              </td>
+                                              <td className="px-5 py-3 text-gray-600 text-xs">
+                                                {cart.location || "-"}
+                                                {cart.address && (
+                                                  <div className="text-[10px] text-gray-400 truncate max-w-[150px]" title={cart.address}>
+                                                    {cart.address}
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="px-5 py-3">
+                                                 <div className="text-xs text-gray-600">
+                                                   <div className="flex items-center gap-1.5" title={cart.email}>
+                                                     <FaEnvelope size={10} className="text-gray-400" />
+                                                     <span className="truncate max-w-[140px]">{cart.email}</span>
+                                                   </div>
+                                                   {cart.phone && (
+                                                     <div className="flex items-center gap-1.5 mt-1">
+                                                       <FaPhone size={10} className="text-gray-400" />
+                                                       <span>{cart.phone}</span>
+                                                     </div>
+                                                   )}
+                                                 </div>
+                                              </td>
+                                              <td className="px-5 py-3 text-center">
+                                                <span
+                                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                                                    cart.isApproved === false
+                                                      ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                                      : cartIsActive
+                                                      ? "bg-green-50 text-green-700 border-green-200"
+                                                      : "bg-gray-100 text-gray-600 border-gray-200"
+                                                  }`}
+                                                >
+                                                  {cart.isApproved === false
+                                                    ? "Pending"
+                                                    : cartIsActive
+                                                    ? "Active"
+                                                    : "Inactive"}
+                                                </span>
+                                              </td>
+                                              <td className="px-5 py-3 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                  {cart.isApproved ? (
+                                                    <button
+                                                      onClick={() => handleToggleCartStatus(cart._id, cartIsActive)}
+                                                      disabled={!isActive}
+                                                      className={`p-1.5 rounded-md transition-colors ${
+                                                        !isActive
+                                                          ? "text-gray-300 cursor-not-allowed"
+                                                          : cartIsActive
+                                                          ? "text-green-600 hover:bg-green-50"
+                                                          : "text-gray-400 hover:bg-gray-100"
+                                                      }`}
+                                                      title={
+                                                        !isActive 
+                                                          ? "Parent franchise inactive"
+                                                          : cartIsActive 
+                                                            ? "Deactivate Cart" 
+                                                            : "Activate Cart"
+                                                      }
+                                                    >
+                                                      {cartIsActive ? <FaToggleOn size={16} /> : <FaToggleOff size={16} />}
+                                                    </button>
+                                                  ) : (
+                                                    <button
+                                                      onClick={() => handleToggleCartStatus(cart._id, cartIsActive)}
+                                                      className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
+                                                      title="Approve Cart"
+                                                    >
+                                                      <FaCheckCircle size={16} />
+                                                    </button>
+                                                  )}
+                                                  
+                                                  <button
+                                                    onClick={() => handleEditCart(cart)}
+                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                                    title="Edit Cart"
+                                                  >
+                                                    <FaEdit size={14} />
+                                                  </button>
+                                                  
+                                                  <button
+                                                    onClick={() => handleDeleteCart(cart._id, cart.cartName || cart.cafeName || cart.name)}
+                                                    className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                                    title="Delete Cart"
+                                                  >
+                                                    <FaTrash size={14} />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -383,6 +383,7 @@ const Inventory = () => {
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Reorder Level</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Weighted Avg Cost</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Total Value</th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Shelf Life</th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Status</th>
                           </tr>
                         </thead>
@@ -491,6 +492,52 @@ const Inventory = () => {
                                   })()}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">₹{Math.round(stockValue)}</td>
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-700">
+                                  {(() => {
+                                    const shelfDays = ing.shelfTimeDays != null && ing.shelfTimeDays !== "" ? Number(ing.shelfTimeDays) : null;
+                                    const startDate = ing.lastReceivedAt ? new Date(ing.lastReceivedAt) : null;
+                                    if (shelfDays != null && startDate && !isNaN(startDate.getTime())) {
+                                      const expiry = new Date(startDate);
+                                      expiry.setDate(expiry.getDate() + shelfDays);
+                                      const today = new Date();
+                                      today.setHours(0, 0, 0, 0);
+                                      expiry.setHours(0, 0, 0, 0);
+                                      const msPerDay = 24 * 60 * 60 * 1000;
+                                      const daysRemaining = Math.floor((expiry - today) / msPerDay);
+                                      if (daysRemaining < 0) {
+                                        return (
+                                          <span className="block">
+                                            <span className="text-red-600 font-medium">Expired</span>
+                                            <span className="block text-xs text-gray-500 mt-0.5">Shelf: {shelfDays} day{shelfDays !== 1 ? "s" : ""}</span>
+                                          </span>
+                                        );
+                                      }
+                                      if (daysRemaining === 0) {
+                                        return (
+                                          <span className="block">
+                                            <span className="text-amber-600 font-medium">Expires today</span>
+                                            <span className="block text-xs text-gray-500 mt-0.5">Shelf: {shelfDays} day{shelfDays !== 1 ? "s" : ""}</span>
+                                          </span>
+                                        );
+                                      }
+                                      return (
+                                        <span className="block">
+                                          <span className="text-green-700 font-medium">{daysRemaining} day{daysRemaining !== 1 ? "s" : ""} left</span>
+                                          <span className="block text-xs text-gray-500 mt-0.5">Expires {expiry.toLocaleDateString()} · Shelf: {shelfDays} day{shelfDays !== 1 ? "s" : ""}</span>
+                                        </span>
+                                      );
+                                    }
+                                    if (shelfDays != null) {
+                                      return (
+                                        <span className="block">
+                                          <span>Shelf: {shelfDays} day{shelfDays !== 1 ? "s" : ""}</span>
+                                          <span className="block text-xs text-gray-500 mt-0.5">— Set start date (return stock) to see expiry</span>
+                                        </span>
+                                      );
+                                    }
+                                    return "—";
+                                  })()}
+                                </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span
                                     className={`px-2 py-1 rounded text-xs ${

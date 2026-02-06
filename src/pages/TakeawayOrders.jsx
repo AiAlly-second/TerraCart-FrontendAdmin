@@ -1251,6 +1251,22 @@ const TakeawayOrders = () => {
     );
   }, [orders]);
 
+  // Fixed order for status filter tabs so all states (Ready, Served, Finalized, etc.) always show
+  const TAKEAWAY_STATUS_ORDER = [
+    "Pending",
+    "Accepted",
+    "Confirmed",
+    "Preparing",
+    "Being Prepared",
+    "Ready",
+    "Served",
+    "Finalized",
+    "Completed",
+    "Paid",
+    "Returned",
+    "Cancelled",
+  ];
+
   const statusBadgeClass = (status) => {
     switch (status) {
       case "Paid":
@@ -1264,7 +1280,10 @@ const TakeawayOrders = () => {
       case "BeingPrepared":
         return "border-blue-200 text-blue-700 bg-blue-50";
       case "Ready":
+      case "Served":
         return "border-purple-200 text-purple-700 bg-purple-50";
+      case "Finalized":
+        return "border-cyan-200 text-cyan-700 bg-cyan-50";
       case "Returned":
         return "border-rose-200 text-rose-700 bg-rose-50";
       case "Cancelled":
@@ -1307,6 +1326,9 @@ const TakeawayOrders = () => {
     });
 
     if (filterStatus === "all") return matches;
+    if (filterStatus === "Being Prepared") {
+      return matches.filter((order) => order.status === "Being Prepared" || order.status === "BeingPrepared");
+    }
     return matches.filter((order) => order.status === filterStatus);
   }, [
     orders,
@@ -1414,50 +1436,66 @@ const TakeawayOrders = () => {
           </div>
         </button>
 
-        {Object.entries(statusSummary.byStatus || {}).map(([status, count]) => (
-          <button
-            type="button"
-            key={status}
-            onClick={() => setFilterStatus(status)}
-            className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-              filterStatus === status ? "ring-2 ring-blue-400" : ""
-            }`}
-          >
-            <div className="flex items-center justify-between gap-1 sm:gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
-                  {count}
+        {TAKEAWAY_STATUS_ORDER.map((status) => {
+          const byStatus = statusSummary.byStatus || {};
+          const countToShow =
+            status === "Being Prepared"
+              ? (byStatus["Being Prepared"] || 0) +
+                (byStatus["BeingPrepared"] || 0)
+              : byStatus[status] || 0;
+
+          // Hide tiles for statuses that have no orders
+          if (!countToShow) return null;
+
+          return (
+            <button
+              type="button"
+              key={status}
+              onClick={() => setFilterStatus(status)}
+              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
+                filterStatus === status ? "ring-2 ring-blue-400" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1 sm:gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
+                    {String(countToShow).padStart(2, "0")}
+                  </div>
+                  <div className="text-[10px] sm:text-xs md:text-sm truncate">
+                    {status}
+                  </div>
                 </div>
-                <div className="text-[10px] sm:text-xs md:text-sm truncate">
-                  {status}
+                <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
+                  {status === "Pending"
+                    ? "⏳"
+                    : status === "Accepted"
+                    ? "✅"
+                    : status === "Being Prepared" || status === "BeingPrepared"
+                    ? "🔥"
+                    : status === "Completed"
+                    ? "📦"
+                    : status === "Confirmed"
+                    ? "👨‍🍳"
+                    : status === "Preparing"
+                    ? "🔥"
+                    : status === "Ready"
+                    ? "🍽️"
+                    : status === "Served"
+                    ? "🍴"
+                    : status === "Finalized"
+                    ? "📋"
+                    : status === "Paid"
+                    ? "✅"
+                    : status === "Returned"
+                    ? "↩️"
+                    : status === "Cancelled"
+                    ? "❌"
+                    : "📦"}
                 </div>
               </div>
-              <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
-                {status === "Pending"
-                  ? "⏳"
-                  : status === "Accepted"
-                  ? "✅"
-                  : status === "Being Prepared" || status === "BeingPrepared"
-                  ? "🔥"
-                  : status === "Completed"
-                  ? "📦"
-                  : status === "Confirmed"
-                  ? "👨‍🍳"
-                  : status === "Preparing"
-                  ? "🔥"
-                  : status === "Ready"
-                  ? "🍽️"
-                  : status === "Paid"
-                  ? "✅"
-                  : status === "Returned"
-                  ? "↩️"
-                  : status === "Cancelled"
-                  ? "❌"
-                  : "📦"}
-              </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
       {/* Orders table */}
@@ -2242,6 +2280,8 @@ const TakeawayOrders = () => {
                         <option value="Confirmed">👨‍🍳 Confirmed</option>
                         <option value="Preparing">🔥 Preparing</option>
                         <option value="Ready">🍽️ Ready</option>
+                        <option value="Served">🍴 Served</option>
+                        <option value="Finalized">📋 Finalized</option>
                         <option value="Paid">✅ Paid</option>
                         <option value="Cancelled">❌ Cancelled</option>
                         <option value="Returned">↩️ Returned</option>
