@@ -350,7 +350,15 @@ api.interceptors.response.use(
             "[401 Unauthorized] Just logged in - not clearing tokens. This might be a timing issue."
           );
         }
-        // Don't logout, just return the error
+        // Retry once after a short delay when NO_TOKEN right after login (token may not be attached yet)
+        if (errorCode === "NO_TOKEN" && error.config && !error.config._retryAfterLogin) {
+          error.config._retryAfterLogin = true;
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(api.request(error.config));
+            }, 150);
+          });
+        }
         return Promise.reject(error);
       }
 
