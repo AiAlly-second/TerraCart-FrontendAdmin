@@ -172,7 +172,7 @@ function App() {
                   <Route
                     path="/addons"
                     element={
-                      <ProtectedRoute allowedRoles={["admin"]}>
+                      <ProtectedRoute allowedRoles={["admin", "franchise_admin"]}>
                         <GlobalAddons />
                       </ProtectedRoute>
                     }

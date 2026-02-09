@@ -20,8 +20,8 @@ const GlobalAddons = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadAddons();
-  }, []);
+    if (user) loadAddons();
+  }, [user]);
 
   const loadAddons = async () => {
     try {

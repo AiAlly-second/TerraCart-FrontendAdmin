@@ -139,6 +139,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/employees", icon: "👥", label: "Employees" },
         { path: "/attendance", icon: "⏰", label: "Attendance" },
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
+        { path: "/addons", icon: "➕", label: "Global Add-ons" },
       ];
       if (isCostingEnabled) {
         items.push({ path: "/costing-v2", icon: "🧮", label: "Finances" });
@@ -152,7 +153,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/takeaway-orders", icon: "🥡", label: "Takeaway Orders" },
         { path: "/invoices", icon: "🧾", label: "Invoices" },
         { path: "/menu", icon: "📋", label: "Menu", showStats: true },
-        { path: "/addons", icon: "➕", label: "Global Add-ons" },
         { path: "/payments", icon: "💳", label: "Payments" },
         { path: "/tables", icon: "🍽️", label: "Tables" },
         { path: "/employees", icon: "👥", label: "Employees" },
