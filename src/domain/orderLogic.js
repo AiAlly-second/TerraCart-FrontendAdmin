@@ -1,22 +1,30 @@
 // Shared order domain logic for Terra Cart Admin
-// Sequential flow - only show next step, not all options
+// UNIFIED sequential flow for both DINE_IN and TAKEAWAY
+// Flow: Pending → Confirmed → Preparing → Ready → Completed → Paid
+
 export const ORDER_SEQUENCE = {
-	Pending:   'Confirmed',
+	Pending: 'Confirmed',
 	Confirmed: 'Preparing',
 	Preparing: 'Ready',
-	Ready:     'Served', // For dine-in orders
-	Served:    'Paid',
-	Paid:      null, // End of flow
-	Cancelled: null, // End of flow
-	Returned:  null, // End of flow
-	Finalized: 'Paid', // For existing orders
+	Ready: 'Completed',  // Unified: both dine-in and takeaway go to Completed
+	Completed: 'Paid',
+	Served: 'Paid',       // Legacy dine-in: treat as Completed
+	Finalized: 'Paid',       // Legacy: keep for backward compat
+	Paid: null,         // End of flow
+	Cancelled: null,         // End of flow
+	Returned: null,         // End of flow
+	// Legacy takeaway statuses - map to unified flow
+	Accepted: 'Preparing',  // Accepted → Preparing (same as Confirmed → Preparing)
+	'Being Prepared': 'Ready',
+	BeingPrepared: 'Ready',
+	Exit: null,
 };
 
-// Get next sequential status (only one option)
-// For takeaway orders, skip "Served" and go directly from "Ready" to "Paid"
+// Get next sequential status (unified for both service types)
 export const getNextStatus = (currentStatus, serviceType = 'DINE_IN') => {
-	if (serviceType === 'TAKEAWAY' && currentStatus === 'Ready') {
-		return 'Paid'; // Takeaway orders skip "Served"
+	// For legacy dine-in orders that use "Served", allow transition to Paid
+	if (currentStatus === 'Served') {
+		return 'Paid';
 	}
 	return ORDER_SEQUENCE[currentStatus] || null;
 };
@@ -29,16 +37,22 @@ export const canCancel = (status) => {
 export const canReturn = (status) => status === 'Paid';
 
 // Full transitions for edit modal (backward compatibility)
+// Unified transitions for both DINE_IN and TAKEAWAY
 export const ORDER_TRANSITIONS = {
-	Pending:   ['Confirmed', 'Cancelled'],
+	Pending: ['Confirmed', 'Cancelled'],
 	Confirmed: ['Preparing', 'Cancelled'],
 	Preparing: ['Ready', 'Cancelled'],
-	Ready:     ['Served', 'Cancelled'],
-	Served:    ['Paid', 'Cancelled'],
-	Finalized: ['Paid', 'Cancelled'],
-	Paid:      ['Returned'],
+	Ready: ['Completed', 'Cancelled'],
+	Completed: ['Paid', 'Cancelled'],
+	Served: ['Paid', 'Cancelled'],     // Legacy
+	Finalized: ['Paid', 'Cancelled'],     // Legacy
+	Paid: ['Returned'],
 	Cancelled: [],
-	Returned:  [],
+	Returned: [],
+	// Legacy takeaway statuses
+	Accepted: ['Preparing', 'Being Prepared', 'Cancelled'],
+	'Being Prepared': ['Ready', 'Completed', 'Cancelled'],
+	BeingPrepared: ['Ready', 'Completed', 'Cancelled'],
 };
 
 export const canAccept = (status) => status === 'Confirmed';
@@ -47,25 +61,26 @@ export const nextStatusOnAccept = 'Preparing';
 // Takeaway: first-come-first-serve accept when Pending
 export const canAcceptTakeaway = (status) => status === 'Pending';
 
-// Takeaway flow: supports both naming conventions
-// 1) Pending -> Accepted -> Being Prepared -> Completed -> Paid
-// 2) Confirmed -> Preparing -> Ready -> Paid (same as dine-in but skip Served, or include Served/Finalized if used)
+// UNIFIED: getNextStatusTakeaway now uses the same logic as getNextStatus
+// This ensures Takeaway behaves identically to Dine-In
 export const getNextStatusTakeaway = (status) => {
-  const map = {
-    Pending: 'Accepted',       // via accept API, not direct status change
-    Accepted: 'Being Prepared',
-    'Being Prepared': 'Completed',
-    BeingPrepared: 'Completed',
-    Completed: 'Paid',
-    // Dine-in style statuses (used by some takeaway orders)
-    Confirmed: 'Preparing',
-    Preparing: 'Ready',
-    Ready: 'Paid',             // takeaway: Ready -> Paid (skip Served)
-    Served: 'Paid',
-    Finalized: 'Paid',
-    Paid: null,
-    Cancelled: null,
-    Returned: null,
-  };
-  return map[status] || null;
+	// Map legacy takeaway statuses to unified flow
+	const legacyMap = {
+		Pending: null,            // Pending → use Accept button, not status change
+		Accepted: 'Preparing',    // For orders that used Accept flow
+		'Being Prepared': 'Ready',
+		BeingPrepared: 'Ready',
+		// Unified flow statuses
+		Confirmed: 'Preparing',
+		Preparing: 'Ready',
+		Ready: 'Completed',
+		Completed: 'Paid',
+		Served: 'Paid',
+		Finalized: 'Paid',
+		Paid: null,
+		Cancelled: null,
+		Returned: null,
+	};
+	return legacyMap[status] || null;
 };
+

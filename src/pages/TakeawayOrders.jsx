@@ -121,22 +121,22 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   const rows =
     aggregatedItems.length > 0
       ? aggregatedItems
-          .map((item) => {
-            const quantity = item.quantity || 0;
-            const price = item.unitPrice || 0;
-            const amount = item.amount || 0;
-            return `
+        .map((item) => {
+          const quantity = item.quantity || 0;
+          const price = item.unitPrice || 0;
+          const amount = item.amount || 0;
+          return `
               <tr>
                 <td class="py-2 border-b">${item.name || ""}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
                 <td class="py-2 border-b text-right">₹${formatMoney(
-                  amount
-                )}</td>
+            amount
+          )}</td>
               </tr>
             `;
-          })
-          .join("")
+        })
+        .join("")
       : `
         <tr>
           <td colspan="4" class="py-4 text-center text-gray-500 border-b">No items recorded.</td>
@@ -211,82 +211,70 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now()
-        ).toLocaleDateString()}</div>
-        ${
-          order.serviceType === "TAKEAWAY" && order.takeawayToken
-            ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
-            : ""
-        }
+    order.paidAt || order.updatedAt || order.createdAt || Date.now()
+  ).toLocaleDateString()}</div>
+        ${order.serviceType === "TAKEAWAY" && order.takeawayToken
+      ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
+      : ""
+    }
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
-        ${
-          order.serviceType === "TAKEAWAY" || order.orderType
-            ? `
+        ${order.serviceType === "TAKEAWAY" || order.orderType
+      ? `
               <div style="font-size: 9px; font-weight: bold; margin-bottom: 4px;">
-                ${
-                  order.orderType === "PICKUP"
-                    ? "📦 Pickup Order"
-                    : order.orderType === "DELIVERY"
-                    ? "🚚 Delivery Order"
-                    : "Takeaway Order"
-                }${
-                  order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
-                }
+                ${order.orderType === "PICKUP"
+        ? "📦 Pickup Order"
+        : order.orderType === "DELIVERY"
+          ? "🚚 Delivery Order"
+          : "Takeaway Order"
+      }${order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
+      }
               </div>
-              ${
-                order.customerName
-                  ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${
-                      order.customerName
-                    }${
-                      order.customerMobile ? ` (${order.customerMobile})` : ""
-                    }</div>`
-                  : ""
-              }
-              ${
-                order.orderType === "PICKUP" && order.pickupLocation
-                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+              ${order.customerName
+        ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${order.customerName
+        }${order.customerMobile ? ` (${order.customerMobile})` : ""
+        }</div>`
+        : ""
+      }
+              ${order.orderType === "PICKUP" && order.pickupLocation
+        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Pickup Location:</div>
                       <div>${order.pickupLocation.address || "Address not set"}</div>
                     </div>`
-                  : ""
-              }
-              ${
-                order.orderType === "DELIVERY" && order.customerLocation
-                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+        : ""
+      }
+              ${order.orderType === "DELIVERY" && order.customerLocation
+        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Delivery Address:</div>
                       <div>${order.customerLocation.address || "Address not set"}</div>
-                      ${
-                        order.deliveryInfo
-                          ? `<div style="margin-top: 4px;">
+                      ${order.deliveryInfo
+          ? `<div style="margin-top: 4px;">
                               <div>Distance: ${order.deliveryInfo.distance?.toFixed(2) || "N/A"} km</div>
-                              ${
-                                order.deliveryInfo.deliveryCharge > 0
-                                  ? `<div style="color: #059669; font-weight: 600;">Delivery Charge: ₹${order.deliveryInfo.deliveryCharge.toFixed(2)}</div>`
-                                  : ""
-                              }
+                              ${order.deliveryInfo.deliveryCharge > 0
+            ? `<div style="color: #059669; font-weight: 600;">Delivery Charge: ₹${order.deliveryInfo.deliveryCharge.toFixed(2)}</div>`
+            : ""
+          }
                             </div>`
-                          : ""
-                      }
+          : ""
+        }
                     </div>`
-                  : ""
-              }
-              ${
-                order.specialInstructions
-                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+        : ""
+      }
+              ${order.specialInstructions
+        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Special Instructions:</div>
                       <div style="font-style: italic;">${order.specialInstructions}</div>
                     </div>`
-                  : ""
-              }
+        : ""
+      }
             `
-            : `
+      : `
               <div style="font-size: 9px;">
                 ${order.tableNumber || ""}
               </div>
             `
-        }
+    }
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
         <thead>
@@ -307,14 +295,13 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             <span>Subtotal</span>
             <span>₹${formatMoney(totals.subtotal)}</span>
           </div>
-          ${
-            totals.deliveryCharge > 0
-              ? `<div class="invoice-line">
+          ${totals.deliveryCharge > 0
+      ? `<div class="invoice-line">
                   <span>Delivery Charge</span>
                   <span>₹${formatMoney(totals.deliveryCharge)}</span>
                 </div>`
-              : ""
-          }
+      : ""
+    }
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
@@ -498,12 +485,12 @@ const downloadOrderInvoice = async (order) => {
     });
 
     const imageData = canvas.toDataURL("image/png");
-    
+
     // Calculate dimensions
     const pdfWidth = 80;
     const margin = 5;
     const usableWidth = pdfWidth - (margin * 2);
-    
+
     const tempPdf = new jsPDF();
     const imgProps = tempPdf.getImageProperties(imageData);
     const imgRatio = imgProps.height / imgProps.width;
@@ -550,7 +537,7 @@ const TakeawayOrders = () => {
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
     return localStorage.getItem("autoPrintTakeawayKOT") === "true";
   });
-  
+
   // Toggle auto-print
   const toggleAutoPrint = () => {
     setAutoPrintEnabled(prev => {
@@ -563,15 +550,15 @@ const TakeawayOrders = () => {
   // Helper to handle auto-printing for incoming takeaway orders
   const handleAutoPrint = useCallback((order) => {
     if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return;
-    
+
     // Print latest KOT
     const latestKotIndex = order.kotLines.length - 1;
     if (latestKotIndex >= 0) {
       const latestKot = order.kotLines[latestKotIndex];
       // Check if this KOT has items
       if (latestKot.items && latestKot.items.length > 0) {
-         console.log(`[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`);
-         printKOT(order, latestKot, latestKotIndex);
+        console.log(`[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`);
+        printKOT(order, latestKot, latestKotIndex);
       }
     }
   }, []);
@@ -764,20 +751,20 @@ const TakeawayOrders = () => {
         );
       }
       upsertOrder(order);
-      
+
       // Auto-print updated orders (if new KOT added)
       if (autoPrintEnabled) {
-         // Logic similar to Orders.jsx: check if new KOT added
-         // For takeaway, we usually don't have "tables", but updates are same.
-         setOrders(prevOrders => {
-           const prevOrder = prevOrders.find(o => o._id === order._id);
-           if (prevOrder && order.kotLines && prevOrder.kotLines) {
-             if (order.kotLines.length > prevOrder.kotLines.length) {
-                handleAutoPrint(order);
-             }
-           }
-           return prevOrders;
-         });
+        // Logic similar to Orders.jsx: check if new KOT added
+        // For takeaway, we usually don't have "tables", but updates are same.
+        setOrders(prevOrders => {
+          const prevOrder = prevOrders.find(o => o._id === order._id);
+          if (prevOrder && order.kotLines && prevOrder.kotLines) {
+            if (order.kotLines.length > prevOrder.kotLines.length) {
+              handleAutoPrint(order);
+            }
+          }
+          return prevOrders;
+        });
       }
     };
 
@@ -1251,20 +1238,22 @@ const TakeawayOrders = () => {
     );
   }, [orders]);
 
-  // Fixed order for status filter tabs so all states (Ready, Served, Finalized, etc.) always show
+  // UNIFIED status order for filter tabs (same as dine-in)
+  // Flow: Pending → Confirmed → Preparing → Ready → Completed → Paid
   const TAKEAWAY_STATUS_ORDER = [
     "Pending",
-    "Accepted",
     "Confirmed",
     "Preparing",
-    "Being Prepared",
     "Ready",
-    "Served",
-    "Finalized",
     "Completed",
     "Paid",
-    "Returned",
     "Cancelled",
+    "Returned",
+    // Legacy statuses (backward compatibility)
+    "Accepted",
+    "Being Prepared",
+    "Served",
+    "Finalized",
   ];
 
   const statusBadgeClass = (status) => {
@@ -1417,9 +1406,8 @@ const TakeawayOrders = () => {
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-            filterStatus === "all" ? "ring-2 ring-blue-400" : ""
-          }`}
+          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${filterStatus === "all" ? "ring-2 ring-blue-400" : ""
+            }`}
         >
           <div className="flex items-center justify-between gap-1 sm:gap-2">
             <div className="min-w-0 flex-1">
@@ -1441,7 +1429,7 @@ const TakeawayOrders = () => {
           const countToShow =
             status === "Being Prepared"
               ? (byStatus["Being Prepared"] || 0) +
-                (byStatus["BeingPrepared"] || 0)
+              (byStatus["BeingPrepared"] || 0)
               : byStatus[status] || 0;
 
           // Hide tiles for statuses that have no orders
@@ -1452,9 +1440,8 @@ const TakeawayOrders = () => {
               type="button"
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-                filterStatus === status ? "ring-2 ring-blue-400" : ""
-              }`}
+              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${filterStatus === status ? "ring-2 ring-blue-400" : ""
+                }`}
             >
               <div className="flex items-center justify-between gap-1 sm:gap-2">
                 <div className="min-w-0 flex-1">
@@ -1469,28 +1456,28 @@ const TakeawayOrders = () => {
                   {status === "Pending"
                     ? "⏳"
                     : status === "Accepted"
-                    ? "✅"
-                    : status === "Being Prepared" || status === "BeingPrepared"
-                    ? "🔥"
-                    : status === "Completed"
-                    ? "📦"
-                    : status === "Confirmed"
-                    ? "👨‍🍳"
-                    : status === "Preparing"
-                    ? "🔥"
-                    : status === "Ready"
-                    ? "🍽️"
-                    : status === "Served"
-                    ? "🍴"
-                    : status === "Finalized"
-                    ? "📋"
-                    : status === "Paid"
-                    ? "✅"
-                    : status === "Returned"
-                    ? "↩️"
-                    : status === "Cancelled"
-                    ? "❌"
-                    : "📦"}
+                      ? "✅"
+                      : status === "Being Prepared" || status === "BeingPrepared"
+                        ? "🔥"
+                        : status === "Completed"
+                          ? "📦"
+                          : status === "Confirmed"
+                            ? "👨‍🍳"
+                            : status === "Preparing"
+                              ? "🔥"
+                              : status === "Ready"
+                                ? "🍽️"
+                                : status === "Served"
+                                  ? "🍴"
+                                  : status === "Finalized"
+                                    ? "📋"
+                                    : status === "Paid"
+                                      ? "✅"
+                                      : status === "Returned"
+                                        ? "↩️"
+                                        : status === "Cancelled"
+                                          ? "❌"
+                                          : "📦"}
                 </div>
               </div>
             </button>
@@ -1546,9 +1533,8 @@ const TakeawayOrders = () => {
               return (
                 <React.Fragment key={order._id}>
                   <tr
-                    className={`hover:bg-gray-50 ${
-                      order.status === "Pending" ? "bg-orange-50" : ""
-                    }`}
+                    className={`hover:bg-gray-50 ${order.status === "Pending" ? "bg-orange-50" : ""
+                      }`}
                   >
                     <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
                       <div className="font-mono text-[9px] text-gray-400 mb-1 select-all" title="Order ID">
@@ -1589,8 +1575,8 @@ const TakeawayOrders = () => {
                               {order.orderType === "PICKUP"
                                 ? "Pickup"
                                 : order.orderType === "DELIVERY"
-                                ? "Delivery"
-                                : "Takeaway"}
+                                  ? "Delivery"
+                                  : "Takeaway"}
                             </span>
                           </div>
                           {order.cancellationReason && (
@@ -1601,11 +1587,10 @@ const TakeawayOrders = () => {
                           {order.orderType && (
                             <div className="mt-1">
                               <span
-                                className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${
-                                  order.orderType === "PICKUP"
+                                className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${order.orderType === "PICKUP"
                                     ? "bg-blue-100 text-blue-700"
                                     : "bg-green-100 text-green-700"
-                                }`}
+                                  }`}
                               >
                                 {order.orderType === "PICKUP"
                                   ? "📦 PICKUP ORDER"
@@ -1733,11 +1718,10 @@ const TakeawayOrders = () => {
                         <div className="mt-1 mb-1">
                           {order.orderType ? (
                             <span
-                              className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${
-                                order.orderType === "PICKUP"
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${order.orderType === "PICKUP"
                                   ? "bg-blue-100 text-blue-700 border border-blue-300"
                                   : "bg-green-100 text-green-700 border border-green-300"
-                              }`}
+                                }`}
                             >
                               {order.orderType === "PICKUP"
                                 ? "📦 PICKUP ORDER"
@@ -1985,28 +1969,25 @@ const TakeawayOrders = () => {
                                       return (
                                         <div
                                           key={i}
-                                          className={`flex justify-between items-center py-2 border-b ${
-                                            item.returned
+                                          className={`flex justify-between items-center py-2 border-b ${item.returned
                                               ? "opacity-50 bg-gray-100"
                                               : ""
-                                          }`}
+                                            }`}
                                         >
                                           <div className="flex items-center gap-2 flex-1">
                                             <span
-                                              className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                                item.returned
+                                              className={`px-2 py-1 rounded-lg text-xs font-bold ${item.returned
                                                   ? "bg-red-100 text-red-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {item.quantity}x
                                             </span>
                                             <span
-                                              className={`text-gray-800 ${
-                                                item.returned
+                                              className={`text-gray-800 ${item.returned
                                                   ? "line-through"
                                                   : ""
-                                              }`}
+                                                }`}
                                             >
                                               {item.name}
                                             </span>
@@ -2018,11 +1999,10 @@ const TakeawayOrders = () => {
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <span
-                                              className={`text-gray-600 ${
-                                                item.returned
+                                              className={`text-gray-600 ${item.returned
                                                   ? "line-through"
                                                   : ""
-                                              }`}
+                                                }`}
                                             >
                                               ₹
                                               {(
@@ -2116,11 +2096,10 @@ const TakeawayOrders = () => {
                               <button
                                 type="button"
                                 onClick={() => setDraftCategory("all")}
-                                className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
-                                  draftCategory === "all"
+                                className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${draftCategory === "all"
                                     ? "bg-blue-600 text-white border-blue-600 shadow"
                                     : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                }`}
+                                  }`}
                               >
                                 All
                               </button>
@@ -2135,12 +2114,11 @@ const TakeawayOrders = () => {
                                       category || "Uncategorized"
                                     )
                                   }
-                                  className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
-                                    draftCategory ===
-                                    (category || "Uncategorized")
+                                  className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${draftCategory ===
+                                      (category || "Uncategorized")
                                       ? "bg-blue-600 text-white border-blue-600 shadow"
                                       : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                  }`}
+                                    }`}
                                 >
                                   {category || "Uncategorized"}
                                 </button>
@@ -2291,12 +2269,12 @@ const TakeawayOrders = () => {
                     {/* Cancellation/Return Reason Display */}
                     {currentOrder?.cancellationReason && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mt-4">
-                         <h4 className="text-sm font-bold text-red-800 mb-1">
-                           Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
-                         </h4>
-                         <p className="text-sm text-red-700">
-                           {currentOrder.cancellationReason}
-                         </p>
+                        <h4 className="text-sm font-bold text-red-800 mb-1">
+                          Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
+                        </h4>
+                        <p className="text-sm text-red-700">
+                          {currentOrder.cancellationReason}
+                        </p>
                       </div>
                     )}
 
@@ -2306,7 +2284,7 @@ const TakeawayOrders = () => {
                         Current Order Items
                       </h3>
                       {!currentOrder?.kotLines ||
-                      currentOrder.kotLines.length === 0 ? (
+                        currentOrder.kotLines.length === 0 ? (
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                           No items in this order yet.
                         </div>
@@ -2344,28 +2322,25 @@ const TakeawayOrders = () => {
                                     return (
                                       <div
                                         key={itemIdx}
-                                        className={`flex justify-between items-center py-2 px-3 rounded border ${
-                                          item.returned
+                                        className={`flex justify-between items-center py-2 px-3 rounded border ${item.returned
                                             ? "bg-red-50 border-red-200 opacity-60"
                                             : "bg-white border-gray-200"
-                                        }`}
+                                          }`}
                                       >
                                         <div className="flex items-center gap-2 flex-1">
                                           <span
-                                            className={`px-2 py-1 rounded text-xs font-bold ${
-                                              item.returned
+                                            className={`px-2 py-1 rounded text-xs font-bold ${item.returned
                                                 ? "bg-red-100 text-red-700"
                                                 : "bg-amber-100 text-amber-700"
-                                            }`}
+                                              }`}
                                           >
                                             {item.quantity}x
                                           </span>
                                           <span
-                                            className={`text-sm text-gray-800 ${
-                                              item.returned
+                                            className={`text-sm text-gray-800 ${item.returned
                                                 ? "line-through"
                                                 : ""
-                                            }`}
+                                              }`}
                                           >
                                             {item.name}
                                           </span>
@@ -2377,11 +2352,10 @@ const TakeawayOrders = () => {
                                         </div>
                                         <div className="flex items-center gap-3">
                                           <span
-                                            className={`text-sm text-gray-600 ${
-                                              item.returned
+                                            className={`text-sm text-gray-600 ${item.returned
                                                 ? "line-through"
                                                 : ""
-                                            }`}
+                                              }`}
                                           >
                                             ₹
                                             {(
@@ -2392,9 +2366,9 @@ const TakeawayOrders = () => {
                                           {!item.returned &&
                                             currentOrder.status !== "Paid" &&
                                             currentOrder.status !==
-                                              "Cancelled" &&
+                                            "Cancelled" &&
                                             currentOrder.status !==
-                                              "Returned" && (
+                                            "Returned" && (
                                               <button
                                                 type="button"
                                                 onClick={() =>
@@ -2458,11 +2432,10 @@ const TakeawayOrders = () => {
                                   <button
                                     type="button"
                                     onClick={() => setDraftCategory("all")}
-                                    className={`px-3 py-1 text-sm rounded-full border transition ${
-                                      draftCategory === "all"
+                                    className={`px-3 py-1 text-sm rounded-full border transition ${draftCategory === "all"
                                         ? "bg-blue-600 text-white border-blue-600 shadow"
                                         : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                    }`}
+                                      }`}
                                   >
                                     All
                                   </button>
@@ -2477,12 +2450,11 @@ const TakeawayOrders = () => {
                                           category || "Uncategorized"
                                         )
                                       }
-                                      className={`px-3 py-1 text-sm rounded-full border transition ${
-                                        draftCategory ===
-                                        (category || "Uncategorized")
+                                      className={`px-3 py-1 text-sm rounded-full border transition ${draftCategory ===
+                                          (category || "Uncategorized")
                                           ? "bg-blue-600 text-white border-blue-600 shadow"
                                           : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                      }`}
+                                        }`}
                                     >
                                       {category || "Uncategorized"}
                                     </button>
