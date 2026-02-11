@@ -26,6 +26,7 @@ import MenuManager from "./pages/MenuManager";
 import GlobalAddons from "./pages/GlobalAddons";
 import Staff from "./pages/Staff";
 import EmployeeManagement from "./pages/EmployeeManagement";
+import TaskManagement from "./pages/TaskManagement";
 import TableDashboard from "./pages/TableDashboard";
 // Lazy load AttendanceManagement and Payments to avoid circular dependency issues
 import { lazy } from "react";
@@ -272,6 +273,16 @@ function App() {
                         >
                           <AttendanceManagement />
                         </Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/tasks-management"
+                    element={
+                      <ProtectedRoute
+                        allowedRoles={["admin", "franchise_admin"]}
+                      >
+                        <TaskManagement />
                       </ProtectedRoute>
                     }
                   />

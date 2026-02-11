@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 // Removed socket import - using HTTP polling instead
 import { confirm } from "../utils/confirm";
+import TaskManagement from "./TaskManagement";
 
 const AttendanceManagement = () => {
   // Use dynamic imports to avoid circular dependency issues during bundling
@@ -35,8 +36,7 @@ const AttendanceManagement = () => {
     new Date().toLocaleDateString('en-CA') // Local YYYY-MM-DD
   );
   const [stats, setStats] = useState(null);
-  const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'stats'
-  const [currentTime, setCurrentTime] = useState(new Date()); // For real-time timer updates
+  const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'tasks'
   const pollingIntervalRef = useRef(null); // For HTTP polling interval
   const [processingAction, setProcessingAction] = useState(null); // Track which action is being processed
   
@@ -76,15 +76,6 @@ const AttendanceManagement = () => {
     }
   }, []);
 
-  // Real-time timer that updates every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
   useEffect(() => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for dependencies to load
 
@@ -96,8 +87,16 @@ const AttendanceManagement = () => {
     }
     fetchTodayAttendance();
 
-    // Removed automatic polling as per user request
-    pollingIntervalRef.current = null;
+    // Keep today attendance synced with mobile check-in/check-out updates.
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    if (activeTab === "today") {
+      pollingIntervalRef.current = setInterval(() => {
+        fetchTodayAttendance();
+      }, 15000);
+    }
 
     return () => {
       if (pollingIntervalRef.current) {
@@ -264,8 +263,16 @@ const AttendanceManagement = () => {
               a.employeeId?._id === employeeId)
         )
       : null;
+    const { hasCheckedIn, hasCheckedOut, isOnBreak } =
+      getAttendanceFlags(todayRecord);
 
-    if (todayRecord?.checkIn?.time) {
+    if (hasCheckedOut) {
+      alert("This employee has already checked out today.");
+      fetchTodayAttendance();
+      return;
+    }
+
+    if (hasCheckedIn || isOnBreak) {
       alert("This employee is already checked in today.");
       // Refresh to show current state
       fetchTodayAttendance();
@@ -473,14 +480,15 @@ const AttendanceManagement = () => {
               a.employeeId?._id === employeeId)
         )
       : null;
+    const { hasCheckedIn, hasCheckedOut } = getAttendanceFlags(todayRecord);
 
-    if (!todayRecord?.checkIn?.time) {
+    if (!hasCheckedIn && !hasCheckedOut) {
       alert("This employee has not checked in today.");
       fetchTodayAttendance();
       return;
     }
 
-    if (todayRecord?.checkOut?.time) {
+    if (hasCheckedOut) {
       alert("This employee is already checked out today.");
       fetchTodayAttendance();
       return;
@@ -576,62 +584,96 @@ const AttendanceManagement = () => {
     return `${mins}m`;
   };
 
-  const calculateRealTimeHours = (record) => {
-    if (!record?.checkIn?.time) return "-";
-
-    // Use currentTime state for real-time updates (updates every second)
-    const now = currentTime;
-    const checkInTime = new Date(record.checkIn.time);
-    const breakMinutes = record.breakDuration || 0;
-
-    // If on break, pause timer at break start
-    let workingSeconds = 0;
-    if (record.isOnBreak && record.breakStart) {
-      // PAUSED: Working timer is frozen at the moment break started
-      const breakStartTime = new Date(record.breakStart);
-      const workingTimeUntilBreak = Math.floor(
-        (breakStartTime - checkInTime) / 1000
-      ); // seconds
-      // breakDuration doesn't include current break, so subtract it (convert to seconds)
-      workingSeconds = Math.max(0, workingTimeUntilBreak - breakMinutes * 60);
-    } else {
-      // ACTIVE: Working timer is running
-      const totalDurationSeconds = Math.floor((now - checkInTime) / 1000);
-      // Subtract completed break time (convert to seconds)
-      workingSeconds = Math.max(0, totalDurationSeconds - breakMinutes * 60);
+  const getEmployeeIdFromAttendance = (record) => {
+    if (!record) return null;
+    const employee = record.employeeId;
+    if (!employee) return null;
+    if (typeof employee === "string") return employee;
+    if (typeof employee === "object") {
+      return (employee._id || employee.id || employee.toString())?.toString() || null;
     }
-
-    // Convert to hours and minutes with seconds for real-time display
-    const hours = Math.floor(workingSeconds / 3600);
-    const mins = Math.floor((workingSeconds % 3600) / 60);
-    const secs = workingSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${mins.toString().padStart(2, "0")}m ${secs
-        .toString()
-        .padStart(2, "0")}s`;
-    }
-    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+    return null;
   };
 
-  const calculateBreakTimer = (record) => {
-    if (!record?.isOnBreak || !record?.breakStart) return null;
-
-    const now = currentTime;
-    const breakStartTime = new Date(record.breakStart);
-    const breakSeconds = Math.floor((now - breakStartTime) / 1000);
-
-    const hours = Math.floor(breakSeconds / 3600);
-    const mins = Math.floor((breakSeconds % 3600) / 60);
-    const secs = breakSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${mins.toString().padStart(2, "0")}m ${secs
-        .toString()
-        .padStart(2, "0")}s`;
+  const getAttendanceFlags = (record) => {
+    if (!record) {
+      return { hasCheckedIn: false, hasCheckedOut: false, isOnBreak: false };
     }
-    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+
+    const attendanceStatus = record.attendanceStatus?.toString()?.toLowerCase();
+    const checkInStatus = record.checkInStatus?.toString()?.toLowerCase();
+    const checkInTime = record.checkIn?.time || record.checkInTime || null;
+    const checkOutTime = record.checkOut?.time || record.checkOutTime || null;
+
+    const hasCheckedOut =
+      record.isCheckedOut === true ||
+      attendanceStatus === "checked_out" ||
+      checkInStatus === "checked_out" ||
+      Boolean(checkOutTime);
+
+    const isOnBreak =
+      attendanceStatus === "on_break" ||
+      record.isOnBreak === true ||
+      Boolean(record.breakStart);
+
+    const hasCheckedIn =
+      !hasCheckedOut &&
+      (attendanceStatus === "checked_in" ||
+        attendanceStatus === "on_break" ||
+        checkInStatus === "checked_in" ||
+        Boolean(checkInTime));
+
+    return { hasCheckedIn, hasCheckedOut, isOnBreak };
   };
+
+  const getAttendancePriority = (record) => {
+    const { hasCheckedOut, isOnBreak, hasCheckedIn } = getAttendanceFlags(record);
+    if (hasCheckedOut) return 4;
+    if (isOnBreak) return 3;
+    if (hasCheckedIn) return 2;
+    return 1;
+  };
+
+  const getAttendanceSortTime = (record) => {
+    if (!record) return 0;
+    return new Date(
+      record.updatedAt ||
+        record.checkOut?.time ||
+        record.checkIn?.time ||
+        record.createdAt ||
+        record.date ||
+        0
+    ).getTime();
+  };
+
+  const todayAttendanceMap = useMemo(() => {
+    const map = new Map();
+    const source = Array.isArray(todayAttendance) ? todayAttendance : [];
+    source.forEach((record) => {
+      const employeeId = getEmployeeIdFromAttendance(record);
+      if (!employeeId) return;
+      const current = map.get(employeeId);
+      if (!current) {
+        map.set(employeeId, record);
+        return;
+      }
+
+      const currentPriority = getAttendancePriority(current);
+      const nextPriority = getAttendancePriority(record);
+      if (nextPriority > currentPriority) {
+        map.set(employeeId, record);
+        return;
+      }
+
+      if (
+        nextPriority === currentPriority &&
+        getAttendanceSortTime(record) >= getAttendanceSortTime(current)
+      ) {
+        map.set(employeeId, record);
+      }
+    });
+    return map;
+  }, [todayAttendance]);
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -641,6 +683,10 @@ const AttendanceManagement = () => {
       half_day: "bg-orange-100 text-orange-800",
       on_leave: "bg-blue-100 text-blue-800",
       sick: "bg-purple-100 text-purple-800",
+      working: "bg-green-100 text-green-800",
+      on_break: "bg-orange-100 text-orange-800",
+      checked_out: "bg-slate-200 text-slate-800",
+      checked_in: "bg-green-100 text-green-800",
     };
     return badges[status] || "bg-gray-100 text-gray-800";
   };
@@ -708,6 +754,16 @@ const AttendanceManagement = () => {
             >
               Attendance History
             </button>
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
+                activeTab === "tasks"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Task Management
+            </button>
           </nav>
         </div>
 
@@ -730,20 +786,20 @@ const AttendanceManagement = () => {
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                         Employee
                       </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">
-                        Role
-                      </th>
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                         Check-In
                       </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                         Check-Out
                       </th>
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                        Status
+                        Total Breaks
                       </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">
-                        Working Hours
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                        Total Break Time
+                      </th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                        Status
                       </th>
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                         Actions
@@ -753,30 +809,45 @@ const AttendanceManagement = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Array.isArray(employees) &&
                       employees.map((employee) => {
-                        // Find today's attendance record - check multiple possible employeeId formats
-                        const todayRecord = Array.isArray(todayAttendance)
-                          ? todayAttendance.find((a) => {
-                              // Handle different employeeId formats
-                              const recordEmployeeId =
-                                a.employeeId?._id || a.employeeId;
-                              const employeeIdStr =
-                                employee._id?.toString() || employee._id;
-                              const match = recordEmployeeId?.toString() === employeeIdStr;
-                              return match;
-                            })
-                          : null;
+                        const employeeIdStr =
+                          employee._id?.toString() || employee._id;
+                        const todayRecord =
+                          todayAttendanceMap.get(employeeIdStr) || null;
+                        const { hasCheckedIn, hasCheckedOut, isOnBreak } =
+                          getAttendanceFlags(todayRecord);
 
-                        // Check if checked in - handle multiple formats
-                        const hasCheckedIn =
-                          todayRecord?.checkIn?.time ||
-                          (todayRecord?.checkIn &&
-                            typeof todayRecord.checkIn === "string");
-                        const hasCheckedOut =
-                          todayRecord?.checkOut?.time ||
-                          (todayRecord?.checkOut &&
-                            typeof todayRecord.checkOut === "string");
-                        const isOnBreak =
-                          todayRecord?.isOnBreak || todayRecord?.breakStart;
+                        const breaks = Array.isArray(todayRecord?.breaks)
+                          ? todayRecord.breaks
+                          : [];
+                        const totalBreakMinutes = Number(
+                          todayRecord?.breakDuration ??
+                            todayRecord?.breakMinutes ??
+                            breaks.reduce(
+                              (sum, entry) =>
+                                sum + Number(entry?.durationMinutes || 0),
+                              0
+                            )
+                        );
+                        const activeBreakCount = isOnBreak ? 1 : 0;
+                        const totalBreaks = breaks.length + activeBreakCount;
+
+                        let statusLabel = "Absent";
+                        let statusKey = "absent";
+                        if (todayRecord) {
+                          if (hasCheckedOut) {
+                            statusLabel = "Checked Out";
+                            statusKey = "checked_out";
+                          } else if (isOnBreak) {
+                            statusLabel = "On Break";
+                            statusKey = "on_break";
+                          } else if (hasCheckedIn) {
+                            statusLabel = "Working";
+                            statusKey = "working";
+                          } else {
+                            statusLabel = "Absent";
+                            statusKey = "absent";
+                          }
+                        }
 
                         return (
                           <tr key={employee._id}>
@@ -784,18 +855,16 @@ const AttendanceManagement = () => {
                               <div className="font-medium text-xs sm:text-sm">
                                 {employee.name}
                               </div>
-                              <div className="text-[10px] sm:text-xs text-gray-500 sm:hidden capitalize">
+                              <div className="text-[10px] sm:text-xs text-gray-500 capitalize">
                                 {employee.employeeRole}
                               </div>
-                            </td>
-                            <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap capitalize text-xs sm:text-sm hidden sm:table-cell">
-                              {employee.employeeRole}
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-4">
                               {hasCheckedIn ? (
                                 <span className="text-green-600 font-medium text-xs sm:text-sm">
                                   {formatTime(
                                     todayRecord.checkIn?.time ||
+                                      todayRecord.checkInTime ||
                                       todayRecord.checkIn
                                   )}
                                 </span>
@@ -805,11 +874,12 @@ const AttendanceManagement = () => {
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
+                            <td className="px-3 sm:px-6 py-2 sm:py-4">
                               {hasCheckedOut ? (
                                 <span className="text-blue-600 font-medium text-xs sm:text-sm">
                                   {formatTime(
                                     todayRecord.checkOut?.time ||
+                                      todayRecord.checkOutTime ||
                                       todayRecord.checkOut
                                   )}
                                 </span>
@@ -820,61 +890,19 @@ const AttendanceManagement = () => {
                               )}
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-4">
-                              <div className="flex flex-col gap-1">
-                                {todayRecord ? (
-                                  <span
-                                    className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full ${getStatusBadge(
-                                      todayRecord.status
-                                    )}`}
-                                  >
-                                    {todayRecord.status
-                                      .replace("_", " ")
-                                      .toUpperCase()}
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-gray-100 text-gray-800">
-                                    ABSENT
-                                  </span>
-                                )}
-                                {isOnBreak && (
-                                  <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full bg-orange-100 text-orange-800">
-                                    ON BREAK
-                                  </span>
-                                )}
-                              </div>
+                              {totalBreaks}
                             </td>
-                            <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell text-xs sm:text-sm">
-                              <div className="space-y-1">
-                                {todayRecord?.workingHours ? (
-                                  formatHours(
-                                    Math.round(todayRecord.workingHours * 60)
-                                  )
-                                ) : hasCheckedIn && !hasCheckedOut ? (
-                                  <div>
-                                    <div
-                                      className={
-                                        todayRecord?.isOnBreak
-                                          ? "text-orange-600"
-                                          : "text-green-600"
-                                      }
-                                    >
-                                      {calculateRealTimeHours(todayRecord)}
-                                      {todayRecord?.isOnBreak && (
-                                        <span className="ml-1">(Paused)</span>
-                                      )}
-                                    </div>
-                                    {todayRecord?.isOnBreak &&
-                                      todayRecord?.breakStart && (
-                                        <div className="text-orange-500 text-[10px]">
-                                          Break:{" "}
-                                          {calculateBreakTimer(todayRecord)}
-                                        </div>
-                                      )}
-                                  </div>
-                                ) : (
-                                  "-"
-                                )}
-                              </div>
+                            <td className="px-3 sm:px-6 py-2 sm:py-4">
+                              {formatHours(totalBreakMinutes)}
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-4">
+                              <span
+                                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-full ${getStatusBadge(
+                                  statusKey
+                                )}`}
+                              >
+                                {statusLabel.toUpperCase()}
+                              </span>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm font-medium">
                               <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
@@ -888,7 +916,7 @@ const AttendanceManagement = () => {
                                   </button>
                                 ) : !hasCheckedOut ? (
                                   <>
-                                    {todayRecord?.isOnBreak ? (
+                                    {isOnBreak ? (
                                       <button
                                         type="button"
                                         onClick={(e) =>
@@ -1082,7 +1110,7 @@ End Break
             </div>
           )}
 
-          {/* Statistics Tab */}
+          {activeTab === "tasks" && <TaskManagement embedded />}
         </div>
       </div>
     </div>
