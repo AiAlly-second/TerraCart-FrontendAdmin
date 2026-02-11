@@ -59,7 +59,7 @@ const Recipes = () => {
       const existing = recipes.find(
         (r) =>
           r.name.trim().toLowerCase() ===
-          recipeNameFromMenu.trim().toLowerCase()
+          recipeNameFromMenu.trim().toLowerCase(),
       );
       if (!existing) {
         setFormData((prev) => ({
@@ -81,45 +81,51 @@ const Recipes = () => {
         getIngredients(),
         getDefaultMenuItems(),
       ]);
-      
+
       // Enhanced logging for debugging
       if (import.meta.env.DEV) {
         console.log(`[FRONTEND] fetchData response:`, {
           recipes: {
             success: recipesRes.data.success,
-            count: recipesRes.data.data?.length || 0
+            count: recipesRes.data.data?.length || 0,
           },
           ingredients: {
             success: ingredientsRes.data.success,
-            count: ingredientsRes.data.data?.length || 0
+            count: ingredientsRes.data.data?.length || 0,
           },
           menuItems: {
             success: defaultMenuRes.data.success,
-            count: defaultMenuRes.data.data?.length || 0
-          }
+            count: defaultMenuRes.data.data?.length || 0,
+          },
         });
-        
+
         if (recipesRes.data.success && recipesRes.data.data) {
           if (recipesRes.data.data.length > 0) {
-            console.log(`[FRONTEND] Sample recipes:`, recipesRes.data.data.slice(0, 3).map(rec => ({
-              name: rec.name,
-              cartId: rec.cartId || 'null',
-              isActive: rec.isActive
-            })));
+            console.log(
+              `[FRONTEND] Sample recipes:`,
+              recipesRes.data.data.slice(0, 3).map((rec) => ({
+                name: rec.name,
+                cartId: rec.cartId || "null",
+                isActive: rec.isActive,
+              })),
+            );
           } else {
             console.warn(`[FRONTEND] ⚠️ No recipes received!`);
           }
         }
       }
-      
+
       if (recipesRes.data.success) setRecipes(recipesRes.data.data || []);
-      if (ingredientsRes.data.success) setIngredients(ingredientsRes.data.data || []);
+      if (ingredientsRes.data.success)
+        setIngredients(ingredientsRes.data.data || []);
       if (defaultMenuRes.data.success)
         setDefaultMenuItems(defaultMenuRes.data.data || []);
     } catch (error) {
       console.error("[FRONTEND] Error fetching data:", error);
       console.error("[FRONTEND] Error response:", error.response?.data);
-      alert(`Failed to fetch data: ${error.response?.data?.message || error.message}`);
+      alert(
+        `Failed to fetch data: ${error.response?.data?.message || error.message}`,
+      );
     } finally {
       setLoading(false);
     }
@@ -158,12 +164,12 @@ const Recipes = () => {
         const duplicateRecipe = recipes.find(
           (r) =>
             r.name.trim().toLowerCase() ===
-            submitData.name.trim().toLowerCase()
+            submitData.name.trim().toLowerCase(),
         );
 
         if (duplicateRecipe) {
           alert(
-            `A BOM with the name "${submitData.name}" already exists. Please use a different name or edit the existing BOM.`
+            `A BOM with the name "${submitData.name}" already exists. Please use a different name or edit the existing BOM.`,
           );
           return;
         }
@@ -184,7 +190,7 @@ const Recipes = () => {
       alert(
         `Failed to save recipe: ${
           error.response?.data?.message || error.message
-        }`
+        }`,
       );
     } finally {
       setSavingRecipe(false);
@@ -207,7 +213,7 @@ const Recipes = () => {
     setEditing(recipe);
     // Try to auto-select a linked default menu item by matching name
     const linkedDefaultItem = defaultMenuItems.find(
-      (m) => m.name === recipe.name
+      (m) => m.name === recipe.name,
     );
     setSelectedMenuItemId(linkedDefaultItem ? linkedDefaultItem.name : "");
     setFormData({
@@ -215,29 +221,33 @@ const Recipes = () => {
       yieldPercent: recipe.yieldPercent,
       portions: recipe.portions,
       instructions: recipe.instructions || "",
-      ingredients: recipe.ingredients && recipe.ingredients.length > 0
-        ? recipe.ingredients.map((ing) => {
-            // Handle populated ingredientId (object) or plain ID (string)
-            let ingredientId = "";
-            if (ing.ingredientId) {
-              if (typeof ing.ingredientId === "object" && ing.ingredientId._id) {
-                // Populated object - extract _id
-                ingredientId = ing.ingredientId._id.toString();
-              } else if (typeof ing.ingredientId === "string") {
-                // Already a string ID
-                ingredientId = ing.ingredientId;
-              } else {
-                // Try to convert to string if it's an ObjectId
-                ingredientId = String(ing.ingredientId);
+      ingredients:
+        recipe.ingredients && recipe.ingredients.length > 0
+          ? recipe.ingredients.map((ing) => {
+              // Handle populated ingredientId (object) or plain ID (string)
+              let ingredientId = "";
+              if (ing.ingredientId) {
+                if (
+                  typeof ing.ingredientId === "object" &&
+                  ing.ingredientId._id
+                ) {
+                  // Populated object - extract _id
+                  ingredientId = ing.ingredientId._id.toString();
+                } else if (typeof ing.ingredientId === "string") {
+                  // Already a string ID
+                  ingredientId = ing.ingredientId;
+                } else {
+                  // Try to convert to string if it's an ObjectId
+                  ingredientId = String(ing.ingredientId);
+                }
               }
-            }
-            return {
-              ingredientId: ingredientId,
-            qty: ing.qty || "",
-              uom: ing.uom || "kg",
-            };
-          })
-        : [{ ingredientId: "", qty: "", uom: "kg" }],
+              return {
+                ingredientId: ingredientId,
+                qty: ing.qty || "",
+                uom: ing.uom || "kg",
+              };
+            })
+          : [{ ingredientId: "", qty: "", uom: "kg" }],
       isActive: recipe.isActive !== undefined ? recipe.isActive : true,
     });
     setModalOpen(true);
@@ -271,7 +281,7 @@ const Recipes = () => {
         danger: true,
         confirmText: "Delete",
         cancelText: "Cancel",
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -284,7 +294,7 @@ const Recipes = () => {
       alert(
         `Failed to delete recipe: ${
           error.response?.data?.message || error.message
-        }`
+        }`,
       );
     }
   };
@@ -298,7 +308,7 @@ const Recipes = () => {
       alert(
         `Failed to recalculate: ${
           error.response?.data?.message || error.message
-        }`
+        }`,
       );
     }
   };
@@ -317,7 +327,7 @@ const Recipes = () => {
         cancelText: "Cancel",
         danger: false,
         requireInput: false,
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -337,7 +347,7 @@ const Recipes = () => {
       }
     } catch (error) {
       alert(
-        `Failed to push data: ${error.response?.data?.message || error.message}`
+        `Failed to push data: ${error.response?.data?.message || error.message}`,
       );
     } finally {
       setPushing(false);
@@ -763,7 +773,7 @@ const Recipes = () => {
                           updateIngredient(
                             index,
                             "ingredientId",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm sm:col-span-2"
@@ -789,11 +799,7 @@ const Recipes = () => {
                             : ing.qty
                         }
                         onChange={(e) =>
-                          updateIngredient(
-                            index,
-                            "qty",
-                            e.target.value
-                          )
+                          updateIngredient(index, "qty", e.target.value)
                         }
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent text-sm"
                       />

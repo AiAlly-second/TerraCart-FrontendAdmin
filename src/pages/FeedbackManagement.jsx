@@ -26,7 +26,7 @@ const FeedbackManagement = () => {
         "[FeedbackManagement] User role:",
         user?.role,
         "User ID:",
-        user?._id
+        user?._id,
       );
 
       // Backend should automatically filter by cafeId for cart admins
@@ -35,13 +35,13 @@ const FeedbackManagement = () => {
 
       console.log(
         "[FeedbackManagement] Received feedbacks:",
-        feedbacksData.length
+        feedbacksData.length,
       );
 
       // For cart admin, verify filtering is working
       if (user?.role === "admin" && feedbacksData.length > 0) {
         console.log(
-          "[FeedbackManagement] Cart admin - verifying feedback data"
+          "[FeedbackManagement] Cart admin - verifying feedback data",
         );
         // Log sample feedback to verify it belongs to this cart
         const sampleFeedback = feedbacksData[0];
@@ -59,7 +59,7 @@ const FeedbackManagement = () => {
       console.error("Error details:", error.response?.data);
       alert(
         "Failed to load feedback. Please check console for details.",
-        "error"
+        "error",
       );
     } finally {
       setLoading(false);
@@ -133,11 +133,15 @@ const FeedbackManagement = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
-            <div className="text-xs sm:text-sm text-gray-600">Total Feedback</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Total Feedback
+            </div>
             <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
-            <div className="text-xs sm:text-sm text-gray-600">Average Rating</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Average Rating
+            </div>
             <div className="text-xl sm:text-2xl font-bold text-yellow-600">
               {stats.averageRating}
             </div>
@@ -149,7 +153,9 @@ const FeedbackManagement = () => {
             </div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg shadow">
-            <div className="text-xs sm:text-sm text-gray-600">Service Speed</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Service Speed
+            </div>
             <div className="text-xl sm:text-2xl font-bold">
               {stats.averageServiceSpeed || "N/A"}
             </div>
@@ -340,7 +346,7 @@ const FeedbackManagement = () => {
                         <div className="flex items-center">
                           <span className="mr-1">
                             {getRatingStars(
-                              feedback.orderFeedback.serviceSpeed
+                              feedback.orderFeedback.serviceSpeed,
                             )}
                           </span>
                           <span>({feedback.orderFeedback.serviceSpeed})</span>
@@ -354,7 +360,7 @@ const FeedbackManagement = () => {
                         <div className="flex items-center">
                           <span className="mr-1">
                             {getRatingStars(
-                              feedback.orderFeedback.orderAccuracy
+                              feedback.orderFeedback.orderAccuracy,
                             )}
                           </span>
                           <span>({feedback.orderFeedback.orderAccuracy})</span>
