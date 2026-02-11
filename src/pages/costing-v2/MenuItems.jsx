@@ -51,11 +51,14 @@ const MenuItems = () => {
       const [menuItemsRes, recipesRes, defaultMenuRes] = await Promise.all([
         getMenuItems(params),
         getRecipes(),
-        isCartAdmin ? getDefaultMenuItems() : Promise.resolve({ data: { success: true, data: [] } }),
+        isCartAdmin
+          ? getDefaultMenuItems()
+          : Promise.resolve({ data: { success: true, data: [] } }),
       ]);
       if (menuItemsRes.data.success) setMenuItems(menuItemsRes.data.data);
       if (recipesRes.data.success) setRecipes(recipesRes.data.data);
-      if (defaultMenuRes.data.success) setDefaultMenuItems(defaultMenuRes.data.data);
+      if (defaultMenuRes.data.success)
+        setDefaultMenuItems(defaultMenuRes.data.data);
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error("Error fetching data:", error);
@@ -72,7 +75,7 @@ const MenuItems = () => {
       // For super_admin / franchise_admin we MUST know which outlet (cart) to create into
       if (!isCartAdmin && !selectedOutlet) {
         alert(
-          "Please select an outlet/cart at the top-right before creating a menu item."
+          "Please select an outlet/cart at the top-right before creating a menu item.",
         );
         return;
       }
@@ -84,7 +87,9 @@ const MenuItems = () => {
           return;
         }
         if (!formData.sellingPrice || formData.sellingPrice <= 0) {
-          alert("Selling price is required. Please select a menu item from your menu.");
+          alert(
+            "Selling price is required. Please select a menu item from your menu.",
+          );
           return;
         }
       }
@@ -111,7 +116,7 @@ const MenuItems = () => {
       alert(
         `Failed to save menu item: ${
           error.response?.data?.message || error.message
-        }`
+        }`,
       );
     }
   };
@@ -135,7 +140,6 @@ const MenuItems = () => {
     linked: menuItems.filter((m) => m.defaultMenuPath).length,
     highFoodCost: menuItems.filter((m) => (m.foodCostPercent || 0) > 40).length,
   };
-
 
   const handleEdit = (item) => {
     setEditing(item);
@@ -165,7 +169,7 @@ const MenuItems = () => {
         danger: true,
         confirmText: "Delete",
         cancelText: "Cancel",
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -178,7 +182,7 @@ const MenuItems = () => {
       alert(
         `Failed to delete menu item: ${
           error.response?.data?.message || error.message
-        }`
+        }`,
       );
     }
   };
@@ -322,14 +326,17 @@ const MenuItems = () => {
                     {(() => {
                       // Use menu item's costPerPortion (updated by backend), or fallback to recipe's costPerPortion
                       let costPerPortion = item.costPerPortion || 0;
-                      
+
                       // If costPerPortion is 0 and recipe exists, try to get from populated recipe
                       if (costPerPortion === 0 && item.recipeId) {
-                        if (typeof item.recipeId === 'object' && item.recipeId.costPerPortion) {
+                        if (
+                          typeof item.recipeId === "object" &&
+                          item.recipeId.costPerPortion
+                        ) {
                           costPerPortion = item.recipeId.costPerPortion;
                         }
                       }
-                      
+
                       return `₹${Number(costPerPortion).toFixed(2)}`;
                     })()}
                   </td>
@@ -339,8 +346,8 @@ const MenuItems = () => {
                         item.foodCostPercent > 40
                           ? "bg-red-100 text-red-800"
                           : item.foodCostPercent > 30
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-green-100 text-green-800"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-green-100 text-green-800"
                       }`}
                     >
                       {Number(item.foodCostPercent || 0).toFixed(2)}%
@@ -421,7 +428,9 @@ const MenuItems = () => {
                     value={(() => {
                       if (!formData.name) return "";
                       const idx = defaultMenuItems.findIndex(
-                        (item) => item.name === formData.name && item.category === formData.category
+                        (item) =>
+                          item.name === formData.name &&
+                          item.category === formData.category,
                       );
                       return idx >= 0 ? idx.toString() : "";
                     })()}
@@ -452,11 +461,12 @@ const MenuItems = () => {
                     ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    Select an item from your operational menu. Price will be set automatically.
+                    Select an item from your operational menu. Price will be set
+                    automatically.
                   </p>
                 </div>
               )}
-              
+
               {/* For non-cart admin or editing, show manual fields */}
               {(!isCartAdmin || editing) && (
                 <>
@@ -492,20 +502,26 @@ const MenuItems = () => {
                   </div>
                 </>
               )}
-              
+
               {/* Show selected item details for cart admin */}
               {isCartAdmin && formData.name && (
                 <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-sm font-medium text-gray-700 mb-1">Selected Item:</p>
+                  <p className="text-sm font-medium text-gray-700 mb-1">
+                    Selected Item:
+                  </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-semibold">{formData.name}</span> - {formData.category}
+                    <span className="font-semibold">{formData.name}</span> -{" "}
+                    {formData.category}
                   </p>
                   <p className="text-sm text-gray-600 mt-1">
-                    Price: <span className="font-semibold text-green-700">₹{Number(formData.sellingPrice || 0).toFixed(2)}</span>
+                    Price:{" "}
+                    <span className="font-semibold text-green-700">
+                      ₹{Number(formData.sellingPrice || 0).toFixed(2)}
+                    </span>
                   </p>
                 </div>
               )}
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Link Recipe {!isCartAdmin && "(Optional)"}
@@ -528,12 +544,12 @@ const MenuItems = () => {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {isCartAdmin 
+                  {isCartAdmin
                     ? "Link a recipe to automatically calculate food cost based on ingredient prices"
                     : "Optional: Link a recipe to automatically calculate food cost"}
                 </p>
               </div>
-              
+
               {/* Only show selling price for non-cart admin or when editing */}
               {(!isCartAdmin || editing) && (
                 <div>
@@ -591,7 +607,6 @@ const MenuItems = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

@@ -10,7 +10,7 @@ const getApiUrl = () => {
   if (envUrl && !envUrl.match(/^https?:\/\//)) {
     const fixedUrl = `http://${envUrl}`;
     console.warn(
-      `[AuthContext] API URL missing protocol, fixed: ${envUrl} → ${fixedUrl}`
+      `[AuthContext] API URL missing protocol, fixed: ${envUrl} → ${fixedUrl}`,
     );
     return fixedUrl;
   }
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
         ) {
           console.log(
             "[AuthContext] Suppressed password change alert:",
-            message
+            message,
           );
           return;
         }
@@ -151,8 +151,8 @@ export const AuthProvider = ({ children }) => {
           (response.status === 401
             ? "Invalid email or password"
             : response.status === 403
-            ? data?.message || "Account access denied"
-            : "Login failed. Please try again.");
+              ? data?.message || "Account access denied"
+              : "Login failed. Please try again.");
 
         if (import.meta.env.DEV) {
           console.error("[AuthContext] Login failed:", {
@@ -238,7 +238,7 @@ export const AuthProvider = ({ children }) => {
         if (import.meta.env.DEV) {
           console.error(
             "[AuthContext] Error writing to localStorage:",
-            storageError
+            storageError,
           );
         }
         // Continue even if storage fails

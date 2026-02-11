@@ -43,7 +43,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           const menu = response.data || [];
           const totalItems = menu.reduce(
             (sum, cat) => sum + (cat.items?.length || 0),
-            0
+            0,
           );
           setMenuStats({
             categories: menu.length,
