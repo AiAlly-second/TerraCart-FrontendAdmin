@@ -70,7 +70,11 @@ const aggregateKotItems = (kotLines = []) => {
 };
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
-const computeKotTotals = (kotLines = [], aggregatedItems = [], order = null) => {
+const computeKotTotals = (
+  kotLines = [],
+  aggregatedItems = [],
+  order = null,
+) => {
   // Calculate subtotal from non-returned items (amount is already in rupees)
   const subtotal = aggregatedItems.reduce((sum, item) => {
     const amount = Number(item.amount) || 0;
@@ -84,9 +88,10 @@ const computeKotTotals = (kotLines = [], aggregatedItems = [], order = null) => 
   const gst = 0;
 
   // Add delivery charge if applicable
-  const deliveryCharge = order?.orderType === "DELIVERY" && order?.deliveryInfo?.deliveryCharge
-    ? Number(order.deliveryInfo.deliveryCharge) || 0
-    : 0;
+  const deliveryCharge =
+    order?.orderType === "DELIVERY" && order?.deliveryInfo?.deliveryCharge
+      ? Number(order.deliveryInfo.deliveryCharge) || 0
+      : 0;
 
   // Calculate total amount (subtotal + delivery charge, no GST)
   const totalAmount = Number((subtotalRounded + deliveryCharge).toFixed(2));
@@ -109,7 +114,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
   // Get franchise FSSAI number (fallback to GST if available)
-  const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
+  const franchiseFSSAI =
+    franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
   // Payment mode display (fallback to CASH if not available on order)
   const paymentMethod =
@@ -121,22 +127,22 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   const rows =
     aggregatedItems.length > 0
       ? aggregatedItems
-        .map((item) => {
-          const quantity = item.quantity || 0;
-          const price = item.unitPrice || 0;
-          const amount = item.amount || 0;
-          return `
+          .map((item) => {
+            const quantity = item.quantity || 0;
+            const price = item.unitPrice || 0;
+            const amount = item.amount || 0;
+            return `
               <tr>
                 <td class="py-2 border-b">${item.name || ""}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
                 <td class="py-2 border-b text-right">₹${formatMoney(
-            amount
-          )}</td>
+                  amount,
+                )}</td>
               </tr>
             `;
-        })
-        .join("")
+          })
+          .join("")
       : `
         <tr>
           <td colspan="4" class="py-4 text-center text-gray-500 border-b">No items recorded.</td>
@@ -211,70 +217,82 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-    order.paidAt || order.updatedAt || order.createdAt || Date.now()
-  ).toLocaleDateString()}</div>
-        ${order.serviceType === "TAKEAWAY" && order.takeawayToken
-      ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
-      : ""
-    }
+          order.paidAt || order.updatedAt || order.createdAt || Date.now(),
+        ).toLocaleDateString()}</div>
+        ${
+          order.serviceType === "TAKEAWAY" && order.takeawayToken
+            ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
+            : ""
+        }
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
-        ${order.serviceType === "TAKEAWAY" || order.orderType
-      ? `
+        ${
+          order.serviceType === "TAKEAWAY" || order.orderType
+            ? `
               <div style="font-size: 9px; font-weight: bold; margin-bottom: 4px;">
-                ${order.orderType === "PICKUP"
-        ? "📦 Pickup Order"
-        : order.orderType === "DELIVERY"
-          ? "🚚 Delivery Order"
-          : "Takeaway Order"
-      }${order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
-      }
+                ${
+                  order.orderType === "PICKUP"
+                    ? "📦 Pickup Order"
+                    : order.orderType === "DELIVERY"
+                      ? "🚚 Delivery Order"
+                      : "Takeaway Order"
+                }${
+                  order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
+                }
               </div>
-              ${order.customerName
-        ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${order.customerName
-        }${order.customerMobile ? ` (${order.customerMobile})` : ""
-        }</div>`
-        : ""
-      }
-              ${order.orderType === "PICKUP" && order.pickupLocation
-        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+              ${
+                order.customerName
+                  ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${
+                      order.customerName
+                    }${
+                      order.customerMobile ? ` (${order.customerMobile})` : ""
+                    }</div>`
+                  : ""
+              }
+              ${
+                order.orderType === "PICKUP" && order.pickupLocation
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Pickup Location:</div>
                       <div>${order.pickupLocation.address || "Address not set"}</div>
                     </div>`
-        : ""
-      }
-              ${order.orderType === "DELIVERY" && order.customerLocation
-        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+                  : ""
+              }
+              ${
+                order.orderType === "DELIVERY" && order.customerLocation
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Delivery Address:</div>
                       <div>${order.customerLocation.address || "Address not set"}</div>
-                      ${order.deliveryInfo
-          ? `<div style="margin-top: 4px;">
+                      ${
+                        order.deliveryInfo
+                          ? `<div style="margin-top: 4px;">
                               <div>Distance: ${order.deliveryInfo.distance?.toFixed(2) || "N/A"} km</div>
-                              ${order.deliveryInfo.deliveryCharge > 0
-            ? `<div style="color: #059669; font-weight: 600;">Delivery Charge: ₹${order.deliveryInfo.deliveryCharge.toFixed(2)}</div>`
-            : ""
-          }
+                              ${
+                                order.deliveryInfo.deliveryCharge > 0
+                                  ? `<div style="color: #059669; font-weight: 600;">Delivery Charge: ₹${order.deliveryInfo.deliveryCharge.toFixed(2)}</div>`
+                                  : ""
+                              }
                             </div>`
-          : ""
-        }
+                          : ""
+                      }
                     </div>`
-        : ""
-      }
-              ${order.specialInstructions
-        ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+                  : ""
+              }
+              ${
+                order.specialInstructions
+                  ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Special Instructions:</div>
                       <div style="font-style: italic;">${order.specialInstructions}</div>
                     </div>`
-        : ""
-      }
+                  : ""
+              }
             `
-      : `
+            : `
               <div style="font-size: 9px;">
                 ${order.tableNumber || ""}
               </div>
             `
-    }
+        }
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
         <thead>
@@ -295,13 +313,14 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             <span>Subtotal</span>
             <span>₹${formatMoney(totals.subtotal)}</span>
           </div>
-          ${totals.deliveryCharge > 0
-      ? `<div class="invoice-line">
+          ${
+            totals.deliveryCharge > 0
+              ? `<div class="invoice-line">
                   <span>Delivery Charge</span>
                   <span>₹${formatMoney(totals.deliveryCharge)}</span>
                 </div>`
-      : ""
-    }
+              : ""
+          }
           <div class="invoice-line" style="font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 12px;">
             <span>Total</span>
             <span>₹${formatMoney(totals.totalAmount)}</span>
@@ -489,13 +508,13 @@ const downloadOrderInvoice = async (order) => {
     // Calculate dimensions
     const pdfWidth = 80;
     const margin = 5;
-    const usableWidth = pdfWidth - (margin * 2);
+    const usableWidth = pdfWidth - margin * 2;
 
     const tempPdf = new jsPDF();
     const imgProps = tempPdf.getImageProperties(imageData);
     const imgRatio = imgProps.height / imgProps.width;
     const imgHeight = usableWidth * imgRatio;
-    const pdfHeight = imgHeight + (margin * 2);
+    const pdfHeight = imgHeight + margin * 2;
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -522,6 +541,9 @@ const TakeawayOrders = () => {
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState("");
   const [draftSelections, setDraftSelections] = useState({});
+  const [draftAddonSelections, setDraftAddonSelections] = useState({});
+  const [addonList, setAddonList] = useState([]);
+  const [addonsLoading, setAddonsLoading] = useState(false);
   const [draftSearch, setDraftSearch] = useState("");
   const [draftCategory, setDraftCategory] = useState("all");
   const [searchOrderId, setSearchOrderId] = useState("");
@@ -540,7 +562,7 @@ const TakeawayOrders = () => {
 
   // Toggle auto-print
   const toggleAutoPrint = () => {
-    setAutoPrintEnabled(prev => {
+    setAutoPrintEnabled((prev) => {
       const newValue = !prev;
       localStorage.setItem("autoPrintTakeawayKOT", newValue);
       return newValue;
@@ -557,7 +579,9 @@ const TakeawayOrders = () => {
       const latestKot = order.kotLines[latestKotIndex];
       // Check if this KOT has items
       if (latestKot.items && latestKot.items.length > 0) {
-        console.log(`[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`);
+        console.log(
+          `[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`,
+        );
         printKOT(order, latestKot, latestKotIndex);
       }
     }
@@ -572,7 +596,7 @@ const TakeawayOrders = () => {
       if (!incoming) {
         if (import.meta.env.DEV) {
           console.log(
-            "[TakeawayOrders] upsertOrder: incoming is null/undefined"
+            "[TakeawayOrders] upsertOrder: incoming is null/undefined",
           );
         }
         return;
@@ -580,7 +604,7 @@ const TakeawayOrders = () => {
       if (incoming.serviceType !== "TAKEAWAY") {
         if (import.meta.env.DEV) {
           console.log(
-            `[TakeawayOrders] upsertOrder: filtering out order - serviceType is ${incoming.serviceType}, expected TAKEAWAY`
+            `[TakeawayOrders] upsertOrder: filtering out order - serviceType is ${incoming.serviceType}, expected TAKEAWAY`,
           );
         }
         return;
@@ -595,20 +619,20 @@ const TakeawayOrders = () => {
 
       if (import.meta.env.DEV) {
         console.log(
-          `[TakeawayOrders] upsertOrder: processing takeaway order ${incomingId}`
+          `[TakeawayOrders] upsertOrder: processing takeaway order ${incomingId}`,
         );
       }
 
       setOrders((prev) => {
         const list = Array.isArray(prev) ? [...prev] : [];
         const index = list.findIndex(
-          (order) => normalizeId(order._id) === incomingId
+          (order) => normalizeId(order._id) === incomingId,
         );
 
         if (index >= 0) {
           if (import.meta.env.DEV) {
             console.log(
-              `[TakeawayOrders] upsertOrder: updating existing order at index ${index}`
+              `[TakeawayOrders] upsertOrder: updating existing order at index ${index}`,
             );
           }
           list[index] = incoming;
@@ -617,13 +641,13 @@ const TakeawayOrders = () => {
 
         if (import.meta.env.DEV) {
           console.log(
-            `[TakeawayOrders] upsertOrder: adding new order (prepend: ${prepend})`
+            `[TakeawayOrders] upsertOrder: adding new order (prepend: ${prepend})`,
           );
         }
         return prepend ? [incoming, ...list] : [...list, incoming];
       });
     },
-    [setOrders]
+    [setOrders],
   );
 
   // Load menu items for "Modify Order" (add items) flow
@@ -657,6 +681,31 @@ const TakeawayOrders = () => {
     }
   }, []);
 
+  // Load add-ons for "Add-ons" option in Edit/Create modal – same request as Global Add-ons page
+  const loadAddons = useCallback(async () => {
+    try {
+      setAddonsLoading(true);
+      const response = await api.get("/addons");
+      const raw = response.data;
+      const addonsList = Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.addons)
+            ? raw.addons
+            : [];
+      const list = addonsList.filter((a) => a && (a.name != null || a._id != null || a.id != null));
+      setAddonList(list);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("[TakeawayOrders] Add-ons fetch failed:", err?.response?.status, err?.response?.data);
+      }
+      setAddonList([]);
+    } finally {
+      setAddonsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -685,7 +734,7 @@ const TakeawayOrders = () => {
 
         if (import.meta.env.DEV) {
           console.log(
-            `[TakeawayOrders] Parsed ${data.length} total orders from response`
+            `[TakeawayOrders] Parsed ${data.length} total orders from response`,
           );
         }
 
@@ -697,7 +746,7 @@ const TakeawayOrders = () => {
           const isTakeaway = order.serviceType === "TAKEAWAY";
           if (import.meta.env.DEV && !isTakeaway) {
             console.log(
-              `[TakeawayOrders] Order ${order._id} filtered out - serviceType: ${order.serviceType}`
+              `[TakeawayOrders] Order ${order._id} filtered out - serviceType: ${order.serviceType}`,
             );
           }
           return isTakeaway;
@@ -705,7 +754,7 @@ const TakeawayOrders = () => {
 
         if (import.meta.env.DEV) {
           console.log(
-            `[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`
+            `[TakeawayOrders] Fetched ${takeawayOrders.length} takeaway orders out of ${data.length} total orders`,
           );
         }
         setOrders(takeawayOrders);
@@ -718,7 +767,7 @@ const TakeawayOrders = () => {
         if (import.meta.env.DEV) {
           if (err.response?.status === 401) {
             console.warn(
-              "Authentication failed - user may need to login again"
+              "Authentication failed - user may need to login again",
             );
           } else if (err.response?.status === 403) {
             console.warn("Access denied - user may not have permission");
@@ -729,6 +778,7 @@ const TakeawayOrders = () => {
 
     fetchOrders();
     loadMenu();
+    loadAddons();
 
     const socket = createSocketConnection();
     socketRef.current = socket;
@@ -747,7 +797,7 @@ const TakeawayOrders = () => {
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Socket: orderUpdated event received:",
-          order
+          order,
         );
       }
       upsertOrder(order);
@@ -756,8 +806,8 @@ const TakeawayOrders = () => {
       if (autoPrintEnabled) {
         // Logic similar to Orders.jsx: check if new KOT added
         // For takeaway, we usually don't have "tables", but updates are same.
-        setOrders(prevOrders => {
-          const prevOrder = prevOrders.find(o => o._id === order._id);
+        setOrders((prevOrders) => {
+          const prevOrder = prevOrders.find((o) => o._id === order._id);
           if (prevOrder && order.kotLines && prevOrder.kotLines) {
             if (order.kotLines.length > prevOrder.kotLines.length) {
               handleAutoPrint(order);
@@ -772,7 +822,7 @@ const TakeawayOrders = () => {
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Socket: orderDeleted event received:",
-          id
+          id,
         );
       }
       // Remove the order from the list if it exists
@@ -781,7 +831,7 @@ const TakeawayOrders = () => {
           const orderId = normalizeId(order._id);
           const deletedId = normalizeId(id);
           return orderId !== deletedId;
-        })
+        }),
       );
     };
 
@@ -790,7 +840,7 @@ const TakeawayOrders = () => {
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Socket: order:created event received:",
-          order
+          order,
         );
       }
       upsertOrder(order, { prepend: true });
@@ -803,7 +853,7 @@ const TakeawayOrders = () => {
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Socket: order:status:updated event received:",
-          order
+          order,
         );
       }
       upsertOrder(order);
@@ -826,7 +876,7 @@ const TakeawayOrders = () => {
       if (import.meta.env.DEV) {
         console.warn(
           "[TakeawayOrders] Error reading from localStorage:",
-          storageError
+          storageError,
         );
       }
     }
@@ -846,7 +896,7 @@ const TakeawayOrders = () => {
         if (import.meta.env.DEV) {
           console.warn(
             "[TakeawayOrders] Could not decode token for socket room:",
-            e
+            e,
           );
         }
       }
@@ -879,30 +929,48 @@ const TakeawayOrders = () => {
           price: Number(item?.price) || 0,
           item,
         })),
-    [draftSelections]
+    [draftSelections],
   );
+
+  const draftAddonsArray = useMemo(() => {
+    if (!draftAddonSelections || typeof draftAddonSelections !== "object") return [];
+    return Object.entries(draftAddonSelections)
+      .filter(([, qty]) => Number(qty) > 0)
+      .map(([id, quantity]) => {
+        const addon = addonList.find((a) => (a._id || a.id) === id);
+        if (!addon) return null;
+        const price = Number(addon.price) || 0;
+        return { id, name: addon.name || "Add-on", price, quantity: Number(quantity) || 0 };
+      })
+      .filter(Boolean);
+  }, [draftAddonSelections, addonList]);
 
   const draftTotals = useMemo(() => {
     if (!Array.isArray(draftItemsArray)) {
-      return { subtotal: 0, gst: 0, total: 0, totalItems: 0 };
+      return { subtotal: 0, gst: 0, total: 0, totalItems: 0, addonsSubtotal: 0 };
     }
     const subtotal = draftItemsArray.reduce((sum, entry) => {
       if (!entry) return sum;
       return sum + (Number(entry.price) || 0) * (Number(entry.quantity) || 0);
     }, 0);
-    const gst = subtotal * 0.05;
-    const total = subtotal + gst;
+    const addonsSubtotal = draftAddonsArray.reduce((sum, entry) => {
+      if (!entry) return sum;
+      return sum + (Number(entry.price) || 0) * (Number(entry.quantity) || 0);
+    }, 0);
+    const gst = 0;
+    const total = subtotal + addonsSubtotal;
     const totalItems = draftItemsArray.reduce((sum, entry) => {
       if (!entry) return sum;
       return sum + (Number(entry.quantity) || 0);
     }, 0);
     return {
       subtotal,
+      addonsSubtotal,
       gst,
       total,
       totalItems,
     };
-  }, [draftItemsArray]);
+  }, [draftItemsArray, draftAddonsArray]);
 
   const filteredMenuItems = useMemo(() => {
     if (!Array.isArray(menuItems)) {
@@ -931,6 +999,22 @@ const TakeawayOrders = () => {
         delete next[key];
       } else {
         next[key] = { item: menuItem, quantity: updatedQuantity };
+      }
+      return next;
+    });
+  }, []);
+
+  const adjustAddonQuantity = useCallback((addon, delta) => {
+    const id = addon._id || addon.id;
+    if (!id) return;
+    setDraftAddonSelections((prev) => {
+      const next = { ...prev };
+      const current = next[id] || 0;
+      const updated = current + delta;
+      if (updated <= 0) {
+        delete next[id];
+      } else {
+        next[id] = updated;
       }
       return next;
     });
@@ -968,19 +1052,22 @@ const TakeawayOrders = () => {
 
   const handleNewTakeawayOrder = () => {
     setDraftSelections({});
+    setDraftAddonSelections({});
     setCurrentOrder({
       serviceType: "TAKEAWAY",
       status: "Confirmed",
       isNew: true,
     });
     setIsModalOpen(true);
+    loadAddons();
   };
 
   const handleEdit = (order) => {
-    // Reset draft selections each time we open the modal
     setDraftSelections({});
+    setDraftAddonSelections({});
     setCurrentOrder({ ...order, isNew: false });
     setIsModalOpen(true);
+    loadAddons();
   };
 
   const handleSave = async (e) => {
@@ -999,7 +1086,7 @@ const TakeawayOrders = () => {
           return await api.patch(
             `/orders/${currentOrder._id}/status`,
             { status: newStatus },
-            { signal }
+            { signal },
           );
         });
       }
@@ -1021,11 +1108,23 @@ const TakeawayOrders = () => {
         });
       }
 
+      if (!isFinal && draftAddonsArray.length > 0) {
+        const existingAddons = Array.isArray(currentOrder.selectedAddons) ? currentOrder.selectedAddons : [];
+        const newAddons = draftAddonsArray.map((a) => ({
+          addonId: a.id,
+          name: a.name,
+          price: a.price,
+          quantity: a.quantity,
+        }));
+        const mergedAddons = [...existingAddons, ...newAddons];
+        await api.patch(`/orders/${currentOrder._id}`, { selectedAddons: mergedAddons });
+      }
+
       // Refresh orders list by fetching again
       const ordersRes = await api.get("/orders");
       const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
       const takeawayOrders = allOrders.filter(
-        (o) => o.serviceType === "TAKEAWAY"
+        (o) => o.serviceType === "TAKEAWAY",
       );
 
       setOrders(takeawayOrders);
@@ -1033,6 +1132,7 @@ const TakeawayOrders = () => {
       setIsModalOpen(false);
       setCurrentOrder(null);
       setDraftSelections({});
+      setDraftAddonSelections({});
       alert("Order updated successfully!");
     } catch (err) {
       if (import.meta.env.DEV) {
@@ -1060,9 +1160,16 @@ const TakeawayOrders = () => {
         price: entry.price,
       }));
 
+      const selectedAddonsPayload = draftAddonsArray.map((a) => ({
+        addonId: a.id,
+        name: a.name,
+        price: a.price,
+        quantity: a.quantity,
+      }));
       const payload = {
         serviceType: "TAKEAWAY",
         items: itemsPayload,
+        ...(selectedAddonsPayload.length > 0 && { selectedAddons: selectedAddonsPayload }),
       };
 
       if (import.meta.env.DEV) {
@@ -1092,13 +1199,13 @@ const TakeawayOrders = () => {
       }
 
       const takeawayOrders = (allOrders || []).filter(
-        (o) => o && o.serviceType === "TAKEAWAY"
+        (o) => o && o.serviceType === "TAKEAWAY",
       );
 
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Filtered takeaway orders:",
-          takeawayOrders.length
+          takeawayOrders.length,
         );
       }
       setOrders(takeawayOrders);
@@ -1106,6 +1213,7 @@ const TakeawayOrders = () => {
       setIsModalOpen(false);
       setCurrentOrder(null);
       setDraftSelections({});
+      setDraftAddonSelections({});
       alert("Takeaway order created successfully!");
     } catch (err) {
       if (import.meta.env.DEV) {
@@ -1142,7 +1250,7 @@ const TakeawayOrders = () => {
     // Check if order can be modified
     if (["Cancelled", "Returned"].includes(order.status)) {
       alert(
-        `Cannot cancel items from an order that is ${order.status.toLowerCase()}.`
+        `Cannot cancel items from an order that is ${order.status.toLowerCase()}.`,
       );
       return;
     }
@@ -1156,7 +1264,7 @@ const TakeawayOrders = () => {
         danger: false,
         confirmText: "Cancel Item",
         cancelText: "Keep Item",
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -1234,7 +1342,7 @@ const TakeawayOrders = () => {
         acc.byStatus[order.status] = (acc.byStatus[order.status] || 0) + 1;
         return acc;
       },
-      { total: 0, byStatus: {} }
+      { total: 0, byStatus: {} },
     );
   }, [orders]);
 
@@ -1316,7 +1424,10 @@ const TakeawayOrders = () => {
 
     if (filterStatus === "all") return matches;
     if (filterStatus === "Being Prepared") {
-      return matches.filter((order) => order.status === "Being Prepared" || order.status === "BeingPrepared");
+      return matches.filter(
+        (order) =>
+          order.status === "Being Prepared" || order.status === "BeingPrepared",
+      );
     }
     return matches.filter((order) => order.status === filterStatus);
   }, [
@@ -1329,7 +1440,12 @@ const TakeawayOrders = () => {
   ]);
 
   const tryAccept = (order) => {
-    if (canAcceptTakeaway(order.status) && (order.serviceType === "TAKEAWAY" || order.serviceType === "PICKUP" || order.serviceType === "DELIVERY")) {
+    if (
+      canAcceptTakeaway(order.status) &&
+      (order.serviceType === "TAKEAWAY" ||
+        order.serviceType === "PICKUP" ||
+        order.serviceType === "DELIVERY")
+    ) {
       acceptOrderTakeaway(order._id);
     } else if (canAccept(order.status)) {
       changeStatus(order._id, nextStatusOnAccept);
@@ -1406,8 +1522,9 @@ const TakeawayOrders = () => {
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${filterStatus === "all" ? "ring-2 ring-blue-400" : ""
-            }`}
+          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
+            filterStatus === "all" ? "ring-2 ring-blue-400" : ""
+          }`}
         >
           <div className="flex items-center justify-between gap-1 sm:gap-2">
             <div className="min-w-0 flex-1">
@@ -1429,7 +1546,7 @@ const TakeawayOrders = () => {
           const countToShow =
             status === "Being Prepared"
               ? (byStatus["Being Prepared"] || 0) +
-              (byStatus["BeingPrepared"] || 0)
+                (byStatus["BeingPrepared"] || 0)
               : byStatus[status] || 0;
 
           // Hide tiles for statuses that have no orders
@@ -1440,8 +1557,9 @@ const TakeawayOrders = () => {
               type="button"
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${filterStatus === status ? "ring-2 ring-blue-400" : ""
-                }`}
+              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
+                filterStatus === status ? "ring-2 ring-blue-400" : ""
+              }`}
             >
               <div className="flex items-center justify-between gap-1 sm:gap-2">
                 <div className="min-w-0 flex-1">
@@ -1457,7 +1575,8 @@ const TakeawayOrders = () => {
                     ? "⏳"
                     : status === "Accepted"
                       ? "✅"
-                      : status === "Being Prepared" || status === "BeingPrepared"
+                      : status === "Being Prepared" ||
+                          status === "BeingPrepared"
                         ? "🔥"
                         : status === "Completed"
                           ? "📦"
@@ -1533,11 +1652,15 @@ const TakeawayOrders = () => {
               return (
                 <React.Fragment key={order._id}>
                   <tr
-                    className={`hover:bg-gray-50 ${order.status === "Pending" ? "bg-orange-50" : ""
-                      }`}
+                    className={`hover:bg-gray-50 ${
+                      order.status === "Pending" ? "bg-orange-50" : ""
+                    }`}
                   >
                     <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
-                      <div className="font-mono text-[9px] text-gray-400 mb-1 select-all" title="Order ID">
+                      <div
+                        className="font-mono text-[9px] text-gray-400 mb-1 select-all"
+                        title="Order ID"
+                      >
                         {order._id}
                       </div>
                       <button
@@ -1587,10 +1710,11 @@ const TakeawayOrders = () => {
                           {order.orderType && (
                             <div className="mt-1">
                               <span
-                                className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${order.orderType === "PICKUP"
+                                className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${
+                                  order.orderType === "PICKUP"
                                     ? "bg-blue-100 text-blue-700"
                                     : "bg-green-100 text-green-700"
-                                  }`}
+                                }`}
                               >
                                 {order.orderType === "PICKUP"
                                   ? "📦 PICKUP ORDER"
@@ -1632,7 +1756,9 @@ const TakeawayOrders = () => {
                                 </div>
                                 {order.pickupLocation ? (
                                   <div className="text-[9px] text-gray-600 bg-blue-50 p-2 rounded">
-                                    📍 {order.pickupLocation.address || "Address not set"}
+                                    📍{" "}
+                                    {order.pickupLocation.address ||
+                                      "Address not set"}
                                   </div>
                                 ) : (
                                   <div className="text-[9px] text-gray-400 italic">
@@ -1647,17 +1773,35 @@ const TakeawayOrders = () => {
                                 </div>
                                 {order.customerLocation ? (
                                   <div className="text-[9px] text-gray-600 bg-green-50 p-2 rounded space-y-1">
-                                    <div>📍 {order.customerLocation.address || "Address not set"}</div>
+                                    <div>
+                                      📍{" "}
+                                      {order.customerLocation.address ||
+                                        "Address not set"}
+                                    </div>
                                     {order.deliveryInfo && (
                                       <div className="mt-1 pt-1 border-t border-green-200">
-                                        <div>📏 Distance: {order.deliveryInfo.distance?.toFixed(2) || "N/A"} km</div>
-                                        {order.deliveryInfo.deliveryCharge > 0 && (
+                                        <div>
+                                          📏 Distance:{" "}
+                                          {order.deliveryInfo.distance?.toFixed(
+                                            2,
+                                          ) || "N/A"}{" "}
+                                          km
+                                        </div>
+                                        {order.deliveryInfo.deliveryCharge >
+                                          0 && (
                                           <div className="text-green-700 font-semibold">
-                                            💰 Delivery Charge: ₹{order.deliveryInfo.deliveryCharge.toFixed(2)}
+                                            💰 Delivery Charge: ₹
+                                            {order.deliveryInfo.deliveryCharge.toFixed(
+                                              2,
+                                            )}
                                           </div>
                                         )}
                                         {order.deliveryInfo.estimatedTime && (
-                                          <div>⏱️ Est. Time: {order.deliveryInfo.estimatedTime} min</div>
+                                          <div>
+                                            ⏱️ Est. Time:{" "}
+                                            {order.deliveryInfo.estimatedTime}{" "}
+                                            min
+                                          </div>
                                         )}
                                       </div>
                                     )}
@@ -1681,16 +1825,7 @@ const TakeawayOrders = () => {
                               </div>
                             </div>
                           )}
-                          {order.sessionToken && (
-                            <div className="mt-2 pt-2 border-t border-gray-200">
-                              <div className="font-semibold text-gray-800">
-                                Session Code:
-                              </div>
-                              <div className="font-mono text-xs break-all">
-                                {order.sessionToken}
-                              </div>
-                            </div>
-                          )}
+                          {/* Session code hidden from UI - data still used for backend */}
                         </div>
                       )}
                     </td>
@@ -1718,10 +1853,11 @@ const TakeawayOrders = () => {
                         <div className="mt-1 mb-1">
                           {order.orderType ? (
                             <span
-                              className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${order.orderType === "PICKUP"
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${
+                                order.orderType === "PICKUP"
                                   ? "bg-blue-100 text-blue-700 border border-blue-300"
                                   : "bg-green-100 text-green-700 border border-green-300"
-                                }`}
+                              }`}
                             >
                               {order.orderType === "PICKUP"
                                 ? "📦 PICKUP ORDER"
@@ -1758,8 +1894,8 @@ const TakeawayOrders = () => {
                             <div className="text-[10px] sm:text-xs mt-1 space-y-0.5">
                               {order.deliveryInfo.distance && (
                                 <div className="text-gray-600">
-                                  📏 {order.deliveryInfo.distance.toFixed(2)}{" "}
-                                  km away
+                                  📏 {order.deliveryInfo.distance.toFixed(2)} km
+                                  away
                                 </div>
                               )}
                               {order.deliveryInfo.deliveryCharge > 0 && (
@@ -1775,18 +1911,14 @@ const TakeawayOrders = () => {
                             Token: {order.takeawayToken}
                           </div>
                         )}
-                        {order.sessionToken && (
-                          <div className="text-[10px] sm:text-xs text-gray-500 mt-1 font-mono bg-gray-50 px-2 py-1 rounded truncate">
-                            Session: {order.sessionToken.substring(0, 20)}...
-                          </div>
-                        )}
+                        {/* Session token hidden from UI - data still used for backend */}
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3">
                       <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
                         <span
                           className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${statusBadgeClass(
-                            order.status
+                            order.status,
                           )}`}
                         >
                           <span className="text-[10px] sm:text-xs md:text-sm">
@@ -1797,14 +1929,21 @@ const TakeawayOrders = () => {
                         {order.acceptedBy?.employeeName && (
                           <div className="text-[9px] sm:text-[10px] text-green-700 mt-0.5 font-medium">
                             Accepted by {order.acceptedBy.employeeName}
-                            {order.acceptedBy.disability?.hasDisability && order.acceptedBy.disability?.type && (
-                              <span className="text-gray-500 ml-1">({order.acceptedBy.disability.type})</span>
-                            )}
+                            {order.acceptedBy.disability?.hasDisability &&
+                              order.acceptedBy.disability?.type && (
+                                <span className="text-gray-500 ml-1">
+                                  ({order.acceptedBy.disability.type})
+                                </span>
+                              )}
                           </div>
                         )}
                         <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                           {(() => {
-                            const isTakeaway = ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(order.serviceType);
+                            const isTakeaway = [
+                              "TAKEAWAY",
+                              "PICKUP",
+                              "DELIVERY",
+                            ].includes(order.serviceType);
                             const nextStatus = isTakeaway
                               ? getNextStatusTakeaway(order.status)
                               : getNextStatus(order.status, order.serviceType);
@@ -1818,7 +1957,7 @@ const TakeawayOrders = () => {
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                                 >
                                   ✅ Accept Order
-                                </button>
+                                </button>,
                               );
                             } else if (canAccept(order.status)) {
                               buttons.push(
@@ -1831,12 +1970,16 @@ const TakeawayOrders = () => {
                                   <span className="hidden sm:inline">
                                     Accept
                                   </span>
-                                </button>
+                                </button>,
                               );
                             }
 
                             // Show next sequential step button (but skip if canAccept/canAcceptTakeaway is true)
-                            if (nextStatus && !canAccept(order.status) && !(canAcceptTakeaway(order.status) && isTakeaway)) {
+                            if (
+                              nextStatus &&
+                              !canAccept(order.status) &&
+                              !(canAcceptTakeaway(order.status) && isTakeaway)
+                            ) {
                               buttons.push(
                                 <button
                                   key="next"
@@ -1846,7 +1989,7 @@ const TakeawayOrders = () => {
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50 truncate max-w-[90px] sm:max-w-none"
                                 >
                                   {nextStatus}
-                                </button>
+                                </button>,
                               );
                             }
 
@@ -1863,7 +2006,7 @@ const TakeawayOrders = () => {
                                   <span className="hidden sm:inline">
                                     Return
                                   </span>
-                                </button>
+                                </button>,
                               );
                             } else if (canCancel(order.status)) {
                               buttons.push(
@@ -1878,7 +2021,7 @@ const TakeawayOrders = () => {
                                   <span className="hidden sm:inline">
                                     Cancel
                                   </span>
-                                </button>
+                                </button>,
                               );
                             }
 
@@ -1923,121 +2066,118 @@ const TakeawayOrders = () => {
                     <tr className="bg-gray-50">
                       <td colSpan="5" className="px-6 py-4">
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(Array.isArray(order?.kotLines)
-                              ? order.kotLines
-                              : []
-                            ).map((kot, idx) => {
-                              if (!kot) return null;
+                          {/* Whole order panel (KOT items + add-ons) */}
+                          {(() => {
+                            const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
+                            const aggregatedItems = aggregateKotItems(kotLines);
+                            const totals = computeKotTotals(kotLines, aggregatedItems, order);
+                            const selectedAddons = Array.isArray(order?.selectedAddons) ? order.selectedAddons : [];
+                            const addonsTotal = selectedAddons.reduce(
+                              (sum, a) => sum + (Number(a.price) || 0) * (Number(a.quantity) || 1),
+                              0
+                            );
+                            const flatItems = kotLines.flatMap((kot, kotIdx) =>
+                              (Array.isArray(kot?.items) ? kot.items : []).map((item, itemIdx) =>
+                                item ? { item, kotIdx, itemIdx } : null
+                              ).filter(Boolean)
+                            );
+                            const hasAny = flatItems.length > 0 || selectedAddons.length > 0;
+                            if (!hasAny) {
                               return (
-                                <div
-                                  key={idx}
-                                  className="bg-white p-4 rounded-lg border shadow-sm"
-                                >
-                                  <div className="flex justify-between items-center mb-2">
-                                    <div className="flex items-center gap-2">
-                                      <div className="text-lg font-semibold text-gray-800">
-                                        KOT #{idx + 1}
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          printKOT(order, kot, idx);
-                                        }}
-                                        className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
-                                        title="Print KOT"
-                                      >
-                                        🖨️ Print KOT
-                                      </button>
-                                    </div>
-                                    <div className="text-lg font-bold text-green-600">
-                                      ₹
-                                      {(
-                                        kot.totalAmount ||
-                                        kot.total ||
-                                        0
-                                      ).toString()}
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {(Array.isArray(kot?.items)
-                                      ? kot.items
-                                      : []
-                                    ).map((item, i) => {
-                                      if (!item) return null;
-                                      return (
-                                        <div
-                                          key={i}
-                                          className={`flex justify-between items-center py-2 border-b ${item.returned
-                                              ? "opacity-50 bg-gray-100"
-                                              : ""
-                                            }`}
-                                        >
-                                          <div className="flex items-center gap-2 flex-1">
-                                            <span
-                                              className={`px-2 py-1 rounded-lg text-xs font-bold ${item.returned
-                                                  ? "bg-red-100 text-red-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
-                                            >
-                                              {item.quantity}x
-                                            </span>
-                                            <span
-                                              className={`text-gray-800 ${item.returned
-                                                  ? "line-through"
-                                                  : ""
-                                                }`}
-                                            >
-                                              {item.name}
-                                            </span>
-                                            {item.returned && (
-                                              <span className="text-xs text-red-600 font-semibold">
-                                                (Cancelled)
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <span
-                                              className={`text-gray-600 ${item.returned
-                                                  ? "line-through"
-                                                  : ""
-                                                }`}
-                                            >
-                                              ₹
-                                              {(
-                                                ((item.price || 0) / 100) *
-                                                (item.quantity || 1)
-                                              ).toFixed(2)}
-                                            </span>
-                                            {!item.returned &&
-                                              order.status !== "Paid" &&
-                                              order.status !== "Cancelled" &&
-                                              order.status !== "Returned" && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    handleCancelItem(
-                                                      order._id,
-                                                      idx,
-                                                      i
-                                                    )
-                                                  }
-                                                  className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                                                  title="Cancel this item"
-                                                >
-                                                  ❌ Cancel
-                                                </button>
-                                              )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                <div className="bg-white p-4 rounded-lg border shadow-sm">
+                                  <div className="text-sm text-gray-500">No items in this order yet.</div>
                                 </div>
                               );
-                            })}
-                          </div>
+                            }
+                            return (
+                              <div className="bg-white p-4 rounded-lg border shadow-sm">
+                                <div className="flex justify-between items-center mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-lg font-semibold text-gray-800">Order</div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        kotLines.forEach((kot, idx) => printKOT(order, kot, idx));
+                                      }}
+                                      className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
+                                      title="Print Order"
+                                    >
+                                      🖨️ Print Order
+                                    </button>
+                                  </div>
+                                  <div className="text-lg font-bold text-green-600">
+                                    ₹{(totals.totalAmount + addonsTotal).toFixed(2)}
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  {flatItems.map(({ item, kotIdx, itemIdx }, keyIdx) => (
+                                    <div
+                                      key={`k-${keyIdx}`}
+                                      className={`flex justify-between items-center py-2 border-b ${
+                                        item.returned ? "opacity-50 bg-gray-100" : ""
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span
+                                          className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                                            item.returned ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                                          }`}
+                                        >
+                                          {item.quantity}x
+                                        </span>
+                                        <span className={item.returned ? "line-through text-gray-800" : "text-gray-800"}>
+                                          {item.name}
+                                        </span>
+                                        {item.returned && (
+                                          <span className="text-xs text-red-600 font-semibold">(Cancelled)</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={item.returned ? "line-through text-gray-600" : "text-gray-600"}>
+                                          ₹{(((item.price || 0) / 100) * (item.quantity || 1)).toFixed(2)}
+                                        </span>
+                                        {!item.returned &&
+                                          order.status !== "Paid" &&
+                                          order.status !== "Cancelled" &&
+                                          order.status !== "Returned" && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCancelItem(order._id, kotIdx, itemIdx)}
+                                              className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                              title="Cancel this item"
+                                            >
+                                              ❌ Cancel
+                                            </button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {selectedAddons.map((addon, aIdx) => {
+                                    const qty = Number(addon.quantity) || 1;
+                                    const price = Number(addon.price) || 0;
+                                    const name = addon.name || "Add-on";
+                                    return (
+                                      <div
+                                        key={`a-${aIdx}`}
+                                        className="flex justify-between items-center py-2 border-b border-gray-100"
+                                      >
+                                        <div className="flex items-center gap-2 flex-1">
+                                          <span className="px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                                            {qty}x
+                                          </span>
+                                          <span className="text-gray-800">(+) {name}</span>
+                                        </div>
+                                        <span className="text-gray-600">
+                                          ₹{(price * qty).toFixed(2)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -2096,29 +2236,31 @@ const TakeawayOrders = () => {
                               <button
                                 type="button"
                                 onClick={() => setDraftCategory("all")}
-                                className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${draftCategory === "all"
+                                className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
+                                  draftCategory === "all"
                                     ? "bg-blue-600 text-white border-blue-600 shadow"
                                     : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                  }`}
+                                }`}
                               >
                                 All
                               </button>
                               {Array.from(
-                                new Set(menuItems.map((it) => it.category))
+                                new Set(menuItems.map((it) => it.category)),
                               ).map((category) => (
                                 <button
                                   type="button"
                                   key={category || "uncategorized"}
                                   onClick={() =>
                                     setDraftCategory(
-                                      category || "Uncategorized"
+                                      category || "Uncategorized",
                                     )
                                   }
-                                  className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${draftCategory ===
-                                      (category || "Uncategorized")
+                                  className={`px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm rounded-full border transition whitespace-nowrap ${
+                                    draftCategory ===
+                                    (category || "Uncategorized")
                                       ? "bg-blue-600 text-white border-blue-600 shadow"
                                       : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                    }`}
+                                  }`}
                                 >
                                   {category || "Uncategorized"}
                                 </button>
@@ -2182,9 +2324,56 @@ const TakeawayOrders = () => {
                                       </button>
                                     </div>
                                   </div>
-                                );
+                                    );
                               })
                             )}
+                          </div>
+                          {/* Add-ons: always visible for new takeaway order */}
+                          <div className="mt-4">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-2">Add-ons</h4>
+                            <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y bg-gray-50/50">
+                              {addonsLoading ? (
+                                <div className="p-3 text-xs text-gray-500">Loading add-ons…</div>
+                              ) : addonList.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-500">No add-ons available.</div>
+                              ) : (
+                                addonList.map((addon) => {
+                                  const id = addon._id || addon.id;
+                                  const quantity = draftAddonSelections[id] || 0;
+                                  return (
+                                    <div
+                                      key={id}
+                                      className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
+                                    >
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-800">(+) {addon.name}</div>
+                                        <div className="text-xs text-gray-500">₹{formatMoney(addon.price || 0)}</div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => adjustAddonQuantity(addon, -1)}
+                                          disabled={quantity === 0}
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                          {quantity}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => adjustAddonQuantity(addon, 1)}
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="space-y-4">
@@ -2192,10 +2381,10 @@ const TakeawayOrders = () => {
                             <h3 className="text-md font-semibold text-gray-800 mb-3">
                               Order Summary
                             </h3>
-                            {draftItemsArray.length === 0 ? (
+                            {draftItemsArray.length === 0 && draftAddonsArray.length === 0 ? (
                               <p className="text-sm text-gray-500">
                                 No items selected yet. Use the menu on the left
-                                to build the order.
+                                or add-ons to build the order.
                               </p>
                             ) : (
                               <div className="space-y-2 text-sm text-gray-700">
@@ -2210,9 +2399,18 @@ const TakeawayOrders = () => {
                                     <span>
                                       ₹
                                       {formatMoney(
-                                        entry.price * entry.quantity
+                                        entry.price * entry.quantity,
                                       )}
                                     </span>
+                                  </div>
+                                ))}
+                                {draftAddonsArray.map((entry) => (
+                                  <div
+                                    key={entry.id}
+                                    className="flex justify-between items-center"
+                                  >
+                                    <span>(+) {entry.name} × {entry.quantity}</span>
+                                    <span>₹{formatMoney(entry.price * entry.quantity)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -2224,10 +2422,14 @@ const TakeawayOrders = () => {
                               </div>
                               <div className="flex justify-between">
                                 <span>Subtotal</span>
-                                <span>
-                                  ₹{formatMoney(draftTotals.subtotal)}
-                                </span>
+                                <span>₹{formatMoney(draftTotals.subtotal)}</span>
                               </div>
+                              {draftTotals.addonsSubtotal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Add-ons</span>
+                                  <span>₹{formatMoney(draftTotals.addonsSubtotal)}</span>
+                                </div>
+                              )}
                               <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                                 <span>Total</span>
                                 <span>₹{formatMoney(draftTotals.total)}</span>
@@ -2253,7 +2455,9 @@ const TakeawayOrders = () => {
                       >
                         <option value="Pending">⏳ Pending</option>
                         <option value="Accepted">✅ Accepted</option>
-                        <option value="Being Prepared">🔥 Being Prepared</option>
+                        <option value="Being Prepared">
+                          🔥 Being Prepared
+                        </option>
                         <option value="Completed">📦 Completed</option>
                         <option value="Confirmed">👨‍🍳 Confirmed</option>
                         <option value="Preparing">🔥 Preparing</option>
@@ -2270,7 +2474,11 @@ const TakeawayOrders = () => {
                     {currentOrder?.cancellationReason && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mt-4">
                         <h4 className="text-sm font-bold text-red-800 mb-1">
-                          Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
+                          Reason for{" "}
+                          {currentOrder.status === "Returned"
+                            ? "Return"
+                            : "Cancellation"}
+                          :
                         </h4>
                         <p className="text-sm text-red-700">
                           {currentOrder.cancellationReason}
@@ -2278,122 +2486,108 @@ const TakeawayOrders = () => {
                       </div>
                     )}
 
-                    {/* Current Order Items section - with cancel option */}
+                    {/* Current Order Items - whole order (no per-KOT) */}
                     <div className="border-t border-gray-200 pt-4 space-y-4">
                       <h3 className="text-lg font-semibold text-gray-800">
                         Current Order Items
                       </h3>
                       {!currentOrder?.kotLines ||
-                        currentOrder.kotLines.length === 0 ? (
+                      currentOrder.kotLines.length === 0 ? (
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                           No items in this order yet.
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {(Array.isArray(currentOrder?.kotLines)
-                            ? currentOrder.kotLines
-                            : []
-                          ).map((kot, kotIdx) => {
-                            if (!kot) return null;
-                            return (
-                              <div
-                                key={kotIdx}
-                                className="bg-gray-50 border border-gray-200 rounded-lg p-4"
-                              >
-                                <div className="flex justify-between items-center mb-3">
-                                  <div className="text-sm font-semibold text-gray-700">
-                                    KOT #{kotIdx + 1}
+                      ) : (() => {
+                        const kotLines = currentOrder.kotLines;
+                        const aggregatedItems = aggregateKotItems(kotLines);
+                        const totals = computeKotTotals(kotLines, aggregatedItems, currentOrder);
+                        const selectedAddons = Array.isArray(currentOrder?.selectedAddons) ? currentOrder.selectedAddons : [];
+                        const addonsTotal = selectedAddons.reduce(
+                          (sum, a) => sum + (Number(a.price) || 0) * (Number(a.quantity) || 1),
+                          0
+                        );
+                        const flatItems = kotLines.flatMap((kot, kotIdx) =>
+                          (Array.isArray(kot?.items) ? kot.items : []).map((item, itemIdx) =>
+                            item ? { item, kotIdx, itemIdx } : null
+                          ).filter(Boolean)
+                        );
+                        return (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div className="flex justify-between items-center mb-3">
+                              <span className="text-sm font-semibold text-gray-700">Order</span>
+                              <span className="text-sm font-bold text-green-600">
+                                ₹{(totals.totalAmount + addonsTotal).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {flatItems.map(({ item, kotIdx, itemIdx }, keyIdx) => (
+                                <div
+                                  key={`k-${keyIdx}`}
+                                  className={`flex justify-between items-center py-2 px-3 rounded border ${
+                                    item.returned
+                                      ? "bg-red-50 border-red-200 opacity-60"
+                                      : "bg-white border-gray-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-bold ${
+                                        item.returned ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                                      }`}
+                                    >
+                                      {item.quantity}x
+                                    </span>
+                                    <span className={`text-sm text-gray-800 ${item.returned ? "line-through" : ""}`}>
+                                      {item.name}
+                                    </span>
+                                    {item.returned && (
+                                      <span className="text-xs text-red-600 font-semibold">(Cancelled)</span>
+                                    )}
                                   </div>
-                                  <div className="text-sm font-bold text-green-600">
-                                    ₹
-                                    {(
-                                      kot.totalAmount ||
-                                      kot.total ||
-                                      0
-                                    ).toString()}
+                                  <div className="flex items-center gap-3">
+                                    <span className={`text-sm text-gray-600 ${item.returned ? "line-through" : ""}`}>
+                                      ₹{(((item.price || 0) / 100) * (item.quantity || 1)).toFixed(2)}
+                                    </span>
+                                    {!item.returned &&
+                                      currentOrder.status !== "Paid" &&
+                                      currentOrder.status !== "Cancelled" &&
+                                      currentOrder.status !== "Returned" && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCancelItem(currentOrder._id, kotIdx, itemIdx)
+                                          }
+                                          className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                          title="Cancel this item"
+                                        >
+                                          ❌ Cancel
+                                        </button>
+                                      )}
                                   </div>
                                 </div>
-                                <div className="space-y-2">
-                                  {(Array.isArray(kot?.items)
-                                    ? kot.items
-                                    : []
-                                  ).map((item, itemIdx) => {
-                                    if (!item) return null;
-                                    return (
-                                      <div
-                                        key={itemIdx}
-                                        className={`flex justify-between items-center py-2 px-3 rounded border ${item.returned
-                                            ? "bg-red-50 border-red-200 opacity-60"
-                                            : "bg-white border-gray-200"
-                                          }`}
-                                      >
-                                        <div className="flex items-center gap-2 flex-1">
-                                          <span
-                                            className={`px-2 py-1 rounded text-xs font-bold ${item.returned
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-amber-100 text-amber-700"
-                                              }`}
-                                          >
-                                            {item.quantity}x
-                                          </span>
-                                          <span
-                                            className={`text-sm text-gray-800 ${item.returned
-                                                ? "line-through"
-                                                : ""
-                                              }`}
-                                          >
-                                            {item.name}
-                                          </span>
-                                          {item.returned && (
-                                            <span className="text-xs text-red-600 font-semibold">
-                                              (Cancelled)
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                          <span
-                                            className={`text-sm text-gray-600 ${item.returned
-                                                ? "line-through"
-                                                : ""
-                                              }`}
-                                          >
-                                            ₹
-                                            {(
-                                              ((item.price || 0) / 100) *
-                                              (item.quantity || 1)
-                                            ).toFixed(2)}
-                                          </span>
-                                          {!item.returned &&
-                                            currentOrder.status !== "Paid" &&
-                                            currentOrder.status !==
-                                            "Cancelled" &&
-                                            currentOrder.status !==
-                                            "Returned" && (
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  handleCancelItem(
-                                                    currentOrder._id,
-                                                    kotIdx,
-                                                    itemIdx
-                                                  )
-                                                }
-                                                className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                                                title="Cancel this item"
-                                              >
-                                                ❌ Cancel
-                                              </button>
-                                            )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                              ))}
+                              {selectedAddons.map((addon, aIdx) => {
+                                const qty = Number(addon.quantity) || 1;
+                                const price = Number(addon.price) || 0;
+                                const name = addon.name || "Add-on";
+                                return (
+                                  <div
+                                    key={`a-${aIdx}`}
+                                    className="flex justify-between items-center py-2 px-3 rounded border bg-white border-gray-200"
+                                  >
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700">
+                                        {qty}x
+                                      </span>
+                                      <span className="text-sm text-gray-800">(+) {name}</span>
+                                    </div>
+                                    <span className="text-sm text-gray-600">₹{(price * qty).toFixed(2)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Add items section (Modify Order logic) */}
@@ -2402,7 +2596,7 @@ const TakeawayOrders = () => {
                         Add Items to Takeaway Order
                       </h3>
                       {["Paid", "Cancelled", "Returned"].includes(
-                        currentOrder?.status || ""
+                        currentOrder?.status || "",
                       ) ? (
                         <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                           You cannot add items to this order because it is{" "}
@@ -2432,29 +2626,31 @@ const TakeawayOrders = () => {
                                   <button
                                     type="button"
                                     onClick={() => setDraftCategory("all")}
-                                    className={`px-3 py-1 text-sm rounded-full border transition ${draftCategory === "all"
+                                    className={`px-3 py-1 text-sm rounded-full border transition ${
+                                      draftCategory === "all"
                                         ? "bg-blue-600 text-white border-blue-600 shadow"
                                         : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                      }`}
+                                    }`}
                                   >
                                     All
                                   </button>
                                   {Array.from(
-                                    new Set(menuItems.map((it) => it.category))
+                                    new Set(menuItems.map((it) => it.category)),
                                   ).map((category) => (
                                     <button
                                       type="button"
                                       key={category || "uncategorized"}
                                       onClick={() =>
                                         setDraftCategory(
-                                          category || "Uncategorized"
+                                          category || "Uncategorized",
                                         )
                                       }
-                                      className={`px-3 py-1 text-sm rounded-full border transition ${draftCategory ===
-                                          (category || "Uncategorized")
+                                      className={`px-3 py-1 text-sm rounded-full border transition ${
+                                        draftCategory ===
+                                        (category || "Uncategorized")
                                           ? "bg-blue-600 text-white border-blue-600 shadow"
                                           : "border-gray-300 text-gray-600 hover:border-blue-400"
-                                        }`}
+                                      }`}
                                     >
                                       {category || "Uncategorized"}
                                     </button>
@@ -2522,16 +2718,73 @@ const TakeawayOrders = () => {
                                   })
                                 )}
                               </div>
+                              {/* Add-ons: always visible so admin can add add-ons to the order */}
+                              <div className="mt-4">
+                                <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                  Add-ons
+                                </h4>
+                                <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y bg-gray-50/50">
+                                  {addonsLoading ? (
+                                    <div className="p-3 text-xs text-gray-500">
+                                      Loading add-ons…
+                                    </div>
+                                  ) : addonList.length === 0 ? (
+                                    <div className="p-3 text-xs text-gray-500">
+                                      No add-ons available.
+                                    </div>
+                                  ) : (
+                                    addonList.map((addon) => {
+                                      const id = addon._id || addon.id;
+                                      const quantity = draftAddonSelections[id] || 0;
+                                      return (
+                                        <div
+                                          key={id}
+                                          className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
+                                        >
+                                          <div>
+                                            <div className="text-sm font-medium text-gray-800">
+                                              (+) {addon.name}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                              ₹{formatMoney(addon.price || 0)}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => adjustAddonQuantity(addon, -1)}
+                                              disabled={quantity === 0}
+                                              className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                              -
+                                            </button>
+                                            <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                              {quantity}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => adjustAddonQuantity(addon, 1)}
+                                              className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                            >
+                                              +
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
                             </div>
                             <div className="space-y-4">
                               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                                 <h3 className="text-md font-semibold text-gray-800 mb-3">
                                   New Items Summary
                                 </h3>
-                                {draftItemsArray.length === 0 ? (
+                                {draftItemsArray.length === 0 && draftAddonsArray.length === 0 ? (
                                   <p className="text-sm text-gray-500">
                                     No items selected yet. Use the menu on the
-                                    left to add items.
+                                    left to add items or add-ons below.
                                   </p>
                                 ) : (
                                   <div className="space-y-2 text-sm text-gray-700">
@@ -2546,8 +2799,21 @@ const TakeawayOrders = () => {
                                         <span>
                                           ₹
                                           {formatMoney(
-                                            entry.price * entry.quantity
+                                            entry.price * entry.quantity,
                                           )}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {draftAddonsArray.map((entry) => (
+                                      <div
+                                        key={entry.id}
+                                        className="flex justify-between items-center"
+                                      >
+                                        <span>
+                                          (+) {entry.name} × {entry.quantity}
+                                        </span>
+                                        <span>
+                                          ₹{formatMoney(entry.price * entry.quantity)}
                                         </span>
                                       </div>
                                     ))}
@@ -2564,6 +2830,12 @@ const TakeawayOrders = () => {
                                       ₹{formatMoney(draftTotals.subtotal)}
                                     </span>
                                   </div>
+                                  {draftTotals.addonsSubtotal > 0 && (
+                                    <div className="flex justify-between">
+                                      <span>Add-ons</span>
+                                      <span>₹{formatMoney(draftTotals.addonsSubtotal)}</span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                                     <span>Total</span>
                                     <span>
@@ -2588,6 +2860,7 @@ const TakeawayOrders = () => {
                         setIsModalOpen(false);
                         setCurrentOrder(null);
                         setDraftSelections({});
+                        setDraftAddonSelections({});
                       }}
                       className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs sm:text-sm md:text-base w-full sm:w-auto"
                     >

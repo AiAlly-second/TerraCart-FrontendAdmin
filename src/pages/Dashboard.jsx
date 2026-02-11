@@ -1,8 +1,8 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import DashboardAdmin from './DashboardAdmin';
-import DashboardFranchise from './DashboardFranchise';
-import DashboardSuper from './DashboardSuper';
+import React from "react";
+import { useAuth } from "../context/AuthContext";
+import DashboardAdmin from "./DashboardAdmin";
+import DashboardFranchise from "./DashboardFranchise";
+import DashboardSuper from "./DashboardSuper";
 
 // Unified Dashboard component that renders role-specific dashboard
 const Dashboard = () => {
@@ -10,11 +10,11 @@ const Dashboard = () => {
   const userRole = user?.role;
 
   // Render role-specific dashboard
-  if (userRole === 'super_admin') {
+  if (userRole === "super_admin") {
     return <DashboardSuper />;
-  } else if (userRole === 'franchise_admin') {
+  } else if (userRole === "franchise_admin") {
     return <DashboardFranchise />;
-  } else if (userRole === 'admin') {
+  } else if (userRole === "admin") {
     return <DashboardAdmin />;
   }
 

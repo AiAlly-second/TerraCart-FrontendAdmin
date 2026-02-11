@@ -69,10 +69,10 @@ const CostingV2Layout = () => {
     user?.role === "super_admin"
       ? "Super Admin"
       : user?.role === "franchise_admin"
-      ? "Franchise Admin"
-      : user?.role === "admin"
-      ? "Cart Admin"
-      : "Finances";
+        ? "Franchise Admin"
+        : user?.role === "admin"
+          ? "Cart Admin"
+          : "Finances";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -89,8 +89,8 @@ const CostingV2Layout = () => {
                 {user?.role === "super_admin"
                   ? "Global costing overview"
                   : user?.role === "franchise_admin"
-                  ? "View franchise financial overview"
-                  : "Costing, BOM & Inventory for your cart"}
+                    ? "View franchise financial overview"
+                    : "Costing, BOM & Inventory for your cart"}
               </p>
             </div>
           </div>

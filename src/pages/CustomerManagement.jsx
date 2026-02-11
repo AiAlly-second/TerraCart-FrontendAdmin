@@ -30,13 +30,13 @@ const CustomerManagement = () => {
 
       console.log(
         "[CustomerManagement] Fetching customers with params:",
-        params
+        params,
       );
       console.log(
         "[CustomerManagement] User role:",
         user?.role,
         "User ID:",
-        user?._id
+        user?._id,
       );
 
       const response = await api.get("/customers", { params });
@@ -44,13 +44,13 @@ const CustomerManagement = () => {
 
       console.log(
         "[CustomerManagement] Received customers:",
-        customersData.length
+        customersData.length,
       );
 
       // For cart admin, verify filtering is working
       if (user?.role === "admin") {
         console.log(
-          "[CustomerManagement] Cart admin - verifying customer data includes feedback and takeaway customers"
+          "[CustomerManagement] Cart admin - verifying customer data includes feedback and takeaway customers",
         );
         // Log sample customer data to verify sources
         if (customersData.length > 0) {
@@ -69,7 +69,7 @@ const CustomerManagement = () => {
       console.error("Error details:", error.response?.data);
       alert(
         "Failed to load customers. Please check console for details.",
-        "error"
+        "error",
       );
     } finally {
       setLoading(false);
@@ -138,7 +138,9 @@ const CustomerManagement = () => {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
-            <div className="text-xs sm:text-sm text-gray-600">Total Customers</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Total Customers
+            </div>
             <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">
               {stats.totalCustomers}
             </div>
@@ -150,13 +152,17 @@ const CustomerManagement = () => {
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
-            <div className="text-xs sm:text-sm text-gray-600">Average Rating</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Average Rating
+            </div>
             <div className="text-xl sm:text-2xl md:text-3xl font-bold text-yellow-600">
               {stats.averageRating || "0.00"} ⭐
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
-            <div className="text-xs sm:text-sm text-gray-600">Customers with Ratings</div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Customers with Ratings
+            </div>
             <div className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-600">
               {stats.customersWithRatings}
             </div>
@@ -166,7 +172,10 @@ const CustomerManagement = () => {
 
       {/* Search and Sort */}
       <div className="bg-white rounded-lg shadow p-3 sm:p-4">
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+        <form
+          onSubmit={handleSearch}
+          className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end"
+        >
           <div className="flex-1">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Search Customers
@@ -293,7 +302,9 @@ const CustomerManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {customer.totalRatings !== undefined ? customer.totalRatings : (customer.ratings?.length || 0)}
+                        {customer.totalRatings !== undefined
+                          ? customer.totalRatings
+                          : customer.ratings?.length || 0}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -485,7 +496,7 @@ const CustomerManagement = () => {
                                   order.kotLines && order.kotLines.length > 0
                                     ? order.kotLines[order.kotLines.length - 1]
                                         .totalAmount
-                                    : 0
+                                    : 0,
                                 )}
                               </div>
                             </div>

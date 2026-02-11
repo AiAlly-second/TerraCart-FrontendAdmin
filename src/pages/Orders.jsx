@@ -98,7 +98,7 @@ const aggregateKotItems = (order) => {
     // Addons price is in Rupees, no need to convert from paise
     const unitPrice = Number(addon.price || 0);
     const amount = unitPrice * quantity;
-    
+
     // Addons follow the main order service type roughly,
     // but in this view we typically group them with dine-in items
     // unless the whole order is takeaway (which this view handles by filtering).
@@ -110,7 +110,7 @@ const aggregateKotItems = (order) => {
       quantity,
       amount,
       isTakeaway: false,
-      isAddon: true
+      isAddon: true,
     });
   });
 
@@ -164,7 +164,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   // Get cart address (prefer address, fallback to location)
   const cartAddress = cartData?.address || "—";
   // Get franchise FSSAI number (fallback to GST if available)
-  const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
+  const franchiseFSSAI =
+    franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
   // Payment mode display (fallback to CASH if not available)
   const paymentMethod =
@@ -304,7 +305,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
         <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
         <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now()
+          order.paidAt || order.updatedAt || order.createdAt || Date.now(),
         ).toLocaleDateString()}</div>
         </div>
       <div style="margin-bottom: 8px;">
@@ -359,7 +360,9 @@ const printOrderInvoice = async (order) => {
   try {
     // Fetch franchise data if franchiseId exists
     if (order.franchiseId) {
-      const franchiseRes = await api.get(`/users/${order.franchiseId}`, { skipErrorLogging: true });
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`, {
+        skipErrorLogging: true,
+      });
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
@@ -371,7 +374,9 @@ const printOrderInvoice = async (order) => {
 
     // Fetch cart data if cartId exists
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`, { skipErrorLogging: true });
+      const cartRes = await api.get(`/users/${order.cartId}`, {
+        skipErrorLogging: true,
+      });
       if (cartRes.data) {
         cartData = {
           address: cartRes.data.address || cartRes.data.location || null,
@@ -464,7 +469,9 @@ const downloadOrderInvoice = async (order) => {
   try {
     // Fetch franchise data if franchiseId exists
     if (order.franchiseId) {
-      const franchiseRes = await api.get(`/users/${order.franchiseId}`, { skipErrorLogging: true });
+      const franchiseRes = await api.get(`/users/${order.franchiseId}`, {
+        skipErrorLogging: true,
+      });
       if (franchiseRes.data) {
         franchiseData = {
           gstNumber: franchiseRes.data.gstNumber || null,
@@ -476,7 +483,9 @@ const downloadOrderInvoice = async (order) => {
 
     // Fetch cart data if cartId exists
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`, { skipErrorLogging: true });
+      const cartRes = await api.get(`/users/${order.cartId}`, {
+        skipErrorLogging: true,
+      });
       if (cartRes.data) {
         cartData = {
           address: cartRes.data.address || cartRes.data.location || null,
@@ -516,17 +525,17 @@ const downloadOrderInvoice = async (order) => {
     });
 
     const imageData = canvas.toDataURL("image/png");
-    
+
     // Calculate dimensions
     const pdfWidth = 80;
     const margin = 5;
-    const usableWidth = pdfWidth - (margin * 2);
-    
+    const usableWidth = pdfWidth - margin * 2;
+
     const tempPdf = new jsPDF();
     const imgProps = tempPdf.getImageProperties(imageData);
     const imgRatio = imgProps.height / imgProps.width;
     const imgHeight = usableWidth * imgRatio;
-    const pdfHeight = imgHeight + (margin * 2);
+    const pdfHeight = imgHeight + margin * 2;
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -579,7 +588,6 @@ const Orders = () => {
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
 
-
   // Reason Modal State
   const [reasonModal, setReasonModal] = useState({
     open: false,
@@ -612,7 +620,6 @@ const Orders = () => {
     changeStatus(reasonModal.orderId, reasonModal.status, reasonInput);
   };
 
-
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
     // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
     if (!incoming || incoming.serviceType !== "DINE_IN") {
@@ -620,7 +627,7 @@ const Orders = () => {
         console.log(
           "[Orders] Ignoring non-DINE_IN order:",
           incoming?.serviceType,
-          incoming?._id
+          incoming?._id,
         );
       }
       return;
@@ -635,7 +642,7 @@ const Orders = () => {
         : [];
       const list = [...filteredPrev];
       const index = list.findIndex(
-        (order) => normalizeId(order._id) === incomingId
+        (order) => normalizeId(order._id) === incomingId,
       );
 
       if (index >= 0) {
@@ -709,7 +716,7 @@ const Orders = () => {
         return await api.patch(
           `/orders/${orderId}/status`,
           { status: newStatus, reason },
-          { signal }
+          { signal },
         );
       });
       upsertOrder(response.data);
@@ -756,7 +763,10 @@ const Orders = () => {
           }`}
         >
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
-            <div className="font-mono text-[9px] text-gray-400 mb-1 select-all" title="Order ID">
+            <div
+              className="font-mono text-[9px] text-gray-400 mb-1 select-all"
+              title="Order ID"
+            >
               {order._id}
             </div>
             <button
@@ -785,12 +795,13 @@ const Orders = () => {
                     {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
                   </span>
                 </div>
-                {order.cancellationReason && 
-                 (order.status === "Cancelled" || order.status === "Returned") && (
-                   <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100">
-                     Reason: {order.cancellationReason}
-                   </div>
-                )}
+                {order.cancellationReason &&
+                  (order.status === "Cancelled" ||
+                    order.status === "Returned") && (
+                    <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100">
+                      Reason: {order.cancellationReason}
+                    </div>
+                  )}
               </div>
             )}
           </td>
@@ -828,7 +839,7 @@ const Orders = () => {
             <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
               <span
                 className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${getStatusClass(
-                  order.status
+                  order.status,
                 )}`}
               >
                 <span className="text-[10px] sm:text-xs md:text-sm">
@@ -841,7 +852,7 @@ const Orders = () => {
                 {(() => {
                   const nextStatus = getNextStatus(
                     order.status,
-                    order.serviceType
+                    order.serviceType,
                   );
                   const buttons = [];
 
@@ -856,7 +867,7 @@ const Orders = () => {
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                       >
                         ✅ <span className="hidden sm:inline">Accept</span>
-                      </button>
+                      </button>,
                     );
                   }
 
@@ -871,7 +882,7 @@ const Orders = () => {
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50 truncate max-w-[80px] sm:max-w-none"
                       >
                         {nextStatus}
-                      </button>
+                      </button>,
                     );
                   }
 
@@ -885,7 +896,7 @@ const Orders = () => {
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                       >
                         ↩️ <span className="hidden sm:inline">Return</span>
-                      </button>
+                      </button>,
                     );
                   } else if (canCancel(order.status)) {
                     buttons.push(
@@ -897,7 +908,7 @@ const Orders = () => {
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                       >
                         ❌ <span className="hidden sm:inline">Cancel</span>
-                      </button>
+                      </button>,
                     );
                   }
 
@@ -1040,7 +1051,9 @@ const Orders = () => {
       if (filterCafeId) {
         // Fetch cart info for the filter
         try {
-          const cafeRes = await api.get(`/users/${filterCafeId}`, { skipErrorLogging: true });
+          const cafeRes = await api.get(`/users/${filterCafeId}`, {
+            skipErrorLogging: true,
+          });
           setCafeInfo(cafeRes.data);
         } catch (err) {
           if (import.meta.env.DEV) {
@@ -1074,11 +1087,11 @@ const Orders = () => {
           setCarts(franchiseCarts);
           if (import.meta.env.DEV) {
             console.log(
-              `[Orders] Found ${franchiseCarts.length} carts for franchise admin (user ID: ${user._id})`
+              `[Orders] Found ${franchiseCarts.length} carts for franchise admin (user ID: ${user._id})`,
             );
             if (franchiseCarts.length === 0) {
               console.warn(
-                `[Orders] No carts found for franchise admin. This might indicate a data issue.`
+                `[Orders] No carts found for franchise admin. This might indicate a data issue.`,
               );
             }
           }
@@ -1118,7 +1131,7 @@ const Orders = () => {
           if (import.meta.env.DEV) {
             console.log(
               `Filtered orders for cart ${filterCafeId}:`,
-              dineInOrders.length
+              dineInOrders.length,
             );
           }
         }
@@ -1129,7 +1142,7 @@ const Orders = () => {
             dineInOrders.length,
             "out of",
             data.length || 0,
-            "total orders"
+            "total orders",
           );
         }
         setOrders(dineInOrders);
@@ -1160,7 +1173,6 @@ const Orders = () => {
       if (!filterCafeId) {
         upsertOrder(order, { prepend: true });
         // Auto-print new order if enabled
-
       } else {
         let orderCafeId = order.cafeId;
         if (orderCafeId && typeof orderCafeId === "object") {
@@ -1168,8 +1180,6 @@ const Orders = () => {
         }
         if (orderCafeId && orderCafeId.toString() === filterCafeId) {
           upsertOrder(order, { prepend: true });
-          
-
         }
       }
     });
@@ -1188,13 +1198,11 @@ const Orders = () => {
       }
 
       if (matches) {
-
-        
         upsertOrder(updatedOrder);
       } else {
         // Remove if it no longer matches filter
         setOrders((prev) =>
-          prev.filter((order) => order._id !== updatedOrder._id)
+          prev.filter((order) => order._id !== updatedOrder._id),
         );
       }
     });
@@ -1226,9 +1234,18 @@ const Orders = () => {
     setDraftSearch("");
     setDraftCategory("all");
     // Load menu for this order's outlet so franchise admin sees correct items (not mixed from all outlets)
-    const orderCartId = order?.cartId ? (typeof order.cartId === "object" ? order.cartId._id : order.cartId) : null;
+    const orderCartId = order?.cartId
+      ? typeof order.cartId === "object"
+        ? order.cartId._id
+        : order.cartId
+      : null;
     if (import.meta.env.DEV) {
-      console.log("[Orders] handleEdit - Loading menu for cartId:", orderCartId, "Order:", order._id);
+      console.log(
+        "[Orders] handleEdit - Loading menu for cartId:",
+        orderCartId,
+        "Order:",
+        order._id,
+      );
     }
     loadMenu(orderCartId || undefined);
     setIsModalOpen(true);
@@ -1247,7 +1264,7 @@ const Orders = () => {
         danger: true,
         confirmText: "Delete",
         cancelText: "Cancel",
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -1281,7 +1298,7 @@ const Orders = () => {
           return await api.patch(
             `/orders/${currentOrder._id}/status`,
             { status: newStatus },
-            { signal }
+            { signal },
           );
         });
       }
@@ -1359,7 +1376,7 @@ const Orders = () => {
       const table = tableSource;
       if (!table) {
         setCreateError(
-          "Selected table could not be found. Refresh the page and try again."
+          "Selected table could not be found. Refresh the page and try again.",
         );
         return;
       }
@@ -1369,7 +1386,7 @@ const Orders = () => {
         setCreateError(
           `Table ${
             table.number || table.name || ""
-          } is not currently available.`
+          } is not currently available.`,
         );
         return;
       }
@@ -1397,19 +1414,19 @@ const Orders = () => {
             throw new Error("Unable to claim table: missing QR slug.");
           }
           const lookupRes = await fetch(
-            `${nodeApi}/api/tables/lookup/${table.qrSlug}`
+            `${nodeApi}/api/tables/lookup/${table.qrSlug}`,
           );
           const lookupPayload = await lookupRes.json().catch(() => ({}));
           if (lookupRes.status === 423) {
             throw new Error(
               lookupPayload?.message ||
-                "Table is currently assigned to another guest."
+                "Table is currently assigned to another guest.",
             );
           }
           if (!lookupRes.ok) {
             throw new Error(
               lookupPayload?.message ||
-                "Failed to allocate table. Please try again."
+                "Failed to allocate table. Please try again.",
             );
           }
           sessionToken =
@@ -1420,7 +1437,7 @@ const Orders = () => {
 
         if (!sessionToken) {
           throw new Error(
-            "Unable to obtain a session token for this table. Ask staff to release the table."
+            "Unable to obtain a session token for this table. Ask staff to release the table.",
           );
         }
       }
@@ -1439,7 +1456,10 @@ const Orders = () => {
           draftServiceType === "TAKEAWAY" ? "TAKEAWAY" : tableNumber || null, // TAKEAWAY orders use "TAKEAWAY" as table number
         sessionToken:
           draftServiceType === "TAKEAWAY" ? undefined : sessionToken, // TAKEAWAY orders don't need sessionToken
-        cartId: currentMenuCartId || filterCafeId || (user.role === 'admin' ? user._id : undefined), // Explicitly send cartId for admin-created orders
+        cartId:
+          currentMenuCartId ||
+          filterCafeId ||
+          (user.role === "admin" ? user._id : undefined), // Explicitly send cartId for admin-created orders
         items: itemsPayload,
       };
 
@@ -1456,7 +1476,7 @@ const Orders = () => {
       } else {
         if (import.meta.env.DEV) {
           console.log(
-            "[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list"
+            "[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list",
           );
         }
       }
@@ -1469,7 +1489,7 @@ const Orders = () => {
         console.error("Failed to create order", err);
       }
       setCreateError(
-        err.message || "Failed to create order. Please try again."
+        err.message || "Failed to create order. Please try again.",
       );
     } finally {
       setCreateSubmitting(false);
@@ -1589,7 +1609,7 @@ const Orders = () => {
 
       if (import.meta.env.DEV) {
         console.log(
-          `[Orders] Fetching info for ${cartIdsToFetch.length} unknown cart(s)...`
+          `[Orders] Fetching info for ${cartIdsToFetch.length} unknown cart(s)...`,
         );
       }
 
@@ -1599,7 +1619,10 @@ const Orders = () => {
       ).map(async (cartId) => {
         if (!cartId) return null;
         try {
-          const cartRes = await api.get(`/users/${cartId}`, { skipErrorAlert: true, skipErrorLogging: true });
+          const cartRes = await api.get(`/users/${cartId}`, {
+            skipErrorAlert: true,
+            skipErrorLogging: true,
+          });
           if (cartRes.data) {
             const cartInfo = {
               _id: cartId,
@@ -1615,7 +1638,7 @@ const Orders = () => {
             }));
             if (import.meta.env.DEV) {
               console.log(
-                `[Orders] Fetched cart info for ${cartId}: ${cartInfo.cartName}`
+                `[Orders] Fetched cart info for ${cartId}: ${cartInfo.cartName}`,
               );
             }
             return { cartId, cartInfo };
@@ -1625,7 +1648,7 @@ const Orders = () => {
           if (import.meta.env.DEV && err.response?.status !== 404) {
             console.warn(
               `[Orders] Failed to fetch cart info for ${cartId}:`,
-              err.message
+              err.message,
             );
           }
           // Mark as truly unknown
@@ -1655,7 +1678,7 @@ const Orders = () => {
 
     // STRICT: Only show DINE_IN orders, filter out any TAKEAWAY orders that might have slipped in
     const dineInOrders = orders.filter(
-      (order) => order.serviceType === "DINE_IN"
+      (order) => order.serviceType === "DINE_IN",
     );
 
     // Deduplicate orders by _id to prevent duplicate keys
@@ -1762,7 +1785,7 @@ const Orders = () => {
       const payload = res.data || [];
 
       if (!Array.isArray(payload) || payload.length === 0) {
-        const errorMsg = `No menu items found${outletCartId ? ` for outlet ${outletCartId}` : ''}. Please add menu items first.`;
+        const errorMsg = `No menu items found${outletCartId ? ` for outlet ${outletCartId}` : ""}. Please add menu items first.`;
         setMenuError(errorMsg);
         setMenuCategories([{ id: "all", label: "All" }]);
         setMenuItems([]);
@@ -1797,7 +1820,7 @@ const Orders = () => {
         category.items.map((item) => ({
           ...item,
           category: category.name,
-        }))
+        })),
       );
       if (import.meta.env.DEV) {
         console.log("[Orders] Menu loaded:", {
@@ -1877,24 +1900,21 @@ const Orders = () => {
         price: Number(item.price) || 0,
         item,
       })),
-    [draftSelections]
+    [draftSelections],
   );
 
   const draftTotals = useMemo(() => {
     const subtotal = draftItemsArray.reduce(
       (sum, entry) => sum + entry.price * entry.quantity,
-      0
+      0,
     );
-    const gst = subtotal * 0.05;
-    const total = subtotal + gst;
     const totalItems = draftItemsArray.reduce(
       (sum, entry) => sum + entry.quantity,
-      0
+      0,
     );
     return {
       subtotal,
-      gst,
-      total,
+      total: subtotal,
       totalItems,
     };
   }, [draftItemsArray]);
@@ -1988,8 +2008,6 @@ const Orders = () => {
               View All Carts
             </button>
           )}
-
-
         </div>
 
         {/* Search Filters */}
@@ -2041,7 +2059,9 @@ const Orders = () => {
           type="button"
           onClick={() => setFilterStatus("all")}
           className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
-            filterStatus === "all" ? "border-blue-500 shadow-md" : "border-gray-200"
+            filterStatus === "all"
+              ? "border-blue-500 shadow-md"
+              : "border-gray-200"
           }`}
         >
           <div className="flex items-center justify-between mb-2">
@@ -2052,9 +2072,7 @@ const Orders = () => {
               📦
             </div>
           </div>
-          <div className="text-sm text-gray-600 font-medium">
-            All Dine-In
-          </div>
+          <div className="text-sm text-gray-600 font-medium">All Dine-In</div>
         </button>
 
         {Object.entries(
@@ -2063,27 +2081,25 @@ const Orders = () => {
             .reduce((acc, order) => {
               acc[order.status] = (acc[order.status] || 0) + 1;
               return acc;
-            }, {})
+            }, {}),
         ).map(([status, count]) => (
           <button
             type="button"
             key={status}
             onClick={() => setFilterStatus(status)}
             className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
-              filterStatus === status ? "border-blue-500 shadow-md" : "border-gray-200"
+              filterStatus === status
+                ? "border-blue-500 shadow-md"
+                : "border-gray-200"
             } ${getStatusClass(status)}`}
           >
             <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl font-bold text-gray-900">
-                {count}
-              </div>
+              <div className="text-3xl font-bold text-gray-900">{count}</div>
               <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-xl">
                 {getStatusIcon(status)}
               </div>
             </div>
-            <div className="text-sm text-gray-600 font-medium">
-              {status}
-            </div>
+            <div className="text-sm text-gray-600 font-medium">{status}</div>
           </button>
         ))}
       </div>
@@ -2163,7 +2179,7 @@ const Orders = () => {
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             {filteredCartOrders.map((order) =>
-                              renderOrderRow(order)
+                              renderOrderRow(order),
                             )}
                           </tbody>
                         </table>
@@ -2266,7 +2282,7 @@ const Orders = () => {
                               onClick={() => {
                                 setDraftServiceType(type);
                                 setSelectedTableId("");
-                                
+
                                 // Emit "dine" event immediately when user selects DINE_IN
                                 if (type === "DINE_IN") {
                                   try {
@@ -2275,11 +2291,16 @@ const Orders = () => {
                                       serviceType: "DINE_IN",
                                     });
                                     if (import.meta.env.DEV) {
-                                      console.log("[Orders] Emitted 'dine' event for DINE_IN selection");
+                                      console.log(
+                                        "[Orders] Emitted 'dine' event for DINE_IN selection",
+                                      );
                                     }
                                   } catch (error) {
                                     if (import.meta.env.DEV) {
-                                      console.error("[Orders] Error emitting 'dine' event:", error);
+                                      console.error(
+                                        "[Orders] Error emitting 'dine' event:",
+                                        error,
+                                      );
                                     }
                                   }
                                 }
@@ -2510,10 +2531,6 @@ const Orders = () => {
                               <span>Subtotal</span>
                               <span>₹{formatMoney(draftTotals.subtotal)}</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span>GST (5%)</span>
-                              <span>₹{formatMoney(draftTotals.gst)}</span>
-                            </div>
                             <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                               <span>Total</span>
                               <span>₹{formatMoney(draftTotals.total)}</span>
@@ -2575,17 +2592,22 @@ const Orders = () => {
                     </div>
 
                     {/* Cancellation/Return Reason Display - Only for Cancelled or Returned orders */}
-                    {currentOrder?.cancellationReason && 
-                     (currentOrder?.status === "Cancelled" || currentOrder?.status === "Returned") && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
-                         <h4 className="text-sm font-bold text-red-800 mb-1">
-                           Reason for {currentOrder.status === "Returned" ? "Return" : "Cancellation"}:
-                         </h4>
-                         <p className="text-sm text-red-700">
-                           {currentOrder.cancellationReason}
-                         </p>
-                      </div>
-                    )}
+                    {currentOrder?.cancellationReason &&
+                      (currentOrder?.status === "Cancelled" ||
+                        currentOrder?.status === "Returned") && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
+                          <h4 className="text-sm font-bold text-red-800 mb-1">
+                            Reason for{" "}
+                            {currentOrder.status === "Returned"
+                              ? "Return"
+                              : "Cancellation"}
+                            :
+                          </h4>
+                          <p className="text-sm text-red-700">
+                            {currentOrder.cancellationReason}
+                          </p>
+                        </div>
+                      )}
 
                     {/* Current Order Items Section */}
                     {currentOrder && !currentOrder.isNew && (
@@ -2628,7 +2650,7 @@ const Orders = () => {
 
                           const isPaid = currentOrder.status === "Paid";
                           const canModify = !["Cancelled", "Returned"].includes(
-                            currentOrder.status || ""
+                            currentOrder.status || "",
                           );
 
                           return (
@@ -2684,7 +2706,8 @@ const Orders = () => {
                                           <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                                             ₹
                                             {formatMoney(
-                                              itemData.price * itemData.quantity
+                                              itemData.price *
+                                                itemData.quantity,
                                             )}
                                           </td>
                                           <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm">
@@ -2698,7 +2721,7 @@ const Orders = () => {
                                                         // CRITICAL: window.confirm is now async, must await it
                                                         const confirmed =
                                                           await window.confirm(
-                                                            `Cancel ${itemData.quantity}x ${itemData.name}?`
+                                                            `Cancel ${itemData.quantity}x ${itemData.name}?`,
                                                           );
                                                         if (confirmed) {
                                                           try {
@@ -2713,27 +2736,27 @@ const Orders = () => {
                                                                       itemData.itemIndex,
                                                                   },
                                                                 ],
-                                                              }
+                                                              },
                                                             );
                                                             alert(
-                                                              "Item cancelled successfully!"
+                                                              "Item cancelled successfully!",
                                                             );
                                                             // Refresh order data
                                                             const res =
                                                               await api.get(
-                                                                `/orders/${currentOrder._id}`
+                                                                `/orders/${currentOrder._id}`,
                                                               );
                                                             setCurrentOrder(
-                                                              res.data
+                                                              res.data,
                                                             );
                                                             // Refresh orders list
                                                             const ordersRes =
                                                               await api.get(
-                                                                "/orders"
+                                                                "/orders",
                                                               );
                                                             const allOrders =
                                                               Array.isArray(
-                                                                ordersRes.data
+                                                                ordersRes.data,
                                                               )
                                                                 ? ordersRes.data
                                                                 : [];
@@ -2741,7 +2764,7 @@ const Orders = () => {
                                                               allOrders.filter(
                                                                 (o) =>
                                                                   o.serviceType ===
-                                                                  "DINE_IN"
+                                                                  "DINE_IN",
                                                               );
                                                             if (filterCafeId) {
                                                               dineInOrders =
@@ -2783,17 +2806,20 @@ const Orders = () => {
                                                                       orderCafeId.toString() ===
                                                                         filterCafeId
                                                                     );
-                                                                  }
+                                                                  },
                                                                 );
                                                             }
                                                             setOrders(
-                                                              dineInOrders
+                                                              dineInOrders,
                                                             );
                                                           } catch (err) {
-                                                            if (import.meta.env.DEV) {
+                                                            if (
+                                                              import.meta.env
+                                                                .DEV
+                                                            ) {
                                                               console.error(
                                                                 "Failed to cancel item:",
-                                                                err
+                                                                err,
                                                               );
                                                             }
                                                             const errorMessage =
@@ -2817,7 +2843,7 @@ const Orders = () => {
                                                         // CRITICAL: window.confirm is now async, must await it
                                                         const confirmed =
                                                           await window.confirm(
-                                                            `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                            `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`,
                                                           );
                                                         if (confirmed) {
                                                           try {
@@ -2832,27 +2858,27 @@ const Orders = () => {
                                                                       itemData.itemIndex,
                                                                   },
                                                                 ],
-                                                              }
+                                                              },
                                                             );
                                                             alert(
-                                                              "Item marked as takeaway in bill. Order remains as dine-in."
+                                                              "Item marked as takeaway in bill. Order remains as dine-in.",
                                                             );
                                                             // Refresh order data
                                                             const res =
                                                               await api.get(
-                                                                `/orders/${currentOrder._id}`
+                                                                `/orders/${currentOrder._id}`,
                                                               );
                                                             setCurrentOrder(
-                                                              res.data
+                                                              res.data,
                                                             );
                                                             // Refresh orders list
                                                             const ordersRes =
                                                               await api.get(
-                                                                "/orders"
+                                                                "/orders",
                                                               );
                                                             const allOrders =
                                                               Array.isArray(
-                                                                ordersRes.data
+                                                                ordersRes.data,
                                                               )
                                                                 ? ordersRes.data
                                                                 : [];
@@ -2860,7 +2886,7 @@ const Orders = () => {
                                                               allOrders.filter(
                                                                 (o) =>
                                                                   o.serviceType ===
-                                                                  "DINE_IN"
+                                                                  "DINE_IN",
                                                               );
                                                             if (filterCafeId) {
                                                               dineInOrders =
@@ -2902,17 +2928,20 @@ const Orders = () => {
                                                                       orderCafeId.toString() ===
                                                                         filterCafeId
                                                                     );
-                                                                  }
+                                                                  },
                                                                 );
                                                             }
                                                             setOrders(
-                                                              dineInOrders
+                                                              dineInOrders,
                                                             );
                                                           } catch (err) {
-                                                            if (import.meta.env.DEV) {
+                                                            if (
+                                                              import.meta.env
+                                                                .DEV
+                                                            ) {
                                                               console.error(
                                                                 "Failed to convert item to takeaway:",
-                                                                err
+                                                                err,
                                                               );
                                                             }
                                                             const errorMessage =
@@ -2938,7 +2967,7 @@ const Orders = () => {
                                                       // CRITICAL: window.confirm is now async, must await it
                                                       const confirmed =
                                                         await window.confirm(
-                                                          `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`
+                                                          `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`,
                                                         );
                                                       if (confirmed) {
                                                         try {
@@ -2953,27 +2982,27 @@ const Orders = () => {
                                                                     itemData.itemIndex,
                                                                 },
                                                               ],
-                                                            }
+                                                            },
                                                           );
                                                           alert(
-                                                            "Item converted to takeaway successfully!"
+                                                            "Item converted to takeaway successfully!",
                                                           );
                                                           // Refresh order data
                                                           const res =
                                                             await api.get(
-                                                              `/orders/${currentOrder._id}`
+                                                              `/orders/${currentOrder._id}`,
                                                             );
                                                           setCurrentOrder(
-                                                            res.data
+                                                            res.data,
                                                           );
                                                           // Refresh orders list
                                                           const ordersRes =
                                                             await api.get(
-                                                              "/orders"
+                                                              "/orders",
                                                             );
                                                           const allOrders =
                                                             Array.isArray(
-                                                              ordersRes.data
+                                                              ordersRes.data,
                                                             )
                                                               ? ordersRes.data
                                                               : [];
@@ -2981,7 +3010,7 @@ const Orders = () => {
                                                             allOrders.filter(
                                                               (o) =>
                                                                 o.serviceType ===
-                                                                "DINE_IN"
+                                                                "DINE_IN",
                                                             );
                                                           if (filterCafeId) {
                                                             dineInOrders =
@@ -3022,16 +3051,16 @@ const Orders = () => {
                                                                     orderCafeId.toString() ===
                                                                       filterCafeId
                                                                   );
-                                                                }
+                                                                },
                                                               );
                                                           }
                                                           setOrders(
-                                                            dineInOrders
+                                                            dineInOrders,
                                                           );
                                                         } catch (err) {
                                                           console.error(
                                                             "Failed to convert item to takeaway:",
-                                                            err
+                                                            err,
                                                           );
                                                           const errorMessage =
                                                             err.response?.data
@@ -3057,9 +3086,9 @@ const Orders = () => {
                                                 "Cancelled"
                                                   ? "Cancelled"
                                                   : currentOrder.status ===
-                                                    "Returned"
-                                                  ? "Returned"
-                                                  : "N/A"}
+                                                      "Returned"
+                                                    ? "Returned"
+                                                    : "N/A"}
                                               </span>
                                             )}
                                           </td>
@@ -3296,7 +3325,7 @@ const Orders = () => {
                                       <span className="whitespace-nowrap flex-shrink-0">
                                         ₹
                                         {formatMoney(
-                                          entry.price * entry.quantity
+                                          entry.price * entry.quantity,
                                         )}
                                       </span>
                                     </div>
@@ -3308,10 +3337,6 @@ const Orders = () => {
                                     <span>
                                       ₹{formatMoney(draftTotals.subtotal)}
                                     </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>GST (5%)</span>
-                                    <span>₹{formatMoney(draftTotals.gst)}</span>
                                   </div>
                                   <div className="flex justify-between font-semibold text-gray-800 pt-1.5 sm:pt-2 border-t border-gray-200">
                                     <span>Total</span>
