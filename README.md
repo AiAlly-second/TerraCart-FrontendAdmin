@@ -23,7 +23,10 @@ npm install
 2. Create a `.env` file in the root directory (optional, defaults to `http://localhost:5001`):
 ```
 VITE_NODE_API_URL=http://localhost:5001
+VITE_FEATURE_COSTING_ENABLED=true
 ```
+
+   - `VITE_FEATURE_COSTING_ENABLED`: Set to `"true"` to show the Finances panel (BOM, Inventory, Food Cost) in the sidebar. Required for cart/franchise/super admin to access costing features.
 
 3. Run the development server:
 ```bash

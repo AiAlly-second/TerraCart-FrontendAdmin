@@ -34,6 +34,8 @@ export const returnToInventory = (data) =>
   api.post("/costing-v2/inventory/return", data);
 export const getInventoryTransactions = (params) =>
   api.get("/costing-v2/inventory/transactions", { params });
+export const diagnoseConsumption = (params) =>
+  api.get("/costing-v2/diagnose-consumption", { params });
 export const getLowStock = () => api.get("/costing-v2/low-stock");
 
 // ==================== WASTE ====================
@@ -100,6 +102,8 @@ export const createExpenseCategory = (data) =>
 // ==================== SYNC ====================
 export const syncMenuItemsFromDefault = (data) =>
   api.post("/costing-v2/menu-items/sync-from-default", data);
+export const linkMatchingBoms = (data) =>
+  api.post("/costing-v2/menu-items/link-matching-boms", data);
 
 // ==================== OUTLETS ====================
 export const getOutlets = () => api.get("/costing-v2/outlets");
