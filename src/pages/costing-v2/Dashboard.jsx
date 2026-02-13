@@ -682,9 +682,9 @@ const Dashboard = () => {
                 </p>
                 {foodCost?.totalSales > 0 && 
                  foodCost?.meta?.transactionCount === 0 && (
-                  <p className="text-[10px] sm:text-xs text-red-500 mt-1 flex items-center font-medium" title="Link menu items in Finances → Ingredients/Menu and add BOM (recipes) in Finances → BOM so orders consume ingredients and food cost is recorded.">
+                  <p className="text-[10px] sm:text-xs text-red-500 mt-1 flex items-center font-medium" title="Ensure orders go through Preparing/Being Prepared status, menu items are linked to BOM in Finances, and ingredients have prices.">
                     <FaExclamationTriangle className="mr-1" /> 
-                    No consumption data — add menu items and link recipes in Finances → BOM
+                    No consumption data — ensure orders go through Preparing/Being Prepared, link menu items to BOM in Finances, and set ingredient prices
                   </p>
                 )}
                 {foodCost?.totalSales > 0 && 

@@ -809,7 +809,9 @@ const Inventory = () => {
                           ₹{Number(txn.costAllocated || 0).toFixed(2)}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
-                          {txn.refType}
+                          {txn.refType === "order"
+                            ? `Order: ${txn.refId || "-"}`
+                            : txn.refType}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
                           {/* Actions column - can be used for future features */}

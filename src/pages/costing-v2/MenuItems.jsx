@@ -6,6 +6,8 @@ import {
   deleteMenuItem,
   getRecipes,
   getDefaultMenuItems,
+  syncMenuItemsFromDefault,
+  linkMatchingBoms,
 } from "../../services/costingV2Api";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -16,6 +18,8 @@ import {
   FaCheck,
   FaChartPie,
   FaExclamationTriangle,
+  FaSync,
+  FaMagic,
 } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 
@@ -29,6 +33,8 @@ const MenuItems = () => {
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [linkingBoms, setLinkingBoms] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -139,6 +145,49 @@ const MenuItems = () => {
     active: menuItems.filter((m) => m.isActive).length,
     linked: menuItems.filter((m) => m.defaultMenuPath).length,
     highFoodCost: menuItems.filter((m) => (m.foodCostPercent || 0) > 40).length,
+    noBom: menuItems.filter((m) => !m.recipeId || !m.recipeId._id).length,
+  };
+
+  const handleSyncFromCart = async () => {
+    try {
+      setSyncing(true);
+      const payload = isCartAdmin ? {} : { cartId: selectedOutlet };
+      const res = await syncMenuItemsFromDefault(payload);
+      if (res.data?.success) {
+        alert(
+          res.data.data?.message ||
+            `Synced ${res.data.data?.updated || 0} items. ${res.data.data?.created || 0} created.`
+        );
+        fetchData();
+      } else {
+        alert(res.data?.message || "Sync failed");
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleLinkMatchingBoms = async () => {
+    try {
+      setLinkingBoms(true);
+      const payload = isCartAdmin ? {} : { cartId: selectedOutlet };
+      const res = await linkMatchingBoms(payload);
+      if (res.data?.success) {
+        alert(
+          res.data.data?.message ||
+            `Linked ${res.data.data?.linked || 0} menu items to BOMs.`
+        );
+        fetchData();
+      } else {
+        alert(res.data?.message || "Link failed");
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || "Link failed");
+    } finally {
+      setLinkingBoms(false);
+    }
   };
 
   const handleEdit = (item) => {
@@ -207,12 +256,35 @@ const MenuItems = () => {
               Manage pricing, linking, and sync
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-wrap">
+            <button
+              onClick={handleSyncFromCart}
+              disabled={syncing || (!isCartAdmin && !selectedOutlet)}
+              title={
+                !isCartAdmin && !selectedOutlet
+                  ? "Select an outlet first"
+                  : "Sync menu items from your cart menu"
+              }
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all flex items-center gap-2 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              <FaSync className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing…" : "Sync from Cart Menu"}
+            </button>
+            {stats.noBom > 0 && (
+              <button
+                onClick={handleLinkMatchingBoms}
+                disabled={linkingBoms || (!isCartAdmin && !selectedOutlet)}
+                title="Link menu items without BOM to matching recipes by name"
+                className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-3 sm:px-4 py-2 rounded-lg hover:shadow-lg transform hover:-translate-y-0.5 transition-all flex items-center gap-2 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                <FaMagic className={linkingBoms ? "animate-pulse" : ""} />
+                {linkingBoms ? "Linking…" : "Link matching BOMs"}
+              </button>
+            )}
             <button
               onClick={async () => {
                 setEditing(null);
                 resetForm();
-                // Refresh recipes list before opening modal
                 try {
                   const recipesRes = await getRecipes();
                   if (recipesRes.data.success) setRecipes(recipesRes.data.data);
@@ -238,7 +310,7 @@ const MenuItems = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs sm:text-sm opacity-90">Total Items</p>
@@ -259,6 +331,20 @@ const MenuItems = () => {
             <FaLink className="text-lg sm:text-xl" />
           </div>
           <p className="text-2xl sm:text-3xl font-bold">{stats.linked}</p>
+        </div>
+        <div
+          className={`rounded-xl shadow-lg p-4 sm:p-5 text-white ${
+            stats.noBom > 0
+              ? "bg-gradient-to-br from-amber-500 to-amber-600"
+              : "bg-gradient-to-br from-gray-500 to-gray-600"
+          }`}
+          title="Items without BOM – inventory cannot be consumed"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs sm:text-sm opacity-90">No BOM</p>
+            <FaExclamationTriangle className="text-lg sm:text-xl" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold">{stats.noBom}</p>
         </div>
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-4 sm:p-5 text-white">
           <div className="flex items-center justify-between mb-2">
@@ -370,15 +456,25 @@ const MenuItems = () => {
                     )}
                   </td>
                   <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
-                    <span
-                      className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs ${
-                        item.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {item.isActive ? "Active" : "Inactive"}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs ${
+                          item.isActive
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {item.isActive ? "Active" : "Inactive"}
+                      </span>
+                      {(!item.recipeId || !item.recipeId._id) && (
+                        <span
+                          className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs bg-amber-100 text-amber-800"
+                          title="No BOM linked – inventory will not be consumed for orders"
+                        >
+                          No BOM
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
                     <div className="flex gap-1 sm:gap-2">
