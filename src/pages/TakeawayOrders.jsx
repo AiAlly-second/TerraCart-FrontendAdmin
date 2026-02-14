@@ -554,6 +554,13 @@ const TakeawayOrders = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
+  const [reasonModal, setReasonModal] = useState({
+    open: false,
+    orderId: null,
+    status: null,
+    title: "",
+  });
+  const [reasonInput, setReasonInput] = useState("");
 
   // Auto-print preference (default: false - disabled to prevent automatic popups)
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
@@ -1020,13 +1027,24 @@ const TakeawayOrders = () => {
     });
   }, []);
 
-  const changeStatus = async (orderId, newStatus) => {
+  const changeStatus = async (orderId, newStatus, reason = null) => {
     try {
       const response = await api.patch(`/orders/${orderId}/status`, {
         status: newStatus,
+        reason,
       });
       upsertOrder(response.data);
+      if (reasonModal.open) {
+        closeReasonModal();
+      }
     } catch (e) {
+      if (
+        e.name === "AbortError" ||
+        e.name === "CanceledError" ||
+        e.code === "ERR_CANCELED"
+      ) {
+        return;
+      }
       if (import.meta.env.DEV) {
         console.error("Status change failed:", e);
       }
@@ -1034,6 +1052,29 @@ const TakeawayOrders = () => {
         e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);
     }
+  };
+
+  const openReasonModal = (orderId, status) => {
+    setReasonModal({
+      open: true,
+      orderId,
+      status,
+      title: status === "Cancelled" ? "Cancel Order" : "Return Order",
+    });
+    setReasonInput("");
+  };
+
+  const closeReasonModal = () => {
+    setReasonModal({ open: false, orderId: null, status: null, title: "" });
+    setReasonInput("");
+  };
+
+  const handleReasonSubmit = () => {
+    if (!reasonInput.trim()) {
+      alert("Please provide a reason.");
+      return;
+    }
+    changeStatus(reasonModal.orderId, reasonModal.status, reasonInput.trim());
   };
 
   const acceptOrderTakeaway = async (orderId) => {
@@ -1998,7 +2039,7 @@ const TakeawayOrders = () => {
                                 <button
                                   key="return"
                                   onClick={() =>
-                                    changeStatus(order._id, "Returned")
+                                    openReasonModal(order._id, "Returned")
                                   }
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                                 >
@@ -2013,7 +2054,7 @@ const TakeawayOrders = () => {
                                 <button
                                   key="cancel"
                                   onClick={() =>
-                                    changeStatus(order._id, "Cancelled")
+                                    openReasonModal(order._id, "Cancelled")
                                   }
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                                 >
@@ -2879,8 +2920,60 @@ const TakeawayOrders = () => {
           </div>
         </div>
       )}
+
+      {reasonModal.open && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
+            <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg text-gray-800">
+                {reasonModal.title}
+              </h3>
+              <button
+                onClick={closeReasonModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                type="button"
+              >
+                x
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Please provide a reason:
+              </label>
+              <textarea
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[100px]"
+                placeholder="Type here..."
+                autoFocus
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
+              <button
+                onClick={closeReasonModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleReasonSubmit}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${
+                  reasonModal.status === "Cancelled"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+                type="button"
+              >
+                Confirm {reasonModal.status === "Cancelled" ? "Cancel" : "Return"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default TakeawayOrders;
+

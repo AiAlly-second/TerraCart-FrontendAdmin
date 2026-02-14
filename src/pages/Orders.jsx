@@ -723,7 +723,11 @@ const Orders = () => {
       if (reasonModal.open) closeReasonModal();
     } catch (e) {
       // Ignore AbortError (request was cancelled)
-      if (e.name === "AbortError") {
+      if (
+        e.name === "AbortError" ||
+        e.name === "CanceledError" ||
+        e.code === "ERR_CANCELED"
+      ) {
         return;
       }
       if (import.meta.env.DEV) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getInventoryTransactions,
@@ -44,13 +44,9 @@ const Inventory = () => {
     notes: "",
   });
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedOutlet]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = selectedOutlet ? { cartId: selectedOutlet } : {};
       const [transactionsRes, ingredientsRes] = await Promise.all([
         getInventoryTransactions(params),
@@ -83,11 +79,36 @@ const Inventory = () => {
       if (import.meta.env.DEV) {
         console.error("Error fetching data:", error);
       }
-      alert("Failed to fetch data");
+      if (!silent) {
+        alert("Failed to fetch data");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [selectedOutlet]);
+
+  useEffect(() => {
+    fetchData();
+
+    // Keep inventory in sync with order/BOM consumption without manual refresh.
+    const intervalId = setInterval(() => {
+      fetchData({ silent: true });
+    }, 10000);
+
+    const handleFocus = () => fetchData({ silent: true });
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchData({ silent: true });
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchData]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

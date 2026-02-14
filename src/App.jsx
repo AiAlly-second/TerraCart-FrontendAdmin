@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import AccessibilityButton from "./components/AccessibilityButton";
 import Login from "./pages/Login";
 import { getSocket } from "./utils/socket";
 
@@ -428,6 +429,7 @@ function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </main>
+                {showLayout && <AccessibilityButton />}
               </div>
             </div>
           </ConfirmProvider>
