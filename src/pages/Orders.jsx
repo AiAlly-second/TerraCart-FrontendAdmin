@@ -58,6 +58,61 @@ const paiseToRupees = (value) => {
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 
+const normalizeAddonId = (value) =>
+  typeof value === "string" ? value : value?.toString?.() || "";
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
+
+const toOrderAddonPayload = (addons = []) =>
+  (Array.isArray(addons) ? addons : [])
+    .map((addon) => {
+      if (!addon) return null;
+      const addonId = normalizeAddonId(addon.addonId || addon._id || addon.id);
+      const name = sanitizeAddonName(addon.name);
+      const priceValue = Number(addon.price);
+      const quantityValue = Number(addon.quantity);
+      const price = Number.isFinite(priceValue) && priceValue >= 0 ? priceValue : 0;
+      const quantity =
+        Number.isFinite(quantityValue) && quantityValue > 0
+          ? Math.floor(quantityValue)
+          : 1;
+
+      return {
+        ...(addonId ? { addonId } : {}),
+        name,
+        price,
+        quantity,
+      };
+    })
+    .filter(Boolean);
+
+const mergeOrderAddons = (existing = [], incoming = []) => {
+  const map = new Map();
+
+  [...toOrderAddonPayload(existing), ...toOrderAddonPayload(incoming)].forEach(
+    (addon) => {
+      const key =
+        addon.addonId ||
+        `${sanitizeAddonName(addon.name).toLowerCase()}-${addon.price}`;
+      const previous = map.get(key);
+      if (previous) {
+        map.set(key, {
+          ...previous,
+          quantity: (previous.quantity || 0) + (addon.quantity || 0),
+        });
+      } else {
+        map.set(key, addon);
+      }
+    },
+  );
+
+  return Array.from(map.values()).filter((addon) => addon.quantity > 0);
+};
+
 // Aggregate all items from all KOTs and selected addons, separating takeaway items
 const aggregateKotItems = (order) => {
   const kotLines = order?.kotLines || [];
@@ -93,8 +148,8 @@ const aggregateKotItems = (order) => {
   // Process Addons - always treated as dine-in unless strictly takeaway order
   selectedAddons.forEach((addon) => {
     if (!addon) return;
-    const name = `(+) ${addon.name || "Addon"}`;
-    const quantity = 1; // Addons usually have quantity 1 in the current model
+    const name = sanitizeAddonName(addon.name);
+    const quantity = Number(addon.quantity) || 1;
     // Addons price is in Rupees, no need to convert from paise
     const unitPrice = Number(addon.price || 0);
     const amount = unitPrice * quantity;
@@ -577,10 +632,14 @@ const Orders = () => {
   const [menuError, setMenuError] = useState("");
   const [menuItems, setMenuItems] = useState([]);
   const [menuCategories, setMenuCategories] = useState([]);
+  const [addonList, setAddonList] = useState([]);
+  const [addonsLoading, setAddonsLoading] = useState(false);
+  const [addonsError, setAddonsError] = useState("");
   const [currentMenuCartId, setCurrentMenuCartId] = useState(null); // Track cartId for menu loading (for retry)
   const [tables, setTables] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [draftSelections, setDraftSelections] = useState({});
+  const [draftAddonSelections, setDraftAddonSelections] = useState({});
   const [draftSearch, setDraftSearch] = useState("");
   const [draftCategory, setDraftCategory] = useState("all");
   const [selectedTableId, setSelectedTableId] = useState("");
@@ -701,6 +760,61 @@ const Orders = () => {
         return "↩️";
       default:
         return "⚪";
+    }
+  };
+
+  const getSummaryTileTheme = (status) => {
+    switch (status) {
+      case "Paid":
+        return {
+          card: "bg-emerald-50/70 border-emerald-200/80",
+          icon: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+        };
+      case "Confirmed":
+        return {
+          card: "bg-amber-50/70 border-amber-200/80",
+          icon: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+        };
+      case "Preparing":
+        return {
+          card: "bg-blue-50/70 border-blue-200/80",
+          icon: "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+        };
+      case "Ready":
+        return {
+          card: "bg-purple-50/70 border-purple-200/80",
+          icon: "bg-purple-100 text-purple-700 ring-1 ring-purple-200",
+        };
+      case "Served":
+        return {
+          card: "bg-indigo-50/70 border-indigo-200/80",
+          icon: "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200",
+        };
+      case "Finalized":
+        return {
+          card: "bg-cyan-50/70 border-cyan-200/80",
+          icon: "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200",
+        };
+      case "Pending":
+        return {
+          card: "bg-orange-50/70 border-orange-200/80",
+          icon: "bg-orange-100 text-orange-700 ring-1 ring-orange-200",
+        };
+      case "Cancelled":
+        return {
+          card: "bg-red-50/70 border-red-200/80",
+          icon: "bg-red-100 text-red-700 ring-1 ring-red-200",
+        };
+      case "Returned":
+        return {
+          card: "bg-rose-50/70 border-rose-200/80",
+          icon: "bg-rose-100 text-rose-700 ring-1 ring-rose-200",
+        };
+      default:
+        return {
+          card: "bg-slate-50/70 border-slate-200/80",
+          icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+        };
     }
   };
 
@@ -1225,16 +1339,19 @@ const Orders = () => {
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
     resetDraft();
+    setDraftAddonSelections({});
     // Ensure menu is loaded when opening Add Order modal
     if (menuItems.length === 0 && !menuLoading) {
       loadMenu();
     }
+    loadAddons(currentMenuCartId || filterCafeId || undefined);
     setIsModalOpen(true);
   };
 
   const handleEdit = (order) => {
     setCurrentOrder(order);
     setDraftSelections({});
+    setDraftAddonSelections({});
     setDraftSearch("");
     setDraftCategory("all");
     // Load menu for this order's outlet so franchise admin sees correct items (not mixed from all outlets)
@@ -1252,6 +1369,7 @@ const Orders = () => {
       );
     }
     loadMenu(orderCartId || undefined);
+    loadAddons(orderCartId || undefined);
     setIsModalOpen(true);
   };
 
@@ -1317,6 +1435,21 @@ const Orders = () => {
 
         await api.post(`/orders/${currentOrder._id}/add-items`, {
           items: itemsToAdd,
+        });
+      }
+
+      const isFinal =
+        currentOrder.status === "Paid" ||
+        currentOrder.status === "Cancelled" ||
+        currentOrder.status === "Returned";
+
+      if (!isFinal && draftAddonsArray.length > 0) {
+        const mergedAddons = mergeOrderAddons(
+          currentOrder.selectedAddons || [],
+          draftAddonsArray,
+        );
+        await api.patch(`/orders/${currentOrder._id}/addons`, {
+          selectedAddons: mergedAddons,
         });
       }
 
@@ -1453,6 +1586,8 @@ const Orders = () => {
         price: entry.price,
       }));
 
+      const selectedAddonsPayload = toOrderAddonPayload(draftAddonsArray);
+
       const payload = {
         serviceType: draftServiceType,
         tableId: draftServiceType === "TAKEAWAY" ? null : table?._id || null, // TAKEAWAY orders don't need tableId
@@ -1465,6 +1600,9 @@ const Orders = () => {
           filterCafeId ||
           (user.role === "admin" ? user._id : undefined), // Explicitly send cartId for admin-created orders
         items: itemsPayload,
+        ...(selectedAddonsPayload.length > 0 && {
+          selectedAddons: selectedAddonsPayload,
+        }),
       };
 
       const { data: created } = await api.post("/orders", payload);
@@ -1850,6 +1988,37 @@ const Orders = () => {
     }
   }, []);
 
+  const loadAddons = useCallback(async (outletCartId = null) => {
+    try {
+      setAddonsLoading(true);
+      setAddonsError("");
+      const params = outletCartId ? { cartId: outletCartId } : {};
+      const response = await api.get("/addons", { params });
+      const raw = response.data;
+      const addonsList = Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.addons)
+            ? raw.addons
+            : [];
+      const list = addonsList.filter(
+        (addon) =>
+          addon &&
+          addon.isAvailable !== false &&
+          (addon.name != null || addon._id != null || addon.id != null),
+      );
+      setAddonList(list);
+    } catch (err) {
+      setAddonList([]);
+      setAddonsError(
+        err.response?.data?.message || "Failed to load add-ons",
+      );
+    } finally {
+      setAddonsLoading(false);
+    }
+  }, []);
+
   const loadTables = useCallback(async () => {
     try {
       setTableLoading(true);
@@ -1891,7 +2060,8 @@ const Orders = () => {
   useEffect(() => {
     loadMenu();
     loadTables();
-  }, [loadMenu, loadTables]);
+    loadAddons();
+  }, [loadMenu, loadTables, loadAddons]);
 
   const getItemKey = (item) => item.id || item._id || item.name;
 
@@ -1907,8 +2077,32 @@ const Orders = () => {
     [draftSelections],
   );
 
+  const draftAddonsArray = useMemo(() => {
+    if (!draftAddonSelections || typeof draftAddonSelections !== "object") {
+      return [];
+    }
+
+    return Object.entries(draftAddonSelections)
+      .filter(([, qty]) => Number(qty) > 0)
+      .map(([id, quantity]) => {
+        const addon = addonList.find((entry) => (entry._id || entry.id) === id);
+        if (!addon) return null;
+        return {
+          id,
+          name: sanitizeAddonName(addon.name),
+          price: Number(addon.price) || 0,
+          quantity: Number(quantity) || 0,
+        };
+      })
+      .filter(Boolean);
+  }, [draftAddonSelections, addonList]);
+
   const draftTotals = useMemo(() => {
     const subtotal = draftItemsArray.reduce(
+      (sum, entry) => sum + entry.price * entry.quantity,
+      0,
+    );
+    const addonsSubtotal = draftAddonsArray.reduce(
       (sum, entry) => sum + entry.price * entry.quantity,
       0,
     );
@@ -1918,10 +2112,11 @@ const Orders = () => {
     );
     return {
       subtotal,
-      total: subtotal,
+      addonsSubtotal,
+      total: subtotal + addonsSubtotal,
       totalItems,
     };
-  }, [draftItemsArray]);
+  }, [draftItemsArray, draftAddonsArray]);
 
   const filteredMenuItems = useMemo(() => {
     const normalizedSearch = draftSearch.trim().toLowerCase();
@@ -1946,6 +2141,23 @@ const Orders = () => {
         delete next[key];
       } else {
         next[key] = { item: menuItem, quantity: updatedQuantity };
+      }
+      return next;
+    });
+  }, []);
+
+  const adjustAddonQuantity = useCallback((addon, delta) => {
+    const id = addon._id || addon.id;
+    if (!id) return;
+
+    setDraftAddonSelections((prev) => {
+      const next = { ...prev };
+      const current = next[id] || 0;
+      const updated = current + delta;
+      if (updated <= 0) {
+        delete next[id];
+      } else {
+        next[id] = updated;
       }
       return next;
     });
@@ -1980,6 +2192,7 @@ const Orders = () => {
 
   const resetDraft = useCallback(() => {
     setDraftSelections({});
+    setDraftAddonSelections({});
     setDraftSearch("");
     setDraftCategory("all");
     setSelectedTableId("");
@@ -2062,21 +2275,23 @@ const Orders = () => {
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
+          className={`rounded-2xl border p-4 sm:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
             filterStatus === "all"
-              ? "border-blue-500 shadow-md"
-              : "border-gray-200"
+              ? "ring-2 ring-[#e0662f] shadow-md border-[#e8c3ab]"
+              : "shadow-sm border-[#ead7ca]"
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl font-bold text-gray-900">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-3xl font-bold tracking-tight text-[#3f291b]">
               {orders.filter((o) => o.serviceType === "DINE_IN").length}
             </div>
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-xl">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200">
               📦
             </div>
           </div>
-          <div className="text-sm text-gray-600 font-medium">All Dine-In</div>
+          <div className="text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide">
+            All Dine-In
+          </div>
         </button>
 
         {Object.entries(
@@ -2086,26 +2301,37 @@ const Orders = () => {
               acc[order.status] = (acc[order.status] || 0) + 1;
               return acc;
             }, {}),
-        ).map(([status, count]) => (
-          <button
-            type="button"
-            key={status}
-            onClick={() => setFilterStatus(status)}
-            className={`bg-white rounded-lg border-2 p-4 text-left transition-all hover:shadow-md ${
-              filterStatus === status
-                ? "border-blue-500 shadow-md"
-                : "border-gray-200"
-            } ${getStatusClass(status)}`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl font-bold text-gray-900">{count}</div>
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-xl">
-                {getStatusIcon(status)}
+        ).map(([status, count]) => {
+          const theme = getSummaryTileTheme(status);
+          return (
+            <button
+              type="button"
+              key={status}
+              onClick={() => setFilterStatus(status)}
+              className={`rounded-2xl border p-4 sm:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+                filterStatus === status
+                  ? "ring-2 ring-[#e0662f] shadow-md"
+                  : "shadow-sm"
+              } ${theme.card}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-3xl font-bold tracking-tight text-[#3f291b]">
+                  {count}
+                </div>
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${theme.icon}`}
+                >
+                  {getStatusIcon(status)}
+                </div>
               </div>
-            </div>
-            <div className="text-sm text-gray-600 font-medium">{status}</div>
-          </button>
-        ))}
+              <div
+                className="text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide"
+              >
+                {status}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       <div className="overflow-x-auto bg-white rounded-lg shadow-md -mx-2 sm:mx-0">
@@ -2490,6 +2716,67 @@ const Orders = () => {
                             })
                           )}
                         </div>
+
+                        <div className="mt-4">
+                          <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                            Add-ons
+                          </h4>
+                          <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y bg-gray-50/50">
+                            {addonsLoading ? (
+                              <div className="p-3 text-xs text-gray-500">
+                                Loading add-ons…
+                              </div>
+                            ) : addonsError ? (
+                              <div className="p-3 text-xs text-red-600">
+                                {addonsError}
+                              </div>
+                            ) : addonList.length === 0 ? (
+                              <div className="p-3 text-xs text-gray-500">
+                                No add-ons available.
+                              </div>
+                            ) : (
+                              addonList.map((addon) => {
+                                const id = addon._id || addon.id;
+                                const quantity = draftAddonSelections[id] || 0;
+                                return (
+                                  <div
+                                    key={id}
+                                    className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
+                                  >
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-800">
+                                        {sanitizeAddonName(addon.name)}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        ₹{formatMoney(addon.price || 0)}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => adjustAddonQuantity(addon, -1)}
+                                        disabled={quantity === 0}
+                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      >
+                                        -
+                                      </button>
+                                      <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                        {quantity}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => adjustAddonQuantity(addon, 1)}
+                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <div className="space-y-3 sm:space-y-4">
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4">
@@ -2504,7 +2791,8 @@ const Orders = () => {
                                 : "Dine-In"}
                             </span>
                           </div>
-                          {draftItemsArray.length === 0 ? (
+                          {draftItemsArray.length === 0 &&
+                          draftAddonsArray.length === 0 ? (
                             <p className="text-sm text-gray-500">
                               No items selected yet. Use the menu on the left to
                               build the order.
@@ -2512,6 +2800,19 @@ const Orders = () => {
                           ) : (
                             <div className="space-y-2 text-sm text-gray-700">
                               {draftItemsArray.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="flex justify-between items-center"
+                                >
+                                  <span>
+                                    {entry.name} × {entry.quantity}
+                                  </span>
+                                  <span>
+                                    ₹{formatMoney(entry.price * entry.quantity)}
+                                  </span>
+                                </div>
+                              ))}
+                              {draftAddonsArray.map((entry) => (
                                 <div
                                   key={entry.id}
                                   className="flex justify-between items-center"
@@ -2535,6 +2836,12 @@ const Orders = () => {
                               <span>Subtotal</span>
                               <span>₹{formatMoney(draftTotals.subtotal)}</span>
                             </div>
+                            {draftTotals.addonsSubtotal > 0 && (
+                              <div className="flex justify-between">
+                                <span>Add-ons</span>
+                                <span>₹{formatMoney(draftTotals.addonsSubtotal)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between font-semibold text-gray-800 pt-2 border-t border-gray-200">
                               <span>Total</span>
                               <span>₹{formatMoney(draftTotals.total)}</span>
@@ -3296,6 +3603,73 @@ const Orders = () => {
                               })
                             )}
                           </div>
+
+                          <div className="mt-4">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                              Add-ons
+                            </h4>
+                            <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y bg-gray-50/50">
+                              {addonsLoading ? (
+                                <div className="p-3 text-xs text-gray-500">
+                                  Loading add-ons…
+                                </div>
+                              ) : addonsError ? (
+                                <div className="p-3 text-xs text-red-600">
+                                  {addonsError}
+                                </div>
+                              ) : addonList.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-500">
+                                  No add-ons available.
+                                </div>
+                              ) : (
+                                addonList.map((addon) => {
+                                  const id = addon._id || addon.id;
+                                  const quantity = draftAddonSelections[id] || 0;
+                                  const isOrderFinal =
+                                    currentOrder?.status === "Paid" ||
+                                    currentOrder?.status === "Cancelled" ||
+                                    currentOrder?.status === "Returned";
+
+                                  return (
+                                    <div
+                                      key={id}
+                                      className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
+                                    >
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-800">
+                                          {sanitizeAddonName(addon.name)}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          ₹{formatMoney(addon.price || 0)}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => adjustAddonQuantity(addon, -1)}
+                                          disabled={quantity === 0 || isOrderFinal}
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-8 text-center text-sm font-semibold text-gray-700">
+                                          {quantity}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => adjustAddonQuantity(addon, 1)}
+                                          disabled={isOrderFinal}
+                                          className="w-8 h-8 flex items-center justify-center rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <div className="space-y-3 sm:space-y-4">
                           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4">
@@ -3310,7 +3684,8 @@ const Orders = () => {
                                 {currentOrder?.status.toLowerCase()} orders.
                                 Items can only be added to unpaid orders.
                               </p>
-                            ) : draftItemsArray.length === 0 ? (
+                            ) : draftItemsArray.length === 0 &&
+                              draftAddonsArray.length === 0 ? (
                               <p className="text-xs sm:text-sm text-gray-500">
                                 No new items selected. Select items from the
                                 menu to add them to this order.
@@ -3334,6 +3709,19 @@ const Orders = () => {
                                       </span>
                                     </div>
                                   ))}
+                                  {draftAddonsArray.map((entry) => (
+                                    <div
+                                      key={entry.id}
+                                      className="flex justify-between items-center gap-2"
+                                    >
+                                      <span className="truncate min-w-0 flex-1">
+                                        {entry.name} × {entry.quantity}
+                                      </span>
+                                      <span className="whitespace-nowrap flex-shrink-0">
+                                        ₹{formatMoney(entry.price * entry.quantity)}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
                                 <div className="mt-3 sm:mt-4 space-y-1 text-xs sm:text-sm text-gray-600 border-t border-gray-300 pt-2 sm:pt-3">
                                   <div className="flex justify-between">
@@ -3342,6 +3730,14 @@ const Orders = () => {
                                       ₹{formatMoney(draftTotals.subtotal)}
                                     </span>
                                   </div>
+                                  {draftTotals.addonsSubtotal > 0 && (
+                                    <div className="flex justify-between">
+                                      <span>Add-ons</span>
+                                      <span>
+                                        ₹{formatMoney(draftTotals.addonsSubtotal)}
+                                      </span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between font-semibold text-gray-800 pt-1.5 sm:pt-2 border-t border-gray-200">
                                     <span>Total</span>
                                     <span>

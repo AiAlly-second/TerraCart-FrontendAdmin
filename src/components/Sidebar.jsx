@@ -139,7 +139,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/employees", icon: "👥", label: "Employees" },
         { path: "/attendance", icon: "⏰", label: "Attendance" },
         { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
-        { path: "/addons", icon: "➕", label: "Global Add-ons" },
       ];
       if (isCostingEnabled) {
         items.push({ path: "/costing-v2", icon: "🧮", label: "Finances" });

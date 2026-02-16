@@ -1,32 +1,34 @@
 import React, { useEffect, useRef, useState } from "react";
 import { FaWheelchair } from "react-icons/fa";
 
-const STORAGE_KEY = "admin-accessibility-preferences-v2";
+const STORAGE_KEY = "admin-accessibility-preferences-v3";
+const LEGACY_STORAGE_KEY = "admin-accessibility-preferences-v2";
 const STYLE_ID = "admin-accessibility-styles";
-const NORMAL_CONTRAST = "normal";
-const LIGHT_CONTRAST = "light";
 const DEFAULT_FONT_SIZE = 100;
 
 const AccessibilityButton = () => {
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
-  const [contrast, setContrast] = useState(NORMAL_CONTRAST);
   const [dyslexiaFont, setDyslexiaFont] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef(null);
   const buttonRef = useRef(null);
   const hasAccessibilityOverrides =
-    fontSize !== DEFAULT_FONT_SIZE ||
-    contrast !== NORMAL_CONTRAST ||
-    dyslexiaFont;
+    fontSize !== DEFAULT_FONT_SIZE || dyslexiaFont;
 
   useEffect(() => {
+    try {
+      // Drop older persisted values that could keep an unintended zoomed view.
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      // Ignore storage access errors.
+    }
+
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return;
 
     try {
       const parsed = JSON.parse(saved);
       setFontSize(parsed?.fontSize ?? DEFAULT_FONT_SIZE);
-      setContrast(parsed?.contrast ?? NORMAL_CONTRAST);
       setDyslexiaFont(parsed?.dyslexiaFont ?? false);
     } catch {
       // Ignore invalid saved data
@@ -35,7 +37,7 @@ const AccessibilityButton = () => {
 
   useEffect(() => {
     const root = document.documentElement;
-    document.body.classList.toggle("light-contrast", contrast === LIGHT_CONTRAST);
+    document.body.classList.remove("light-contrast");
     document.body.classList.toggle("dyslexia-font", dyslexiaFont);
 
     if (fontSize !== DEFAULT_FONT_SIZE) {
@@ -47,57 +49,22 @@ const AccessibilityButton = () => {
     if (hasAccessibilityOverrides) {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ fontSize, contrast, dyslexiaFont })
+        JSON.stringify({ fontSize, dyslexiaFont })
       );
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
-  }, [contrast, dyslexiaFont, fontSize, hasAccessibilityOverrides]);
+  }, [dyslexiaFont, fontSize, hasAccessibilityOverrides]);
 
   useEffect(() => {
     document.getElementById(STYLE_ID)?.remove();
-    if (
-      contrast !== LIGHT_CONTRAST &&
-      !dyslexiaFont
-    ) {
+    if (!dyslexiaFont) {
       return undefined;
     }
 
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      body.light-contrast {
-        background: #ffffff !important;
-        color: #000000 !important;
-      }
-      body.light-contrast *:not(.accessibility-tools *) {
-        color: #000000 !important;
-        border-color: #000000 !important;
-        text-shadow: none !important;
-        box-shadow: none !important;
-      }
-      body.light-contrast a:not(.accessibility-tools a) {
-        color: #0033cc !important;
-        text-decoration: underline !important;
-      }
-      body.light-contrast button:not(.accessibility-tools button):not([aria-disabled="true"]),
-      body.light-contrast [role="button"]:not(.accessibility-tools [role="button"]) {
-        background: #000000 !important;
-        color: #ffffff !important;
-        border: 2px solid #000000 !important;
-      }
-      body.light-contrast button:disabled:not(.accessibility-tools button) {
-        background: #666666 !important;
-        color: #ffffff !important;
-        border: 2px solid #666666 !important;
-      }
-      body.light-contrast input:not(.accessibility-tools input),
-      body.light-contrast select:not(.accessibility-tools select),
-      body.light-contrast textarea:not(.accessibility-tools textarea) {
-        background: #ffffff !important;
-        color: #000000 !important;
-        border: 2px solid #000000 !important;
-      }
       body.dyslexia-font *:not(.accessibility-tools *) {
         font-family: "Comic Sans MS", "Arial", sans-serif !important;
         letter-spacing: 0.05em !important;
@@ -111,7 +78,7 @@ const AccessibilityButton = () => {
     return () => {
       document.getElementById(STYLE_ID)?.remove();
     };
-  }, [contrast, dyslexiaFont]);
+  }, [dyslexiaFont]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -158,15 +125,8 @@ const AccessibilityButton = () => {
     if (canDecrease) setFontSize((value) => value - 10);
   };
 
-  const toggleContrast = () => {
-    setContrast((value) =>
-      value === NORMAL_CONTRAST ? LIGHT_CONTRAST : NORMAL_CONTRAST
-    );
-  };
-
   const resetAccessibility = () => {
     setFontSize(DEFAULT_FONT_SIZE);
-    setContrast(NORMAL_CONTRAST);
     setDyslexiaFont(false);
     localStorage.removeItem(STORAGE_KEY);
   };
@@ -177,7 +137,7 @@ const AccessibilityButton = () => {
       style={{
         position: "fixed",
         bottom: "16px",
-        left: "16px",
+        right: "16px",
         zIndex: 10000,
       }}
     >
@@ -216,7 +176,7 @@ const AccessibilityButton = () => {
           style={{
             position: "absolute",
             bottom: 56,
-            left: 0,
+            right: 0,
             background: "rgba(255,255,255,0.98)",
             borderRadius: 12,
             padding: 10,
@@ -290,34 +250,6 @@ const AccessibilityButton = () => {
                 -
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={toggleContrast}
-              aria-pressed={contrast !== NORMAL_CONTRAST}
-              title={`Contrast mode: ${contrast}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                flexDirection: "column",
-                gap: 4,
-                padding: "8px 12px",
-                border: "none",
-                borderRadius: 8,
-                background: contrast !== NORMAL_CONTRAST ? "#007bff" : "#f8f9fa",
-                color: contrast !== NORMAL_CONTRAST ? "white" : "#333",
-                cursor: "pointer",
-                fontSize: 12,
-                textAlign: "center",
-                minWidth: 70,
-              }}
-            >
-              <span style={{ fontSize: 16, fontWeight: "bold" }}>C</span>
-              <span style={{ fontWeight: 500, fontSize: 10 }}>Contrast</span>
-              <span style={{ fontSize: 10, opacity: 0.8 }}>
-                {contrast === LIGHT_CONTRAST ? "L" : "N"}
-              </span>
-            </button>
 
             <button
               type="button"

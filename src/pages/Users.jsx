@@ -24,6 +24,10 @@ const Users = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  const [bulkSelectionUpdating, setBulkSelectionUpdating] = useState("");
+  const [bulkUpdating, setBulkUpdating] = useState("");
+  const [bulkPersona, setBulkPersona] = useState("franchise_admin");
   const [filterStatus, setFilterStatus] = useState("all"); // "all", "active", "inactive"
   const [viewMode, setViewMode] = useState("list"); // "list", "tile"
   const [formData, setFormData] = useState({
@@ -39,6 +43,16 @@ const Users = () => {
   });
 
   const isSuperAdmin = currentUser?.role === "super_admin";
+  const ACCESS_MANAGED_ROLES = new Set([
+    "franchise_admin",
+    "admin",
+    "cart_admin",
+    "employee",
+    "manager",
+    "captain",
+    "waiter",
+    "cook",
+  ]);
 
   // Get allowed roles based on current user's hierarchy
   // Note: manager, cook, waiter, and captain roles cannot be created through this form
@@ -81,7 +95,12 @@ const Users = () => {
     try {
       setLoading(true);
       const response = await api.get("/users");
-      setUsers(response.data || []);
+      // Administrative Users page should not display super admin accounts.
+      const nonSuperAdminUsers = (response.data || []).filter(
+        (u) => u?.role !== "super_admin"
+      );
+      setUsers(nonSuperAdminUsers);
+      setSelectedUserIds(new Set());
     } catch (error) {
       console.error("Error fetching users:", error);
       alert("Failed to fetch users");
@@ -102,52 +121,235 @@ const Users = () => {
     }
   };
 
-  const handleToggleStatus = async (user) => {
-    // Determine which endpoint to use based on role
-    let endpoint = "";
-    let confirmMessage = "";
+  const canManageAccess = (user) => {
+    const role = String(user?.role || "").toLowerCase();
+    return ACCESS_MANAGED_ROLES.has(role);
+  };
 
-    const isCurrentlyActive = user.isActive !== false;
+  const isUserOwnActive = (user) => user?.isActive !== false;
+
+  const applyAccessStateToUser = async (user, nextIsActive) => {
+    if (!canManageAccess(user)) {
+      return {
+        success: false,
+        message: "Access toggle is not allowed for this role",
+      };
+    }
+
+    const ownActive = isUserOwnActive(user);
+    if (ownActive === nextIsActive) {
+      return { success: true, skipped: true };
+    }
 
     if (user.role === "franchise_admin") {
-      endpoint = `/users/${user._id}/toggle-status`;
-      confirmMessage = `Are you sure you want to ${
-        isCurrentlyActive ? "DEACTIVATE" : "ACTIVATE"
-      } this franchise?\n\n${
-        isCurrentlyActive
-          ? "⚠️ All carts under this franchise will also be deactivated."
-          : "✅ All carts under this franchise will also be activated."
-      }`;
-    } else if (user.role === "admin" || user.role === "cart_admin") {
-      endpoint = `/users/${user._id}/toggle-cafe-status`;
-      confirmMessage = `Are you sure you want to ${
-        isCurrentlyActive ? "DEACTIVATE" : "ACTIVATE"
-      } this cart?`;
-    } else {
-      // For other roles like employees, don't allow toggle
+      await api.patch(`/users/${user._id}/toggle-status`);
+      return { success: true };
+    }
+
+    if (user.role === "admin" || user.role === "cart_admin") {
+      if (nextIsActive && user.franchiseActive === false) {
+        return {
+          success: false,
+          message:
+            "Cannot activate cart access while franchise is inactive. Activate franchise first.",
+        };
+      }
+      await api.patch(`/users/${user._id}/toggle-cafe-status`);
+      return { success: true };
+    }
+
+    if (!isSuperAdmin) {
+      return {
+        success: false,
+        message: "Only Super Admin can change employee access",
+      };
+    }
+
+    await api.put(`/users/${user._id}`, { isActive: nextIsActive });
+    return { success: true };
+  };
+
+  const handleToggleStatus = async (user) => {
+    if (!canManageAccess(user)) {
       alert(
-        "Status toggle is only available for Franchise Admins and Cart Admins"
+        "Access toggle is only available for administrative and employee personas"
       );
       return;
     }
 
-    // CRITICAL: window.confirm is now async, must await it
+    const isCurrentlyActive = isUserOwnActive(user);
+    const nextIsActive = !isCurrentlyActive;
+    const roleLabel = getRoleLabel(user.role);
+
+    let confirmMessage = `Are you sure you want to ${
+      nextIsActive ? "ACTIVATE" : "DEACTIVATE"
+    } access for ${roleLabel}?`;
+
+    if (user.role === "franchise_admin") {
+      confirmMessage += `\n\n${
+        nextIsActive
+          ? "All carts under this franchise will also be activated."
+          : "All carts under this franchise will also be deactivated."
+      }`;
+    } else if (user.role === "admin" || user.role === "cart_admin") {
+      confirmMessage += "\n\nThis will change cart panel access.";
+    } else {
+      confirmMessage += "\n\nThis will change staff panel access.";
+    }
+
     const confirmed = await window.confirm(confirmMessage);
     if (!confirmed) return;
 
     try {
       setTogglingStatus(user._id);
-      const response = await api.patch(endpoint);
-
-      if (response.data.success) {
-        alert(response.data.message || "Status updated successfully");
-        fetchUsers(); // Refresh the list
+      const result = await applyAccessStateToUser(user, nextIsActive);
+      if (!result.success) {
+        alert(result.message || "Failed to update access");
+        return;
       }
+      alert(`Access ${nextIsActive ? "activated" : "deactivated"} successfully`);
+      fetchUsers();
     } catch (error) {
       console.error("Error toggling status:", error);
       alert(error.response?.data?.message || "Failed to toggle status");
     } finally {
       setTogglingStatus(null);
+    }
+  };
+
+  const toggleSelectUser = (userId) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const clearSelectedUsers = () => {
+    setSelectedUserIds(new Set());
+  };
+
+  const handleBulkSelectedAccess = async (nextIsActive) => {
+    const selectedTargets = users.filter(
+      (u) => selectedUserIds.has(u._id) && canManageAccess(u)
+    );
+    if (selectedTargets.length === 0) {
+      alert("Please select at least one user");
+      return;
+    }
+
+    const confirmed = await confirm(
+      `Are you sure you want to ${
+        nextIsActive ? "ACTIVATE" : "DEACTIVATE"
+      } access for ${selectedTargets.length} selected user(s)?`,
+      {
+        title: `${nextIsActive ? "Activate" : "Deactivate"} Selected Users`,
+        warningMessage: "This will update access for all selected users.",
+        confirmText: nextIsActive ? "Activate Selected" : "Deactivate Selected",
+        cancelText: "Cancel",
+        danger: !nextIsActive,
+      }
+    );
+    if (!confirmed) return;
+
+    try {
+      setBulkSelectionUpdating(nextIsActive ? "activate" : "deactivate");
+      let updated = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const user of selectedTargets) {
+        try {
+          const result = await applyAccessStateToUser(user, nextIsActive);
+          if (result.success) {
+            if (result.skipped) {
+              skipped += 1;
+            } else {
+              updated += 1;
+            }
+          } else {
+            failed += 1;
+          }
+        } catch (_err) {
+          failed += 1;
+        }
+      }
+
+      alert(
+        `Bulk access update completed.\n\nUpdated: ${updated}\nSkipped: ${skipped}\nFailed: ${failed}`
+      );
+      clearSelectedUsers();
+      fetchUsers();
+    } catch (error) {
+      console.error("Error updating selected users:", error);
+      alert(error.response?.data?.message || "Failed to update selected users");
+    } finally {
+      setBulkSelectionUpdating("");
+    }
+  };
+
+  const handleBulkAdministrativeStatus = async (nextIsActive) => {
+    if (!isSuperAdmin) return;
+
+    const personaLabel =
+      bulkPersona === "franchise_admin" ? "Franchise Admins" : "Cart Admins";
+    const targetCount = users.filter((u) =>
+      bulkPersona === "franchise_admin"
+        ? u.role === "franchise_admin"
+        : u.role === "admin" || u.role === "cart_admin"
+    ).length;
+
+    if (targetCount === 0) {
+      alert(`No ${personaLabel.toLowerCase()} found.`);
+      return;
+    }
+
+    const confirmed = await confirm(
+      `Are you sure you want to ${
+        nextIsActive ? "ACTIVATE" : "DEACTIVATE"
+      } all ${personaLabel}?\n\nAffected users: ${targetCount}`,
+      {
+        title: `${nextIsActive ? "Activate" : "Deactivate"} ${personaLabel}`,
+        warningMessage: `This will update all ${personaLabel.toLowerCase()} at once.`,
+        confirmText: nextIsActive ? "Activate All" : "Deactivate All",
+        cancelText: "Cancel",
+        danger: !nextIsActive,
+      }
+    );
+    if (!confirmed) return;
+
+    try {
+      setBulkUpdating(nextIsActive ? "activate" : "deactivate");
+      const response = await api.patch("/users/bulk-status", {
+        persona: bulkPersona,
+        isActive: nextIsActive,
+      });
+
+      const data = response?.data?.data || {};
+      const detailLines =
+        bulkPersona === "franchise_admin"
+          ? `Franchises updated: ${data.updatedFranchises || 0}\nCarts updated: ${
+              data.updatedCarts || 0
+            }`
+          : `Carts updated: ${data.updatedCarts || 0}${
+              data.skippedCarts
+                ? `\nSkipped (inactive franchise): ${data.skippedCarts}`
+                : ""
+            }`;
+
+      alert(
+        `${response?.data?.message || "Bulk status updated successfully"}\n\n${detailLines}`
+      );
+      fetchUsers();
+    } catch (error) {
+      console.error("Error updating bulk status:", error);
+      alert(error.response?.data?.message || "Failed to update bulk status");
+    } finally {
+      setBulkUpdating("");
     }
   };
 
@@ -316,6 +518,26 @@ const Users = () => {
 
     return matchesSearch && matchesStatus;
   });
+  const selectableFilteredUsers = filteredUsers.filter((user) =>
+    canManageAccess(user)
+  );
+  const selectedCount = selectedUserIds.size;
+  const allVisibleSelected =
+    selectableFilteredUsers.length > 0 &&
+    selectableFilteredUsers.every((user) => selectedUserIds.has(user._id));
+  const anyVisibleSelectable = selectableFilteredUsers.length > 0;
+
+  const toggleSelectAllVisible = () => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        selectableFilteredUsers.forEach((user) => next.delete(user._id));
+      } else {
+        selectableFilteredUsers.forEach((user) => next.add(user._id));
+      }
+      return next;
+    });
+  };
 
   // Calculate stats
   const totalUsers = users.length;
@@ -329,6 +551,11 @@ const Users = () => {
     return user.isActive !== false;
   }).length;
   const inactiveUsers = totalUsers - activeUsers;
+  const bulkTargetCount = users.filter((u) =>
+    bulkPersona === "franchise_admin"
+      ? u.role === "franchise_admin"
+      : u.role === "admin" || u.role === "cart_admin"
+  ).length;
 
   const roleColors = {
     super_admin: "bg-purple-100 text-purple-800",
@@ -527,6 +754,63 @@ const Users = () => {
           </div>
         </div>
 
+        <div className="mb-3 sm:mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 sm:gap-3">
+            <label className="inline-flex items-center gap-2 text-xs sm:text-sm text-blue-900">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                disabled={!anyVisibleSelectable || !!bulkSelectionUpdating}
+                onChange={toggleSelectAllVisible}
+                className="w-4 h-4"
+              />
+              Select all visible
+            </label>
+            <span className="text-xs sm:text-sm text-blue-800">
+              Selected: {selectedCount}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBulkSelectedAccess(true)}
+                disabled={selectedCount === 0 || !!bulkSelectionUpdating}
+                className={`px-3 py-1.5 text-xs sm:text-sm rounded-md text-white transition-colors ${
+                  selectedCount === 0 || bulkSelectionUpdating
+                    ? "bg-green-300 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
+                }`}
+              >
+                {bulkSelectionUpdating === "activate"
+                  ? "Activating..."
+                  : "Activate Selected"}
+              </button>
+              <button
+                onClick={() => handleBulkSelectedAccess(false)}
+                disabled={selectedCount === 0 || !!bulkSelectionUpdating}
+                className={`px-3 py-1.5 text-xs sm:text-sm rounded-md text-white transition-colors ${
+                  selectedCount === 0 || bulkSelectionUpdating
+                    ? "bg-red-300 cursor-not-allowed"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {bulkSelectionUpdating === "deactivate"
+                  ? "Deactivating..."
+                  : "Deactivate Selected"}
+              </button>
+              <button
+                onClick={clearSelectedUsers}
+                disabled={selectedCount === 0 || !!bulkSelectionUpdating}
+                className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-colors ${
+                  selectedCount === 0 || bulkSelectionUpdating
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
+                }`}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-12">
             <FaSpinner className="animate-spin text-gray-400 text-3xl" />
@@ -548,6 +832,8 @@ const Users = () => {
               } else {
                 isEffectivelyActive = user.isActive !== false;
               }
+              const isOwnActive = isUserOwnActive(user);
+              const isSelected = selectedUserIds.has(user._id);
 
               return (
                 <div
@@ -586,6 +872,19 @@ const Users = () => {
                   </div>
 
                   <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    {canManageAccess(user) && (
+                      <label
+                        className="px-1.5 py-1.5 text-xs rounded border border-gray-300 bg-white cursor-pointer"
+                        title="Select user"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectUser(user._id)}
+                          className="w-3.5 h-3.5"
+                        />
+                      </label>
+                    )}
                     <button
                       onClick={() => handleEdit(user)}
                       className="flex-1 px-2 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -594,22 +893,20 @@ const Users = () => {
                       <FaEdit size={12} className="inline mr-1" />
                       Edit
                     </button>
-                    {(user.role === "franchise_admin" ||
-                      user.role === "admin" ||
-                      user.role === "cart_admin") && (
+                    {canManageAccess(user) && (
                       <button
                         onClick={() => handleToggleStatus(user)}
                         disabled={togglingStatus === user._id}
                         className={`px-2 py-1.5 text-xs rounded transition-colors ${
-                          isEffectivelyActive
+                          isOwnActive
                             ? "text-green-600 hover:bg-green-50"
                             : "text-gray-400 hover:bg-gray-100"
                         }`}
-                        title={isEffectivelyActive ? "Deactivate" : "Activate"}
+                        title={isOwnActive ? "Deactivate Access" : "Activate Access"}
                       >
                         {togglingStatus === user._id ? (
                           <FaSpinner className="animate-spin" size={12} />
-                        ) : isEffectivelyActive ? (
+                        ) : isOwnActive ? (
                           <FaToggleOn size={14} />
                         ) : (
                           <FaToggleOff size={14} />
@@ -636,6 +933,16 @@ const Users = () => {
               <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm w-10">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        disabled={!anyVisibleSelectable || !!bulkSelectionUpdating}
+                        onChange={toggleSelectAllVisible}
+                        className="w-4 h-4"
+                        title="Select all visible users"
+                      />
+                    </th>
                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm">
                       Name
                     </th>
@@ -657,112 +964,99 @@ const Users = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr
-                      key={user._id}
-                      className="border-b border-gray-100 hover:bg-gray-50"
-                    >
-                      <td className="py-2 sm:py-3 px-2 sm:px-4">
-                        <div>
-                          <p className="font-medium text-xs sm:text-sm">
-                            {user.name}
-                          </p>
-                          {user.cartName && (
-                            <p className="text-[10px] sm:text-xs text-gray-500">
-                              Cart: {user.cartName}
+                  {filteredUsers.map((user) => {
+                    const isOwnActive = isUserOwnActive(user);
+                    const isSelected = selectedUserIds.has(user._id);
+
+                    return (
+                      <tr
+                        key={user._id}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          {canManageAccess(user) && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectUser(user._id)}
+                              className="w-4 h-4"
+                              title="Select user"
+                            />
+                          )}
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          <div>
+                            <p className="font-medium text-xs sm:text-sm">
+                              {user.name}
                             </p>
-                          )}
-                          {user.cafeName && !user.cartName && (
-                            <p className="text-[10px] sm:text-xs text-gray-500">
-                              Cart: {user.cafeName}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-600 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">
-                        {user.email}
-                      </td>
-                      <td className="py-2 sm:py-3 px-2 sm:px-4">
-                        <span
-                          className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
-                            roleColors[user.role] || roleColors.customer
-                          }`}
-                        >
-                          {getRoleLabel(user.role)}
-                        </span>
-                      </td>
-                      <td className="py-2 sm:py-3 px-2 sm:px-4">
-                        {getStatusBadge(user)}
-                      </td>
-                      <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-2 sm:py-3 px-2 sm:px-4">
-                        <div className="flex justify-end space-x-1 sm:space-x-2">
-                          {/* Toggle Status Button - Only for franchise_admin and admin/cart_admin roles */}
-                          {(user.role === "franchise_admin" ||
-                            user.role === "admin" ||
-                            user.role === "cart_admin") && (
-                            <button
-                              onClick={() => handleToggleStatus(user)}
-                              disabled={
-                                togglingStatus === user._id ||
-                                (user.role === "admin" &&
-                                  user.franchiseActive === false)
-                              }
-                              className={`p-2 rounded transition-colors ${
-                                (
-                                  user.effectivelyActive !== undefined
-                                    ? !user.effectivelyActive
-                                    : user.isActive === false
-                                )
-                                  ? "text-red-600 hover:bg-red-50"
-                                  : "text-green-600 hover:bg-green-50"
-                              } ${
-                                togglingStatus === user._id
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              } ${
-                                user.role === "admin" &&
-                                user.franchiseActive === false
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                              title={
-                                user.role === "admin" &&
-                                user.franchiseActive === false
-                                  ? "Cannot toggle - Franchise is inactive. Activate the franchise first."
-                                  : (
-                                      user.effectivelyActive !== undefined
-                                        ? !user.effectivelyActive
-                                        : user.isActive === false
-                                    )
-                                  ? "Click to Activate"
-                                  : "Click to Deactivate"
-                              }
-                            >
-                              {togglingStatus === user._id ? (
-                                <FaSpinner className="animate-spin text-sm sm:text-base" />
-                              ) : (
-                                  user.effectivelyActive !== undefined
-                                    ? !user.effectivelyActive
-                                    : user.isActive === false
-                                ) ? (
-                                <FaToggleOff className="text-base sm:text-xl" />
-                              ) : (
-                                <FaToggleOn className="text-base sm:text-xl" />
-                              )}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleEdit(user)}
-                            className="p-1 sm:p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit"
+                            {user.cartName && (
+                              <p className="text-[10px] sm:text-xs text-gray-500">
+                                Cart: {user.cartName}
+                              </p>
+                            )}
+                            {user.cafeName && !user.cartName && (
+                              <p className="text-[10px] sm:text-xs text-gray-500">
+                                Cart: {user.cafeName}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-600 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">
+                          {user.email}
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          <span
+                            className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
+                              roleColors[user.role] || roleColors.customer
+                            }`}
                           >
-                            <FaEdit className="text-sm sm:text-base" />
-                          </button>
-                          {/* Only hide delete for super_admin */}
-                          {user.role !== "super_admin" && (
+                            {getRoleLabel(user.role)}
+                          </span>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          {getStatusBadge(user)}
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          <div className="flex justify-end space-x-1 sm:space-x-2">
+                            {canManageAccess(user) && (
+                              <button
+                                onClick={() => handleToggleStatus(user)}
+                                disabled={togglingStatus === user._id}
+                                className={`p-2 rounded transition-colors ${
+                                  isOwnActive
+                                    ? "text-green-600 hover:bg-green-50"
+                                    : "text-red-600 hover:bg-red-50"
+                                } ${
+                                  togglingStatus === user._id
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : ""
+                                }`}
+                                title={
+                                  isOwnActive
+                                    ? "Click to Deactivate Access"
+                                    : "Click to Activate Access"
+                                }
+                              >
+                                {togglingStatus === user._id ? (
+                                  <FaSpinner className="animate-spin text-sm sm:text-base" />
+                                ) : isOwnActive ? (
+                                  <FaToggleOn className="text-base sm:text-xl" />
+                                ) : (
+                                  <FaToggleOff className="text-base sm:text-xl" />
+                                )}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleEdit(user)}
+                              className="p-1 sm:p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <FaEdit className="text-sm sm:text-base" />
+                            </button>
+                            {user.role !== "super_admin" && (
                               <button
                                 type="button"
                                 onClick={(e) => handleDelete(e, user._id)}
@@ -772,10 +1066,11 @@ const Users = () => {
                                 <FaTrash className="text-sm sm:text-base" />
                               </button>
                             )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -988,3 +1283,4 @@ const Users = () => {
 };
 
 export default Users;
+

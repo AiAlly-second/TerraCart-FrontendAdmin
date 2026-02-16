@@ -19,6 +19,12 @@ const getApiBaseUrl = () => {
 // Then prepends API base URL to relative paths
 const nodeApiBase = getApiBaseUrl();
 const normalizedApiBase = nodeApiBase.replace(/\/$/, "");
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
 
@@ -112,6 +118,9 @@ const MenuManager = () => {
     "HOT",
     "EXTREME",
   ]);
+  const [addons, setAddons] = useState([]);
+  const [addonsLoading, setAddonsLoading] = useState(false);
+  const [addonsError, setAddonsError] = useState("");
 
   const selectedCategory = useMemo(
     () => menu.find((cat) => cat._id === selectedCategoryId) || null,
@@ -168,6 +177,45 @@ const MenuManager = () => {
   useEffect(() => {
     loadMenu();
   }, []);
+
+  const loadAddons = async () => {
+    if (userRole !== "admin") return;
+    try {
+      setAddonsLoading(true);
+      setAddonsError("");
+      const response = await api.get("/addons");
+      const list = Array.isArray(response?.data?.data)
+        ? response.data.data.map((addon) => ({
+            ...addon,
+            name: sanitizeAddonName(addon?.name),
+          }))
+        : [];
+      setAddons(list);
+    } catch (err) {
+      setAddons([]);
+      setAddonsError(err.response?.data?.message || "Failed to load add-ons");
+    } finally {
+      setAddonsLoading(false);
+    }
+  };
+
+  const handleToggleAddonAvailability = async (addon) => {
+    if (!addon?._id) return;
+    try {
+      await api.put(`/addons/${addon._id}`, {
+        isAvailable: addon.isAvailable === false,
+      });
+      await loadAddons();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update add-on status");
+    }
+  };
+
+  useEffect(() => {
+    if (userRole === "admin") {
+      loadAddons();
+    }
+  }, [userRole]);
 
   const handleCategorySubmit = async (event) => {
     event.preventDefault();
@@ -397,6 +445,21 @@ const MenuManager = () => {
     }
   };
 
+  const handleToggleSpecial = async (item) => {
+    if (!item || !item._id) {
+      console.error("Cannot toggle special flag: invalid item", item);
+      return;
+    }
+    try {
+      await api.patch(`/menu/items/${item._id}`, {
+        isFeatured: !(item.isFeatured === true),
+      });
+      await loadMenu();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update special item flag");
+    }
+  };
+
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -437,6 +500,71 @@ const MenuManager = () => {
           instantly to the customer app.
         </p>
       </div>
+
+      {userRole === "admin" && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Add-ons</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Add-ons are managed by franchise admin. You can only hide or
+                show them for this cart.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadAddons}
+              className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-100"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {addonsLoading ? (
+            <div className="mt-4 text-sm text-slate-500">Loading add-ons...</div>
+          ) : addonsError ? (
+            <div className="mt-4 text-sm text-red-600">{addonsError}</div>
+          ) : addons.length === 0 ? (
+            <div className="mt-4 text-sm text-slate-500">
+              No add-ons available for this cart.
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {addons.map((addon) => (
+                <div
+                  key={addon._id}
+                  className="border border-slate-200 rounded-lg p-3 flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      {sanitizeAddonName(addon.name)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      ₹{Number(addon.price || 0).toFixed(2)}
+                    </p>
+                    {addon.description ? (
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                        {addon.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAddonAvailability(addon)}
+                    className={`text-xs px-2.5 py-1.5 rounded border ${
+                      addon.isAvailable !== false
+                        ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                        : "border-green-200 text-green-700 hover:bg-green-50"
+                    }`}
+                  >
+                    {addon.isAvailable !== false ? "Hide" : "Show"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 md:p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm">
@@ -665,6 +793,8 @@ const MenuManager = () => {
                 <p className="text-xs text-slate-500 mt-1">
                   Toggle availability to hide items temporarily. Once marked
                   unavailable, the customer app instantly prevents ordering.
+                  Mark items as Special to show them in the customer special
+                  section.
                 </p>
               </div>
             </div>
@@ -719,9 +849,11 @@ const MenuManager = () => {
                           </div>
                         )}
                         {/* Badges */}
-                        <div className="absolute top-1 left-1 flex gap-0.5">
+                        <div className="absolute top-1 left-1 flex gap-0.5 items-center flex-wrap">
                           {item.isFeatured && (
-                            <span className="text-xs">⭐</span>
+                            <span className="px-1 py-0.5 bg-purple-600 text-white text-[10px] rounded">
+                              Special
+                            </span>
                           )}
                           {!item.isAvailable && (
                             <span className="px-1 py-0.5 bg-red-500 text-white text-[10px] rounded">
@@ -790,6 +922,16 @@ const MenuManager = () => {
                               }`}
                             >
                               {item?.isAvailable !== false ? "Hide" : "Show"}
+                            </button>
+                            <button
+                              onClick={() => item && handleToggleSpecial(item)}
+                              className={`flex-1 text-[10px] px-1 py-1 rounded border ${
+                                item?.isFeatured
+                                  ? "border-purple-200 text-purple-700 bg-purple-50"
+                                  : "border-slate-200 text-slate-600"
+                              }`}
+                            >
+                              {item?.isFeatured ? "Special On" : "Special Off"}
                             </button>
                             <button
                               onClick={() => item && handleEditItem(item)}
@@ -1102,7 +1244,7 @@ const MenuManager = () => {
                           }))
                         }
                       />
-                      Feature in highlights
+                      Show as Special item (Customer side)
                     </label>
                   </div>
 
@@ -1142,3 +1284,4 @@ const MenuManager = () => {
 };
 
 export default MenuManager;
+

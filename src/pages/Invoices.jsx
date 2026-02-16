@@ -8,6 +8,12 @@ import React, {
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import api from "../utils/api";
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
 
 const aggregateKotItems = (order) => {
   if (!order) return [];
@@ -49,13 +55,14 @@ const aggregateKotItems = (order) => {
   // Process Selected Add-ons
   const addons = order.selectedAddons || [];
   addons.forEach(addon => {
-     const name = `(+) ${addon.name}`;
-     const quantity = 1; // Assuming 1 per entry in array
+     const addonName = sanitizeAddonName(addon.name);
+     const addonKey = `addon:${addon.addonId || addon._id || addon.id || `${addonName}-${addon.price || 0}`}`;
+     const quantity = Number(addon.quantity) || 1;
      const unitPrice = Number(addon.price) || 0; // Addons are in Rupees
      
-     if (!map.has(name)) {
-       map.set(name, {
-         name,
+     if (!map.has(addonKey)) {
+       map.set(addonKey, {
+         name: addonName,
          unitPrice,
          quantity: 0,
          returnedQuantity: 0,
@@ -63,7 +70,7 @@ const aggregateKotItems = (order) => {
          amount: 0,
        });
      }
-     const entry = map.get(name);
+     const entry = map.get(addonKey);
      entry.quantity += quantity;
      entry.amount += unitPrice * quantity;
   });
@@ -771,4 +778,3 @@ const Invoices = () => {
 };
 
 export default Invoices;
-

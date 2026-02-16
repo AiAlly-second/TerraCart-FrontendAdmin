@@ -17,6 +17,12 @@ import api from "../utils/api";
 import { printKOT } from "../utils/kotPrinter";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
 
 const buildInvoiceId = (order) => {
   if (!order) return "";
@@ -41,8 +47,8 @@ const paiseToRupees = (value) => {
   return num / 100;
 };
 
-// Aggregate all items from all KOTs
-const aggregateKotItems = (kotLines = []) => {
+// Aggregate all items from all KOTs and selected add-ons
+const aggregateKotItems = (kotLines = [], selectedAddons = []) => {
   const map = new Map();
   (kotLines || []).forEach((kot) => {
     (kot?.items || []).forEach((item) => {
@@ -66,6 +72,28 @@ const aggregateKotItems = (kotLines = []) => {
       }
     });
   });
+
+  (selectedAddons || []).forEach((addon) => {
+    if (!addon) return;
+    const addonName = sanitizeAddonName(addon.name);
+    const addonKey = `addon:${normalizeId(
+      addon.addonId || addon._id || addon.id || `${addonName}-${addon.price || 0}`,
+    )}`;
+    const quantity = Number(addon.quantity) || 1;
+    const unitPrice = Number(addon.price) || 0; // Add-ons are in rupees
+    if (!map.has(addonKey)) {
+      map.set(addonKey, {
+        name: addonName,
+        unitPrice,
+        quantity: 0,
+        amount: 0,
+      });
+    }
+    const entry = map.get(addonKey);
+    entry.quantity += quantity;
+    entry.amount += unitPrice * quantity;
+  });
+
   return Array.from(map.values());
 };
 
@@ -108,7 +136,10 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   if (!order) return "";
   const invoiceNumber = buildInvoiceId(order);
   const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
-  const aggregatedItems = aggregateKotItems(kotLines);
+  const selectedAddons = Array.isArray(order.selectedAddons)
+    ? order.selectedAddons
+    : [];
+  const aggregatedItems = aggregateKotItems(kotLines, selectedAddons);
   const totals = computeKotTotals(kotLines, aggregatedItems, order);
 
   // Get cart address (prefer address, fallback to location)
@@ -701,7 +732,12 @@ const TakeawayOrders = () => {
           : Array.isArray(raw?.addons)
             ? raw.addons
             : [];
-      const list = addonsList.filter((a) => a && (a.name != null || a._id != null || a.id != null));
+      const list = addonsList.filter(
+        (a) =>
+          a &&
+          a.isAvailable !== false &&
+          (a.name != null || a._id != null || a.id != null),
+      );
       setAddonList(list);
     } catch (err) {
       if (import.meta.env.DEV) {
@@ -947,7 +983,12 @@ const TakeawayOrders = () => {
         const addon = addonList.find((a) => (a._id || a.id) === id);
         if (!addon) return null;
         const price = Number(addon.price) || 0;
-        return { id, name: addon.name || "Add-on", price, quantity: Number(quantity) || 0 };
+        return {
+          id,
+          name: sanitizeAddonName(addon.name),
+          price,
+          quantity: Number(quantity) || 0,
+        };
       })
       .filter(Boolean);
   }, [draftAddonSelections, addonList]);
@@ -1158,7 +1199,9 @@ const TakeawayOrders = () => {
           quantity: a.quantity,
         }));
         const mergedAddons = [...existingAddons, ...newAddons];
-        await api.patch(`/orders/${currentOrder._id}`, { selectedAddons: mergedAddons });
+        await api.patch(`/orders/${currentOrder._id}/addons`, {
+          selectedAddons: mergedAddons,
+        });
       }
 
       // Refresh orders list by fetching again
@@ -1367,6 +1410,61 @@ const TakeawayOrders = () => {
     }
   };
 
+  const getTakeawayTileTheme = (status) => {
+    switch (status) {
+      case "Paid":
+      case "Completed":
+        return {
+          card: "bg-emerald-50/70 border-emerald-200/80",
+          icon: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+        };
+      case "Confirmed":
+      case "Accepted":
+        return {
+          card: "bg-amber-50/70 border-amber-200/80",
+          icon: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+        };
+      case "Preparing":
+      case "Being Prepared":
+      case "BeingPrepared":
+        return {
+          card: "bg-blue-50/70 border-blue-200/80",
+          icon: "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+        };
+      case "Ready":
+      case "Served":
+        return {
+          card: "bg-indigo-50/70 border-indigo-200/80",
+          icon: "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200",
+        };
+      case "Finalized":
+        return {
+          card: "bg-cyan-50/70 border-cyan-200/80",
+          icon: "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200",
+        };
+      case "Pending":
+        return {
+          card: "bg-orange-50/70 border-orange-200/80",
+          icon: "bg-orange-100 text-orange-700 ring-1 ring-orange-200",
+        };
+      case "Cancelled":
+        return {
+          card: "bg-red-50/70 border-red-200/80",
+          icon: "bg-red-100 text-red-700 ring-1 ring-red-200",
+        };
+      case "Returned":
+        return {
+          card: "bg-rose-50/70 border-rose-200/80",
+          icon: "bg-rose-100 text-rose-700 ring-1 ring-rose-200",
+        };
+      default:
+        return {
+          card: "bg-slate-50/70 border-slate-200/80",
+          icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+        };
+    }
+  };
+
   // Details open by default; toggle only stores explicitly collapsed (false) vs expanded (true)
   const toggleExpand = (id) => {
     setExpanded((prev) => ({ ...prev, [id]: prev[id] === false }));
@@ -1559,24 +1657,26 @@ const TakeawayOrders = () => {
       </div>
 
       {/* Status summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-            filterStatus === "all" ? "ring-2 ring-blue-400" : ""
+          className={`rounded-2xl border p-3 sm:p-4 md:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+            filterStatus === "all"
+              ? "ring-2 ring-[#e0662f] shadow-md border-[#e8c3ab] bg-orange-50/70"
+              : "shadow-sm border-[#ead7ca] bg-white"
           }`}
         >
-          <div className="flex items-center justify-between gap-1 sm:gap-2">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#3f291b] leading-none">
                 {statusSummary.total}
               </div>
-              <div className="text-[10px] sm:text-xs md:text-sm truncate">
+              <div className="mt-2 text-xs sm:text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide truncate">
                 All Takeaway
               </div>
             </div>
-            <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200 flex-shrink-0">
               🥡
             </div>
           </div>
@@ -1598,46 +1698,25 @@ const TakeawayOrders = () => {
               type="button"
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-                filterStatus === status ? "ring-2 ring-blue-400" : ""
-              }`}
+              className={`rounded-2xl border p-3 sm:p-4 md:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+                filterStatus === status
+                  ? "ring-2 ring-[#e0662f] shadow-md"
+                  : "shadow-sm"
+              } ${getTakeawayTileTheme(status).card}`}
             >
-              <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
+                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#3f291b] leading-none">
                     {String(countToShow).padStart(2, "0")}
                   </div>
-                  <div className="text-[10px] sm:text-xs md:text-sm truncate">
+                  <div className="mt-2 text-xs sm:text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide truncate">
                     {status}
                   </div>
                 </div>
-                <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
-                  {status === "Pending"
-                    ? "⏳"
-                    : status === "Accepted"
-                      ? "✅"
-                      : status === "Being Prepared" ||
-                          status === "BeingPrepared"
-                        ? "🔥"
-                        : status === "Completed"
-                          ? "📦"
-                          : status === "Confirmed"
-                            ? "👨‍🍳"
-                            : status === "Preparing"
-                              ? "🔥"
-                              : status === "Ready"
-                                ? "🍽️"
-                                : status === "Served"
-                                  ? "🍴"
-                                  : status === "Finalized"
-                                    ? "📋"
-                                    : status === "Paid"
-                                      ? "✅"
-                                      : status === "Returned"
-                                        ? "↩️"
-                                        : status === "Cancelled"
-                                          ? "❌"
-                                          : "📦"}
+                                <div
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl flex-shrink-0 ${getTakeawayTileTheme(status).icon}`}
+                >
+                  {getStatusIcon(status)}
                 </div>
               </div>
             </button>
@@ -1697,7 +1776,7 @@ const TakeawayOrders = () => {
                       order.status === "Pending" ? "bg-orange-50" : ""
                     }`}
                   >
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs">
                       <div
                         className="font-mono text-[9px] text-gray-400 mb-1 select-all"
                         title="Order ID"
@@ -1722,7 +1801,7 @@ const TakeawayOrders = () => {
                         )}
                       </button>
                       {expanded[order._id] !== false && (
-                        <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
+                        <div className="mt-1.5 text-[9px] sm:text-[10px] text-gray-600 space-y-0.5">
                           <div className="truncate">
                             Created:{" "}
                             {new Date(order.createdAt).toLocaleString()}
@@ -1870,7 +1949,7 @@ const TakeawayOrders = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs text-gray-600 hidden md:table-cell">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium text-gray-900 text-xs sm:text-sm">
                           {formattedDate}
@@ -1880,13 +1959,13 @@ const TakeawayOrders = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 hidden sm:table-cell">
-                      <div className="flex flex-col gap-2">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 hidden sm:table-cell">
+                      <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg sm:text-xl md:text-2xl flex-shrink-0">
+                          <span className="text-base sm:text-lg flex-shrink-0">
                             🥡
                           </span>
-                          <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
+                          <span className="text-xs sm:text-sm md:text-sm lg:text-base font-semibold text-gray-700 truncate">
                             {order.tableNumber || "TAKEAWAY"}
                           </span>
                         </div>
@@ -1948,14 +2027,14 @@ const TakeawayOrders = () => {
                             </div>
                           )}
                         {order.takeawayToken && (
-                          <div className="text-sm mt-2 font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                          <div className="text-xs mt-1.5 font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                             Token: {order.takeawayToken}
                           </div>
                         )}
                         {/* Session token hidden from UI - data still used for backend */}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2">
                       <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
                         <span
                           className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${statusBadgeClass(
@@ -2071,7 +2150,7 @@ const TakeawayOrders = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs">
                       <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
                         {/* Modify Order button - only show for unpaid orders */}
                         {order.status !== "Paid" &&
@@ -2105,8 +2184,8 @@ const TakeawayOrders = () => {
 
                   {expanded[order._id] !== false && (
                     <tr className="bg-gray-50">
-                      <td colSpan="5" className="px-6 py-4">
-                        <div className="space-y-4">
+                      <td colSpan="5" className="px-3 sm:px-4 md:px-5 py-2.5 sm:py-3">
+                        <div className="space-y-2.5">
                           {/* Whole order panel (KOT items + add-ons) */}
                           {(() => {
                             const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
@@ -2125,43 +2204,43 @@ const TakeawayOrders = () => {
                             const hasAny = flatItems.length > 0 || selectedAddons.length > 0;
                             if (!hasAny) {
                               return (
-                                <div className="bg-white p-4 rounded-lg border shadow-sm">
-                                  <div className="text-sm text-gray-500">No items in this order yet.</div>
+                                <div className="bg-white p-3 rounded-lg border shadow-sm">
+                                  <div className="text-xs text-gray-500">No items in this order yet.</div>
                                 </div>
                               );
                             }
                             return (
-                              <div className="bg-white p-4 rounded-lg border shadow-sm">
-                                <div className="flex justify-between items-center mb-3">
+                              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                                <div className="flex justify-between items-center mb-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="text-lg font-semibold text-gray-800">Order</div>
+                                    <div className="text-base font-semibold text-gray-800">Order</div>
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         kotLines.forEach((kot, idx) => printKOT(order, kot, idx));
                                       }}
-                                      className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
+                                      className="px-1.5 py-0.5 text-[11px] text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
                                       title="Print Order"
                                     >
                                       🖨️ Print Order
                                     </button>
                                   </div>
-                                  <div className="text-lg font-bold text-green-600">
+                                  <div className="text-base font-bold text-green-600">
                                     ₹{(totals.totalAmount + addonsTotal).toFixed(2)}
                                   </div>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                   {flatItems.map(({ item, kotIdx, itemIdx }, keyIdx) => (
                                     <div
                                       key={`k-${keyIdx}`}
-                                      className={`flex justify-between items-center py-2 border-b ${
+                                      className={`flex justify-between items-center py-1.5 border-b ${
                                         item.returned ? "opacity-50 bg-gray-100" : ""
                                       }`}
                                     >
                                       <div className="flex items-center gap-2 flex-1">
                                         <span
-                                          className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                                          className={`px-1.5 py-0.5 rounded-lg text-[11px] font-bold ${
                                             item.returned ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
@@ -2174,7 +2253,7 @@ const TakeawayOrders = () => {
                                           <span className="text-xs text-red-600 font-semibold">(Cancelled)</span>
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
                                         <span className={item.returned ? "line-through text-gray-600" : "text-gray-600"}>
                                           ₹{(((item.price || 0) / 100) * (item.quantity || 1)).toFixed(2)}
                                         </span>
@@ -2185,7 +2264,7 @@ const TakeawayOrders = () => {
                                             <button
                                               type="button"
                                               onClick={() => handleCancelItem(order._id, kotIdx, itemIdx)}
-                                              className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                              className="px-1.5 py-0.5 text-[11px] text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
                                               title="Cancel this item"
                                             >
                                               ❌ Cancel
@@ -2197,17 +2276,17 @@ const TakeawayOrders = () => {
                                   {selectedAddons.map((addon, aIdx) => {
                                     const qty = Number(addon.quantity) || 1;
                                     const price = Number(addon.price) || 0;
-                                    const name = addon.name || "Add-on";
+                                    const name = sanitizeAddonName(addon.name);
                                     return (
                                       <div
                                         key={`a-${aIdx}`}
-                                        className="flex justify-between items-center py-2 border-b border-gray-100"
+                                        className="flex justify-between items-center py-1.5 border-b border-gray-100"
                                       >
                                         <div className="flex items-center gap-2 flex-1">
-                                          <span className="px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                                          <span className="px-1.5 py-0.5 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700">
                                             {qty}x
                                           </span>
-                                          <span className="text-gray-800">(+) {name}</span>
+                                          <span className="text-gray-800">{name}</span>
                                         </div>
                                         <span className="text-gray-600">
                                           ₹{(price * qty).toFixed(2)}
@@ -2387,7 +2466,9 @@ const TakeawayOrders = () => {
                                       className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
                                     >
                                       <div>
-                                        <div className="text-sm font-medium text-gray-800">(+) {addon.name}</div>
+                                        <div className="text-sm font-medium text-gray-800">
+                                          {sanitizeAddonName(addon.name)}
+                                        </div>
                                         <div className="text-xs text-gray-500">₹{formatMoney(addon.price || 0)}</div>
                                       </div>
                                       <div className="flex items-center gap-2">
@@ -2450,7 +2531,7 @@ const TakeawayOrders = () => {
                                     key={entry.id}
                                     className="flex justify-between items-center"
                                   >
-                                    <span>(+) {entry.name} × {entry.quantity}</span>
+                                    <span>{entry.name} × {entry.quantity}</span>
                                     <span>₹{formatMoney(entry.price * entry.quantity)}</span>
                                   </div>
                                 ))}
@@ -2609,7 +2690,7 @@ const TakeawayOrders = () => {
                               {selectedAddons.map((addon, aIdx) => {
                                 const qty = Number(addon.quantity) || 1;
                                 const price = Number(addon.price) || 0;
-                                const name = addon.name || "Add-on";
+                                const name = sanitizeAddonName(addon.name);
                                 return (
                                   <div
                                     key={`a-${aIdx}`}
@@ -2619,7 +2700,7 @@ const TakeawayOrders = () => {
                                       <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700">
                                         {qty}x
                                       </span>
-                                      <span className="text-sm text-gray-800">(+) {name}</span>
+                                      <span className="text-sm text-gray-800">{name}</span>
                                     </div>
                                     <span className="text-sm text-gray-600">₹{(price * qty).toFixed(2)}</span>
                                   </div>
@@ -2784,7 +2865,7 @@ const TakeawayOrders = () => {
                                         >
                                           <div>
                                             <div className="text-sm font-medium text-gray-800">
-                                              (+) {addon.name}
+                                              {sanitizeAddonName(addon.name)}
                                             </div>
                                             <div className="text-xs text-gray-500">
                                               ₹{formatMoney(addon.price || 0)}
@@ -2851,7 +2932,7 @@ const TakeawayOrders = () => {
                                         className="flex justify-between items-center"
                                       >
                                         <span>
-                                          (+) {entry.name} × {entry.quantity}
+                                          {entry.name} × {entry.quantity}
                                         </span>
                                         <span>
                                           ₹{formatMoney(entry.price * entry.quantity)}
