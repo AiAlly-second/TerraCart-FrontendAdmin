@@ -67,9 +67,9 @@ const TableCard = ({
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
 
   return (
-    <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col gap-4">
+    <div className="min-w-0 p-5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-xl font-semibold text-slate-800">
             Table {table.number}
           </h3>
@@ -96,7 +96,7 @@ const TableCard = ({
             </p>
           )}
           {table.currentOrder && (
-            <p className="text-xs text-orange-600 mt-1">
+            <p className="text-xs text-orange-600 mt-1 break-all">
               Active order:{" "}
               {typeof table.currentOrder === "object"
                 ? table.currentOrder._id || table.currentOrder.id || "Active"
@@ -112,12 +112,12 @@ const TableCard = ({
           {table.sessionToken && table.status !== "AVAILABLE" && (
             <p className="text-xs text-emerald-600 mt-1">
               Session code:{" "}
-              <span className="font-mono">{table.sessionToken}</span>
+              <span className="font-mono break-all">{table.sessionToken}</span>
             </p>
           )}
         </div>
         <span
-          className={`px-3 py-1 text-xs font-semibold rounded-full border ${statusMeta.classes}`}
+          className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full border ${statusMeta.classes}`}
         >
           {statusMeta.label}
         </span>

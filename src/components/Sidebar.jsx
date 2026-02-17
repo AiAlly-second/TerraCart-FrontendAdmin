@@ -134,7 +134,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/carts", icon: "🛒", label: "Cart Management" },
-        { path: "/orders", icon: "📦", label: "Orders" },
         { path: "/revenue", icon: "💰", label: "Revenue" },
         { path: "/employees", icon: "👥", label: "Employees" },
         { path: "/attendance", icon: "⏰", label: "Attendance" },
@@ -149,7 +148,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       const items = [
         { path: "/dashboard", icon: "📊", label: "Dashboard" },
         { path: "/orders", icon: "📦", label: "Orders" },
-        { path: "/takeaway-orders", icon: "🥡", label: "Takeaway Orders" },
         { path: "/invoices", icon: "🧾", label: "Invoices" },
         { path: "/menu", icon: "📋", label: "Menu", showStats: true },
         { path: "/payments", icon: "💳", label: "Payments" },
@@ -157,7 +155,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: "/employees", icon: "👥", label: "Employees" },
         { path: "/attendance", icon: "⏰", label: "Attendance" },
         { path: "/table-dashboard", icon: "📊", label: "Table Dashboard" },
-        { path: "/feedback", icon: "💬", label: "Feedback" },
         { path: "/customers", icon: "👥", label: "Customers" },
       ];
       if (isCostingEnabled) {

@@ -340,14 +340,63 @@ function getShelfDaysRemaining(ing) {
   return Math.floor((expiry - today) / msPerDay);
 }
 
-const normalizeAlertId = (id) => (id == null ? null : String(id));
+const normalizeAlertId = (id) => {
+  if (id == null) return null;
+
+  if (typeof id === "string" || typeof id === "number") {
+    const normalized = String(id).trim();
+    return normalized || null;
+  }
+
+  if (typeof id === "object") {
+    if (id._id != null) return normalizeAlertId(id._id);
+    if (id.id != null) return normalizeAlertId(id.id);
+    if (id.$oid != null) return normalizeAlertId(id.$oid);
+    if (typeof id.toString === "function") {
+      const converted = id.toString();
+      if (converted && converted !== "[object Object]") {
+        return normalizeAlertId(converted);
+      }
+    }
+  }
+
+  const fallback = String(id).trim();
+  return fallback && fallback !== "[object Object]" ? fallback : null;
+};
+
+const resolveOrderAlertIds = (order) => {
+  const ids = [
+    normalizeAlertId(order?._id),
+    normalizeAlertId(order?.orderId),
+    normalizeAlertId(order?.id),
+  ].filter(Boolean);
+
+  return Array.from(new Set(ids));
+};
+
+const normalizeDismissScope = (scope) => {
+  if (scope == null || scope === "") return "global";
+  if (typeof scope === "object") {
+    return (
+      normalizeAlertId(scope._id) ||
+      normalizeAlertId(scope.id) ||
+      normalizeAlertId(scope.cartCode) ||
+      "global"
+    );
+  }
+  return normalizeAlertId(scope) || "global";
+};
 
 const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved, dismissedAlertsScope = 'global' }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
-  const dismissedAlertsStorageKey = useMemo(
-    () => `dashboard_admin_dismissed_alerts_${dismissedAlertsScope || 'global'}`,
+  const stableDismissScope = useMemo(
+    () => normalizeDismissScope(dismissedAlertsScope),
     [dismissedAlertsScope]
+  );
+  const dismissedAlertsStorageKey = useMemo(
+    () => `dashboard_admin_dismissed_alerts_${stableDismissScope}`,
+    [stableDismissScope]
   );
 
   useEffect(() => {
@@ -392,12 +441,13 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
   };
 
   // Action handlers
-  const handleMarkServed = async (requestId) => {
+  const handleMarkServed = async (requestId, dismissKeys = []) => {
     try {
       await api.post(`/customer-requests/${requestId}/resolve`, {
         notes: 'Marked as served'
       });
       addToDismissed(requestId);
+      (dismissKeys || []).forEach((key) => addToDismissed(key));
       onCustomerRequestResolved?.();
     } catch (error) {
       console.error('Error marking request as served:', error);
@@ -406,17 +456,18 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
     }
   };
 
-  const handleRushOrder = async (orderId) => {
+  const handleRushOrder = async (orderId, dismissKeys = []) => {
     try {
       console.log('Rushing order:', orderId);
       alert(`Order ${String(orderId).slice(-4)} marked as RUSH! Kitchen has been notified.`);
       addToDismissed(orderId);
+      (dismissKeys || []).forEach((key) => addToDismissed(key));
     } catch (error) {
       console.error('Error rushing order:', error);
     }
   };
 
-  const handleClearTable = async (tableNumber, alertId, alertType) => {
+  const handleClearTable = async (tableNumber, alertId, alertType, dismissKeys = []) => {
     try {
       const table = tables.find(t => String(t.number) === String(tableNumber) || String(t.tableNumber) === String(tableNumber));
       if (!table) {
@@ -426,7 +477,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       const confirmClear = confirm(`Clear Table ${tableNumber}? This will mark it as AVAILABLE.`);
       if (confirmClear) {
         await api.put(`/tables/${table._id}`, { status: "AVAILABLE" });
-        if (alertId) handleDismiss(alertId, alertType);
+        if (alertId) handleDismiss(alertId, alertType, dismissKeys);
       }
     } catch (error) {
       console.error('Error clearing table:', error);
@@ -436,8 +487,9 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
 
   // id = alert.id, alertType = 'customer_request' | 'kitchen_delay' | 'table_overstay' | 'shelf_*'
   // Only call resolve API for customer_request; others are local-only dismiss
-  const handleDismiss = async (id, alertType) => {
+  const handleDismiss = async (id, alertType, dismissKeys = []) => {
     addToDismissed(id);
+    (dismissKeys || []).forEach((key) => addToDismissed(key));
     if (alertType === 'customer_request') {
       try {
         await api.post(`/customer-requests/${id}/resolve`, {
@@ -461,34 +513,62 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       const orderTime = new Date(o.createdAt);
       const minutesElapsed = (now - orderTime) / 60000;
       return minutesElapsed > 30;
-    }).map(o => ({
-      id: o.orderId || o._id, // Consistent ID property
-      type: 'kitchen_delay',
-      orderId: o.orderId || o._id,
-      tableNumber: o.tableNumber,
-      minutesElapsed: Math.floor((now - new Date(o.createdAt)) / 60000),
-      createdAt: o.createdAt
-    }));
+    }).map(o => {
+      const idCandidates = resolveOrderAlertIds(o);
+      const fallbackId = normalizeAlertId(
+        `kitchen_${o.tableNumber || "NA"}_${o.createdAt || o.updatedAt || ""}`
+      );
+      const alertId = idCandidates[0] || fallbackId;
+      const dismissKeys = Array.from(
+        new Set([...(idCandidates || []), alertId].filter(Boolean))
+      );
+
+      return {
+        id: alertId,
+        dismissKeys,
+        type: 'kitchen_delay',
+        orderId: alertId,
+        tableNumber: o.tableNumber,
+        minutesElapsed: Math.floor((now - new Date(o.createdAt)) / 60000),
+        createdAt: o.createdAt
+      };
+    });
   }, [orders]);
   
   // Calculate table overstay (paid orders with table still occupied > 15 mins)
   const tableOverstays = useMemo(() => {
     const now = new Date();
     return orders.filter(o => {
+      const serviceType = String(o.serviceType || "").toUpperCase();
+      if (serviceType !== 'DINE_IN') return false;
       if (o.status !== 'Paid' || !o.tableNumber) return false;
+      const tableLabel = String(o.tableNumber).trim().toUpperCase();
+      if (!tableLabel || tableLabel === 'TAKEAWAY') return false;
       const paidTime = new Date(o.paidAt || o.updatedAt);
       const minutesElapsed = (now - paidTime) / 60000;
       // Only show if > 15 mins AND table shows as Occupied (optional check, but good for accuracy)
       // Since we don't have table status readily mapped here without lookup, we assume overstay if order is Paid but time passed.
       return minutesElapsed > 15;
-    }).map(o => ({
-      id: o.orderId || o._id, // Consistent ID property
-      type: 'table_overstay',
-      tableNumber: o.tableNumber,
-      orderId: o.orderId || o._id,
-      minutesElapsed: Math.floor((now - new Date(o.paidAt || o.updatedAt)) / 60000),
-      paidAt: o.paidAt || o.updatedAt
-    }));
+    }).map(o => {
+      const idCandidates = resolveOrderAlertIds(o);
+      const fallbackId = normalizeAlertId(
+        `overstay_${o.tableNumber || "NA"}_${o.paidAt || o.updatedAt || ""}`
+      );
+      const alertId = idCandidates[0] || fallbackId;
+      const dismissKeys = Array.from(
+        new Set([...(idCandidates || []), alertId].filter(Boolean))
+      );
+
+      return {
+        id: alertId,
+        dismissKeys,
+        type: 'table_overstay',
+        tableNumber: o.tableNumber,
+        orderId: alertId,
+        minutesElapsed: Math.floor((now - new Date(o.paidAt || o.updatedAt)) / 60000),
+        paidAt: o.paidAt || o.updatedAt
+      };
+    });
   }, [orders]);
   
   // Shelf life alerts: expired or near expiry (≤3 days)
@@ -498,8 +578,10 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       const daysRemaining = getShelfDaysRemaining(ing);
       if (daysRemaining === null) return; // no start date
       if (daysRemaining < 0 || daysRemaining <= 3) {
+        const shelfId = `shelf_${ing._id}`;
         list.push({
-          id: `shelf_${ing._id}`,
+          id: shelfId,
+          dismissKeys: [shelfId],
           type: daysRemaining < 0 ? 'shelf_expired' : 'shelf_near_expiry',
           ingredientId: ing._id,
           name: ing.name,
@@ -515,6 +597,12 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
   // Format customer requests
   const formattedRequests = useMemo(() => {
     return (customerRequests || []).map(r => {
+      const requestCandidates = [
+        normalizeAlertId(r._id),
+        normalizeAlertId(r.requestId),
+        normalizeAlertId(r.id),
+      ].filter(Boolean);
+      const alertId = requestCandidates[0];
       
       // Extract table number
       let tableNum = null;
@@ -529,7 +617,8 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       }
       
       return {
-        id: r._id, // Consistent ID property
+        id: alertId,
+        dismissKeys: requestCandidates,
         type: 'customer_request',
         requestType: r.requestType,
         tableNumber: tableNum,
@@ -546,8 +635,17 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
     // Filter out dismissed alerts
     return combined
         .filter(alert => {
-          const alertId = normalizeAlertId(alert.id);
-          return !alertId || !dismissedAlerts.has(alertId);
+          const dismissKeys = [
+            ...(Array.isArray(alert.dismissKeys) ? alert.dismissKeys : []),
+            alert.id,
+            alert._id,
+            alert.orderId,
+          ]
+            .map((key) => normalizeAlertId(key))
+            .filter(Boolean);
+
+          if (dismissKeys.length === 0) return true;
+          return !dismissKeys.some((key) => dismissedAlerts.has(key));
         })
         .sort((a, b) => new Date(b.createdAt || b.paidAt || 0) - new Date(a.createdAt || a.paidAt || 0));
   }, [formattedRequests, kitchenDelays, tableOverstays, shelfAlerts, dismissedAlerts]);
@@ -720,13 +818,13 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                   {isRequest && (
                     <>
                       <button
-                        onClick={() => handleMarkServed(alert.id)}
+                        onClick={() => handleMarkServed(alert.id, alert.dismissKeys)}
                         className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
                       >
                         <FiCheckCircle size={12} /> Mark Served
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id, 'customer_request')}
+                        onClick={() => handleDismiss(alert.id, 'customer_request', alert.dismissKeys)}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -736,13 +834,13 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                   {isKitchen && (
                     <>
                       <button
-                        onClick={() => handleRushOrder(alert.id)}
+                        onClick={() => handleRushOrder(alert.id, alert.dismissKeys)}
                         className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
                       >
                         <FaFire size={12} /> Rush Order
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id, 'kitchen_delay')}
+                        onClick={() => handleDismiss(alert.id, 'kitchen_delay', alert.dismissKeys)}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -752,13 +850,13 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                   {isOverstay && (
                     <>
                       <button
-                        onClick={() => handleClearTable(alert.tableNumber, alert.id, 'table_overstay')}
+                        onClick={() => handleClearTable(alert.tableNumber, alert.id, 'table_overstay', alert.dismissKeys)}
                         className="flex-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-1"
                       >
                         <MdTableRestaurant size={12} /> Clear Table
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id, 'table_overstay')}
+                        onClick={() => handleDismiss(alert.id, 'table_overstay', alert.dismissKeys)}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss
@@ -780,7 +878,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                         <BiReceipt size={12} /> Purchase
                       </button>
                       <button
-                        onClick={() => handleDismiss(alert.id, alert.type)}
+                        onClick={() => handleDismiss(alert.id, alert.type, alert.dismissKeys)}
                         className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded transition-colors"
                       >
                         Dismiss

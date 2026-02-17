@@ -6,8 +6,10 @@ import jsPDF from "jspdf";
 import {
   ORDER_TRANSITIONS,
   canAccept,
+  canAcceptTakeaway,
   nextStatusOnAccept,
   getNextStatus,
+  getNextStatusTakeaway,
   canCancel,
   canReturn,
 } from "../domain/orderLogic";
@@ -15,7 +17,7 @@ import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { withCancellation } from "../utils/requestManager";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
-import { printKOT } from "../utils/kotPrinter";
+import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
 
 // Helper: get API base URL with protocol ensured
 const getApiBaseUrl = () => {
@@ -48,6 +50,44 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const getValidDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getOrderCreatedDate = (order) => getValidDate(order?.createdAt);
+const getOrderUpdatedDate = (order) => getValidDate(order?.updatedAt);
+
+const formatOrderDateForFilter = (date) => {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatOrderDateTime = (date) => {
+  if (!date) {
+    return { dateLabel: "-", timeLabel: "-" };
+  }
+
+  return {
+    dateLabel: date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }),
+    timeLabel: date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+};
+
+const formatOrderDateTimeLong = (date) =>
+  date ? date.toLocaleString("en-US") : "-";
+
 const paiseToRupees = (value) => {
   if (value === undefined || value === null) return 0;
   const num = Number(value);
@@ -60,6 +100,86 @@ const normalizeId = (value) =>
 
 const normalizeAddonId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
+
+const TAKEAWAY_SERVICE_TYPES = new Set(["TAKEAWAY", "PICKUP", "DELIVERY"]);
+const isTakeawayServiceType = (serviceType) =>
+  TAKEAWAY_SERVICE_TYPES.has(serviceType);
+const isPresentValue = (value) =>
+  value !== undefined &&
+  value !== null &&
+  String(value).trim() !== "";
+const hasMeaningfulDeliveryInfo = (order) => {
+  if (!order?.deliveryInfo) return false;
+
+  const hasDistance =
+    isPresentValue(order.deliveryInfo.distance) &&
+    !Number.isNaN(Number(order.deliveryInfo.distance));
+  const hasEstimatedTime =
+    isPresentValue(order.deliveryInfo.estimatedTime) &&
+    !Number.isNaN(Number(order.deliveryInfo.estimatedTime));
+  const hasCharge = Number(order.deliveryInfo.deliveryCharge || 0) > 0;
+
+  return hasDistance || hasEstimatedTime || hasCharge;
+};
+const getOrderCustomerName = (order) =>
+  order?.customerName || order?.customer?.name || "";
+const getOrderCustomerMobile = (order) =>
+  order?.customerMobile ||
+  order?.customerPhone ||
+  order?.customer?.phone ||
+  "";
+const resolveTakeawayOrderType = (order) => {
+  if (!order) return null;
+
+  const explicitOrderType = String(order.orderType || "").toUpperCase();
+  if (explicitOrderType === "PICKUP" || explicitOrderType === "DELIVERY") {
+    return explicitOrderType;
+  }
+
+  const serviceType = String(order.serviceType || "").toUpperCase();
+  if (serviceType === "PICKUP" || serviceType === "DELIVERY") {
+    return serviceType;
+  }
+
+  // Legacy records can be persisted as TAKEAWAY without explicit orderType.
+  if (serviceType === "TAKEAWAY") {
+    if (hasMeaningfulDeliveryInfo(order)) return "DELIVERY";
+    if (isPresentValue(order.pickupLocation?.address)) return "PICKUP";
+  }
+
+  return null;
+};
+
+const normalizeOrdersPayload = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const getOrderCafeId = (order) => {
+  let orderCafeId = order?.cafeId || order?.cartId;
+  if (orderCafeId && typeof orderCafeId === "object") {
+    orderCafeId = orderCafeId._id || orderCafeId;
+  }
+
+  if (!orderCafeId && order?.table?.cafeId) {
+    orderCafeId = order.table.cafeId;
+    if (typeof orderCafeId === "object") {
+      orderCafeId = orderCafeId._id || orderCafeId;
+    }
+  }
+
+  return orderCafeId;
+};
+
+const filterOrdersByCafeId = (orders, cafeId) => {
+  const list = Array.isArray(orders) ? orders : [];
+  if (!cafeId) return list;
+  return list.filter((order) => {
+    const orderCafeId = getOrderCafeId(order);
+    return orderCafeId && orderCafeId.toString() === cafeId;
+  });
+};
 const sanitizeAddonName = (value) => {
   const normalized = String(value || "")
     .replace(/^\(\s*\+\s*\)\s*/u, "")
@@ -170,6 +290,57 @@ const aggregateKotItems = (order) => {
   });
 
   return { dineInItems, takeawayItems };
+};
+
+const buildOrderLineItems = (order, { includeReturned = true } = {}) => {
+  const lines = [];
+  const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
+
+  kotLines.forEach((kot, kotIndex) => {
+    const items = Array.isArray(kot?.items) ? kot.items : [];
+    items.forEach((item, itemIndex) => {
+      if (!item) return;
+      const returned = Boolean(item.returned);
+      if (returned && !includeReturned) return;
+
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = paiseToRupees(item.price || 0);
+      lines.push({
+        key: `item-${kotIndex}-${itemIndex}`,
+        type: "item",
+        kotIndex,
+        itemIndex,
+        name: item.name || "Item",
+        quantity,
+        unitPrice,
+        total: unitPrice * quantity,
+        returned,
+        isTakeaway: item.convertedToTakeaway === true,
+      });
+    });
+  });
+
+  const selectedAddons = Array.isArray(order?.selectedAddons)
+    ? order.selectedAddons
+    : [];
+  selectedAddons.forEach((addon, addonIndex) => {
+    if (!addon) return;
+    const quantity = Number(addon.quantity) || 1;
+    const unitPrice = Number(addon.price) || 0;
+    lines.push({
+      key: `addon-${addonIndex}`,
+      type: "addon",
+      addonIndex,
+      name: sanitizeAddonName(addon.name),
+      quantity,
+      unitPrice,
+      total: unitPrice * quantity,
+      returned: false,
+      isTakeaway: false,
+    });
+  });
+
+  return lines;
 };
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
@@ -680,26 +851,18 @@ const Orders = () => {
   };
 
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
-    // STRICT: Only process DINE_IN orders, completely ignore TAKEAWAY orders
-    if (!incoming || incoming.serviceType !== "DINE_IN") {
-      if (import.meta.env.DEV) {
-        console.log(
-          "[Orders] Ignoring non-DINE_IN order:",
-          incoming?.serviceType,
-          incoming?._id,
-        );
-      }
+    if (!incoming) return;
+    if (
+      filterCafeId &&
+      getOrderCafeId(incoming)?.toString() !== filterCafeId.toString()
+    ) {
       return;
     }
     const incomingId = normalizeId(incoming._id);
     if (!incomingId) return;
 
     setOrders((prev) => {
-      // Also filter out any TAKEAWAY orders that might have slipped in
-      const filteredPrev = Array.isArray(prev)
-        ? prev.filter((o) => o.serviceType === "DINE_IN")
-        : [];
-      const list = [...filteredPrev];
+      const list = Array.isArray(prev) ? [...prev] : [];
       const index = list.findIndex(
         (order) => normalizeId(order._id) === incomingId,
       );
@@ -711,7 +874,7 @@ const Orders = () => {
 
       return prepend ? [incoming, ...list] : [...list, incoming];
     });
-  }, []);
+  }, [filterCafeId]);
 
   const getStatusClass = (status) => {
     switch (status) {
@@ -859,19 +1022,71 @@ const Orders = () => {
     }
   };
 
+  const acceptOrderTakeaway = async (orderId) => {
+    try {
+      const response = await api.patch(`/orders/${orderId}/accept`);
+      upsertOrder(response.data);
+    } catch (e) {
+      if (import.meta.env.DEV) {
+        console.error("Accept order failed:", e);
+      }
+      const errorMessage =
+        e.response?.data?.message || e.message || "Failed to accept order";
+      alert(errorMessage);
+    }
+  };
+
   // Render order row (reusable for both grouped and flat views)
   const renderOrderRow = (order) => {
-    // INFO: Use updatedAt to show the time of the latest activity (e.g. KOT 2, KOT 3)
-    const orderDate = new Date(order.updatedAt || order.createdAt);
-    const formattedDate = orderDate.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-    const formattedTime = orderDate.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const createdAtDate = getOrderCreatedDate(order);
+    const updatedAtDate = getOrderUpdatedDate(order);
+    const orderDate = createdAtDate || updatedAtDate;
+    const normalizedServiceType = String(order?.serviceType || "").toUpperCase();
+    const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
+    const customerName = getOrderCustomerName(order);
+    const customerMobile = getOrderCustomerMobile(order);
+    const isTakeawayOrder =
+      isTakeawayServiceType(order.serviceType) ||
+      Boolean(resolvedTakeawayOrderType);
+    const serviceTypeLabel =
+      normalizedServiceType === "DINE_IN"
+        ? "Dine-In"
+        : normalizedServiceType === "TAKEAWAY"
+          ? "Takeaway"
+          : normalizedServiceType === "PICKUP"
+            ? "Pickup"
+            : normalizedServiceType === "DELIVERY"
+              ? "Delivery"
+              : isTakeawayOrder
+                ? "Takeaway"
+                : "Dine-In";
+    const takeawayOrderTypeLabel =
+      resolvedTakeawayOrderType === "DELIVERY"
+        ? "Delivery"
+        : resolvedTakeawayOrderType === "PICKUP"
+          ? "Pickup"
+          : "Takeaway";
+    const shouldShowOrderTypeMeta =
+      Boolean(resolvedTakeawayOrderType) &&
+      resolvedTakeawayOrderType !== normalizedServiceType;
+    const pickupAddress =
+      order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
+    const deliveryAddress =
+      order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const hasTakeawayToken =
+      resolvedTakeawayOrderType !== "DELIVERY" &&
+      order.takeawayToken !== undefined &&
+      order.takeawayToken !== null;
+    const hasTakeawayCustomerInfo = Boolean(customerName || customerMobile);
+    const hasTakeawayMeta = isTakeawayOrder &&
+      (hasTakeawayCustomerInfo ||
+        hasTakeawayToken ||
+        resolvedTakeawayOrderType ||
+        (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
+        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+    const isExpanded = Boolean(expanded[order._id]);
+    const { dateLabel: formattedDate, timeLabel: formattedTime } =
+      formatOrderDateTime(orderDate);
 
     return (
       <React.Fragment key={order._id}>
@@ -898,10 +1113,47 @@ const Orders = () => {
                 {formattedTime}
               </span>
             </button>
-            {expanded[order._id] && (
+            {hasTakeawayMeta && !isExpanded && (
+              <div className="mt-1 space-y-0.5">
+                {resolvedTakeawayOrderType && (
+                  <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
+                    {takeawayOrderTypeLabel}
+                  </div>
+                )}
+                {customerName && (
+                  <div className="text-[10px] sm:text-xs text-gray-700 truncate">
+                    Customer: {customerName}
+                  </div>
+                )}
+                {customerMobile && (
+                  <div className="text-[10px] sm:text-xs text-gray-600 truncate">
+                    Mobile: {customerMobile}
+                  </div>
+                )}
+                {resolvedTakeawayOrderType === "PICKUP" && pickupAddress && (
+                  <div className="text-[10px] sm:text-xs text-gray-600 truncate">
+                    Pickup: {pickupAddress}
+                  </div>
+                )}
+                {resolvedTakeawayOrderType === "DELIVERY" && (
+                  <div className="text-[10px] sm:text-xs text-gray-600 truncate">
+                    Address: {deliveryAddress || "Address not set"}
+                  </div>
+                )}
+                {hasTakeawayToken && (
+                  <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    Token: {order.takeawayToken}
+                  </div>
+                )}
+              </div>
+            )}
+            {isExpanded && (
               <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
                 <div className="truncate">
-                  Created: {new Date(order.createdAt).toLocaleString()}
+                  Created: {formatOrderDateTimeLong(createdAtDate || orderDate)}
+                </div>
+                <div className="truncate">
+                  Updated: {formatOrderDateTimeLong(updatedAtDate)}
                 </div>
                 <div className="truncate">
                   Invoice:{" "}
@@ -910,9 +1162,65 @@ const Orders = () => {
                 <div className="truncate">
                   Service Type:{" "}
                   <span className="font-semibold text-gray-700">
-                    {order.serviceType === "TAKEAWAY" ? "Takeaway" : "Dine-In"}
+                    {serviceTypeLabel}
                   </span>
                 </div>
+                {shouldShowOrderTypeMeta && (
+                  <div className="truncate">
+                    Order Type:{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </span>
+                  </div>
+                )}
+                {resolvedTakeawayOrderType === "PICKUP" && (
+                  <div className="truncate">
+                    Pickup Address: {pickupAddress || "Address not set"}
+                  </div>
+                )}
+                {resolvedTakeawayOrderType === "DELIVERY" && (
+                  <>
+                    <div className="truncate">
+                      Delivery Address: {deliveryAddress || "Address not set"}
+                    </div>
+                    {order.deliveryInfo?.distance != null && (
+                      <div className="truncate">
+                        Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
+                      </div>
+                    )}
+                    {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                      <div className="truncate text-green-700">
+                        Delivery Charge: ₹
+                        {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                      </div>
+                    )}
+                    {isPresentValue(order.deliveryInfo?.estimatedTime) &&
+                      !Number.isNaN(Number(order.deliveryInfo.estimatedTime)) &&
+                      Number(order.deliveryInfo.estimatedTime) > 0 && (
+                      <div className="truncate">
+                        Est. Time: {order.deliveryInfo.estimatedTime} min
+                      </div>
+                    )}
+                  </>
+                )}
+                {hasTakeawayToken && (
+                  <div className="truncate">
+                    Token:{" "}
+                    <span className="font-semibold text-blue-700">
+                      {order.takeawayToken}
+                    </span>
+                  </div>
+                )}
+                {hasTakeawayCustomerInfo && (
+                  <div className="space-y-0.5">
+                    {customerName && (
+                      <div className="truncate">Customer: {customerName}</div>
+                    )}
+                    {customerMobile && (
+                      <div className="truncate">Mobile: {customerMobile}</div>
+                    )}
+                  </div>
+                )}
                 {order.cancellationReason &&
                   (order.status === "Cancelled" ||
                     order.status === "Returned") && (
@@ -935,14 +1243,20 @@ const Orders = () => {
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
             <div className="flex items-center gap-1 sm:gap-2">
-              <img
-                src={tableIcon}
-                alt="Table"
-                title="Table"
-                className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 object-contain flex-shrink-0"
-              />
+              {!isTakeawayOrder && (
+                <img
+                  src={tableIcon}
+                  alt="Table"
+                  title="Table"
+                  className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 object-contain flex-shrink-0"
+                />
+              )}
               <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
-                {order.tableNumber || "N/A"}
+                {isTakeawayOrder
+                  ? resolvedTakeawayOrderType
+                    ? takeawayOrderTypeLabel
+                    : order.tableNumber || "Takeaway"
+                  : order.tableNumber || "N/A"}
               </span>
             </div>
             {order.specialInstructions && (
@@ -968,14 +1282,27 @@ const Orders = () => {
               {/* Sequential flow - show only next step + cancel option */}
               <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                 {(() => {
-                  const nextStatus = getNextStatus(
-                    order.status,
-                    order.serviceType,
-                  );
+                  const isTakeaway =
+                    isTakeawayServiceType(order.serviceType) ||
+                    Boolean(resolveTakeawayOrderType(order));
+                  const nextStatus = isTakeaway
+                    ? getNextStatusTakeaway(order.status)
+                    : getNextStatus(order.status, order.serviceType);
                   const buttons = [];
 
-                  // Show Accept button for Confirmed orders
-                  if (canAccept(order.status)) {
+                  if (isTakeaway && canAcceptTakeaway(order.status)) {
+                    buttons.push(
+                      <button
+                        key="accept-takeaway"
+                        type="button"
+                        onClick={() => acceptOrderTakeaway(order._id)}
+                        title="Accept Order"
+                        className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
+                      >
+                        ✅ <span className="hidden sm:inline">Accept</span>
+                      </button>,
+                    );
+                  } else if (canAccept(order.status)) {
                     buttons.push(
                       <button
                         key="accept"
@@ -989,8 +1316,12 @@ const Orders = () => {
                     );
                   }
 
-                  // Show next sequential step button (but skip if canAccept is true to avoid duplicate Preparing button)
-                  if (nextStatus && !canAccept(order.status)) {
+                  // Show next sequential step button (but skip if accept action is available)
+                  if (
+                    nextStatus &&
+                    !canAccept(order.status) &&
+                    !(isTakeaway && canAcceptTakeaway(order.status))
+                  ) {
                     buttons.push(
                       <button
                         key="next"
@@ -1085,77 +1416,92 @@ const Orders = () => {
           <tr className="bg-gray-50">
             <td colSpan="5" className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
               <div className="space-y-3 sm:space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  {Array.isArray(order.kotLines) &&
-                    order.kotLines.map((kot, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-800">
-                              KOT #{idx + 1}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                printKOT(order, kot, idx);
-                              }}
-                              className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
-                              title="Print KOT"
-                            >
-                              🖨️ Print KOT
-                            </button>
-                          </div>
-                          <div className="text-sm sm:text-base md:text-lg font-bold text-green-600">
-                            ₹{(kot.totalAmount || kot.total || 0).toString()}
-                          </div>
+                {(() => {
+                  const lineItems = buildOrderLineItems(order, {
+                    includeReturned: true,
+                  });
+
+                  if (!lineItems.length) {
+                    return (
+                      <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm text-sm text-gray-500">
+                        No items in this order yet.
+                      </div>
+                    );
+                  }
+
+                  const orderTotal = lineItems.reduce(
+                    (sum, line) => sum + (line.returned ? 0 : line.total || 0),
+                    0,
+                  );
+
+                  return (
+                    <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-800">
+                          Order Items
                         </div>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          {(kot.items || []).map((item, i) => {
-                            if (item.returned) return null; // Skip returned items
-                            const isTakeaway =
-                              item.convertedToTakeaway === true;
-                            return (
-                              <div
-                                key={i}
-                                className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 py-1 border-b"
-                              >
-                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                                  <span
-                                    className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex-shrink-0 ${
-                                      isTakeaway
-                                        ? "bg-green-100 text-green-800"
-                                        : "bg-orange-100 text-orange-800"
-                                    }`}
-                                  >
-                                    {item.quantity}x
-                                  </span>
-                                  <span className="text-xs sm:text-sm text-gray-800 truncate min-w-0 flex-1">
-                                    {item.name}
-                                    {isTakeaway && (
-                                      <span className="ml-1 sm:ml-2 text-green-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
-                                        📦 TAKEAWAY
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap flex-shrink-0 sm:ml-2">
-                                  ₹
-                                  {(
-                                    ((item.price || 0) / 100) *
-                                    (item.quantity || 1)
-                                  ).toFixed(2)}
-                                </span>
-                              </div>
-                            );
-                          })}
+                        <div className="text-sm sm:text-base md:text-lg font-bold text-green-600">
+                          {"\u20B9"}
+                          {formatMoney(orderTotal)}
                         </div>
                       </div>
-                    ))}
-                </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        {lineItems.map((line) => (
+                          <div
+                            key={line.key}
+                            className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 py-1 border-b ${
+                              line.returned ? "opacity-60 bg-gray-100" : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                              <span
+                                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex-shrink-0 ${
+                                  line.type === "addon"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : line.isTakeaway
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-orange-100 text-orange-800"
+                                }`}
+                              >
+                                {line.quantity}x
+                              </span>
+                              <span className="text-xs sm:text-sm text-gray-800 truncate min-w-0 flex-1">
+                                <span
+                                  className={line.returned ? "line-through" : ""}
+                                >
+                                  {line.name}
+                                </span>
+                                {line.type === "addon" && (
+                                  <span className="ml-1 sm:ml-2 text-blue-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
+                                    ADD-ON
+                                  </span>
+                                )}
+                                {line.isTakeaway && line.type !== "addon" && (
+                                  <span className="ml-1 sm:ml-2 text-green-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
+                                    TAKEAWAY
+                                  </span>
+                                )}
+                                {line.returned && (
+                                  <span className="ml-1 sm:ml-2 text-red-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
+                                    (Cancelled)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-xs sm:text-sm whitespace-nowrap flex-shrink-0 sm:ml-2 ${
+                                line.returned ? "text-gray-500 line-through" : "text-gray-600"
+                              }`}
+                            >
+                              {"\u20B9"}
+                              {formatMoney(line.total)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </td>
           </tr>
@@ -1163,6 +1509,14 @@ const Orders = () => {
       </React.Fragment>
     );
   };
+
+  const refreshOrders = useCallback(async () => {
+    const ordersRes = await api.get("/orders");
+    const allOrders = normalizeOrdersPayload(ordersRes.data);
+    const scopedOrders = filterOrdersByCafeId(allOrders, filterCafeId);
+    setOrders(scopedOrders);
+    return scopedOrders;
+  }, [filterCafeId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1222,48 +1576,14 @@ const Orders = () => {
 
       // Fetch initial orders
       try {
-        const res = await api.get("/orders");
-        const data = res.data || [];
-
-        // STRICT: Only show DINE_IN orders, completely filter out TAKEAWAY orders
-        let dineInOrders = Array.isArray(data)
-          ? data.filter((order) => order.serviceType === "DINE_IN")
-          : [];
-
-        // If cartId filter is provided, filter by specific cart
-        if (filterCafeId) {
-          dineInOrders = dineInOrders.filter((order) => {
-            let orderCafeId = order.cafeId || order.cartId;
-            if (orderCafeId && typeof orderCafeId === "object") {
-              orderCafeId = orderCafeId._id || orderCafeId;
-            }
-            // Also check table.cafeId as fallback
-            if (!orderCafeId && order.table && order.table.cafeId) {
-              orderCafeId = order.table.cafeId;
-              if (typeof orderCafeId === "object") {
-                orderCafeId = orderCafeId._id || orderCafeId;
-              }
-            }
-            return orderCafeId && orderCafeId.toString() === filterCafeId;
-          });
-          if (import.meta.env.DEV) {
-            console.log(
-              `Filtered orders for cart ${filterCafeId}:`,
-              dineInOrders.length,
-            );
-          }
-        }
-
+        const scopedOrders = await refreshOrders();
         if (import.meta.env.DEV) {
           console.log(
-            "Fetched dine-in orders:",
-            dineInOrders.length,
-            "out of",
-            data.length || 0,
-            "total orders",
+            filterCafeId
+              ? `Fetched orders for cart ${filterCafeId}: ${scopedOrders.length}`
+              : `Fetched all orders: ${scopedOrders.length}`,
           );
         }
-        setOrders(dineInOrders);
       } catch (err) {
         if (import.meta.env.DEV) {
           console.error("Failed to fetch orders:", err);
@@ -1334,7 +1654,7 @@ const Orders = () => {
       socket.off("orderUpdated");
       socket.off("orderDeleted");
     };
-  }, [upsertOrder, filterCafeId, user]);
+  }, [upsertOrder, filterCafeId, user, refreshOrders]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -1404,6 +1724,80 @@ const Orders = () => {
     }
   };
 
+  const handleCancelAddonLine = async (orderId, addonIndex) => {
+    const normalizedOrderId = normalizeId(orderId);
+    const sourceOrder =
+      orders.find((order) => normalizeId(order?._id) === normalizedOrderId) ||
+      (normalizeId(currentOrder?._id) === normalizedOrderId
+        ? currentOrder
+        : null);
+
+    if (!sourceOrder) return;
+
+    if (["Paid", "Cancelled", "Returned"].includes(sourceOrder.status)) {
+      alert(
+        `Cannot cancel add-ons from an order that is ${String(sourceOrder.status || "").toLowerCase()}.`,
+      );
+      return;
+    }
+
+    const existingAddons = Array.isArray(sourceOrder.selectedAddons)
+      ? sourceOrder.selectedAddons
+      : [];
+    const targetAddon = existingAddons[addonIndex];
+    if (!targetAddon) return;
+
+    const addonName = sanitizeAddonName(targetAddon.name);
+    const addonQty = Number(targetAddon.quantity) || 1;
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to cancel "${addonName}" (${addonQty}x) from this order?`,
+      {
+        title: "Cancel Add-on",
+        warningMessage: "Cancel Add-on",
+        danger: false,
+        confirmText: "Cancel Add-on",
+        cancelText: "Keep Add-on",
+      },
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const updatedAddons = existingAddons.filter(
+        (_, index) => index !== addonIndex,
+      );
+      const response = await api.patch(`/orders/${sourceOrder._id}/addons`, {
+        selectedAddons: toOrderAddonPayload(updatedAddons),
+      });
+
+      const updatedOrder = response?.data;
+      if (updatedOrder?._id) {
+        upsertOrder(updatedOrder);
+        if (
+          currentOrder &&
+          normalizeId(currentOrder._id) === normalizeId(updatedOrder._id)
+        ) {
+          setCurrentOrder(updatedOrder);
+        }
+      } else {
+        await refreshOrders();
+      }
+
+      alert(`Add-on "${addonName}" cancelled successfully.`);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Failed to cancel add-on:", err);
+      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to cancel add-on. Please try again.";
+      alert(errorMessage);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -1454,28 +1848,7 @@ const Orders = () => {
       }
 
       // Refresh orders list by fetching again
-      const ordersRes = await api.get("/orders");
-      const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-      let dineInOrders = allOrders.filter((o) => o.serviceType === "DINE_IN");
-
-      // Re-apply cart filter if active
-      if (filterCafeId) {
-        dineInOrders = dineInOrders.filter((order) => {
-          let orderCafeId = order.cafeId;
-          if (orderCafeId && typeof orderCafeId === "object") {
-            orderCafeId = orderCafeId._id || orderCafeId;
-          }
-          if (!orderCafeId && order.table && order.table.cafeId) {
-            orderCafeId = order.table.cafeId;
-            if (typeof orderCafeId === "object") {
-              orderCafeId = orderCafeId._id || orderCafeId;
-            }
-          }
-          return orderCafeId && orderCafeId.toString() === filterCafeId;
-        });
-      }
-
-      setOrders(dineInOrders);
+      await refreshOrders();
 
       setIsModalOpen(false);
       setCurrentOrder(null);
@@ -1606,22 +1979,7 @@ const Orders = () => {
       };
 
       const { data: created } = await api.post("/orders", payload);
-      // Only add to orders list if it's a DINE_IN order
-      if (created?.serviceType === "DINE_IN") {
-        setOrders((prev) => {
-          // Ensure we don't have any TAKEAWAY orders in the list
-          const filteredPrev = Array.isArray(prev)
-            ? prev.filter((o) => o.serviceType === "DINE_IN")
-            : [];
-          return [created, ...filteredPrev];
-        });
-      } else {
-        if (import.meta.env.DEV) {
-          console.log(
-            "[Orders] Created order is TAKEAWAY, not adding to DINE_IN orders list",
-          );
-        }
-      }
+      upsertOrder(created, { prepend: true });
       setIsModalOpen(false);
       setCurrentOrder(null);
       resetDraft();
@@ -1818,14 +2176,9 @@ const Orders = () => {
     const normalizedTable = searchTable.trim().toLowerCase();
     const normalizedInvoice = searchInvoice.trim().toLowerCase();
 
-    // STRICT: Only show DINE_IN orders, filter out any TAKEAWAY orders that might have slipped in
-    const dineInOrders = orders.filter(
-      (order) => order.serviceType === "DINE_IN",
-    );
-
     // Deduplicate orders by _id to prevent duplicate keys
     const uniqueOrders = new Map();
-    dineInOrders.forEach((order) => {
+    orders.forEach((order) => {
       const orderId = order._id?.toString() || order._id;
       if (orderId && !uniqueOrders.has(orderId)) {
         uniqueOrders.set(orderId, order);
@@ -1848,12 +2201,10 @@ const Orders = () => {
       // Date filter: compare order date with filter date
       let dateMatch = true;
       if (filterDate) {
-        const orderDate = new Date(order.createdAt);
-        const filterDateObj = new Date(filterDate);
-        // Compare dates (ignore time)
-        const orderDateStr = orderDate.toISOString().split("T")[0];
-        const filterDateStr = filterDateObj.toISOString().split("T")[0];
-        dateMatch = orderDateStr === filterDateStr;
+        const orderDate =
+          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
+        dateMatch =
+          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
       }
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
@@ -1862,6 +2213,52 @@ const Orders = () => {
     if (filterStatus === "all") return matches;
     return matches.filter((o) => o.status === filterStatus);
   })();
+
+  const handleDownloadOrdersReport = () => {
+    const rows = filteredOrders.map((order) => {
+      const createdAtDate = getOrderCreatedDate(order);
+      const updatedAtDate = getOrderUpdatedDate(order);
+      const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
+      const customerName = getOrderCustomerName(order);
+      const customerMobile = getOrderCustomerMobile(order);
+      const lineItems = buildOrderLineItems(order, { includeReturned: false });
+      const totalAmount = lineItems.reduce(
+        (sum, line) => sum + (Number(line.total) || 0),
+        0,
+      );
+
+      return {
+        "Order ID": order._id || "",
+        "Invoice ID": buildInvoiceId(order),
+        "Created At": formatOrderDateTimeLong(createdAtDate),
+        "Updated At": formatOrderDateTimeLong(updatedAtDate),
+        Status: order.status || "",
+        "Service Type":
+          resolvedTakeawayOrderType ||
+          (String(order.serviceType || "").toUpperCase() === "DINE_IN"
+            ? "Dine-In"
+            : String(order.serviceType || "")),
+        "Order Type": resolvedTakeawayOrderType || "",
+        "Table / Counter": order.tableNumber || "",
+        Token: order.takeawayToken ?? "",
+        Customer: customerName || "",
+        Mobile: customerMobile || "",
+        "Items Count": lineItems.length,
+        "Total Amount (Rs)": Number(totalAmount.toFixed(2)),
+      };
+    });
+
+    const fileName = buildExcelFileName("orders-report", filterDate);
+    const exported = exportRowsToExcel({
+      rows,
+      fileName,
+      sheetName: "Orders",
+    });
+
+    if (!exported) {
+      alert("No orders available for the selected filters.");
+    }
+  };
 
   // Filter orders by cart for grouped view
   const getFilteredOrdersForCart = (cartOrders) => {
@@ -1894,12 +2291,10 @@ const Orders = () => {
       // Date filter: compare order date with filter date
       let dateMatch = true;
       if (filterDate) {
-        const orderDate = new Date(order.createdAt);
-        const filterDateObj = new Date(filterDate);
-        // Compare dates (ignore time)
-        const orderDateStr = orderDate.toISOString().split("T")[0];
-        const filterDateStr = filterDateObj.toISOString().split("T")[0];
-        dateMatch = orderDateStr === filterDateStr;
+        const orderDate =
+          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
+        dateMatch =
+          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
       }
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
@@ -2228,7 +2623,7 @@ const Orders = () => {
         </div>
 
         {/* Search Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           <input
             type="text"
             placeholder="Order ID / Token"
@@ -2257,6 +2652,12 @@ const Orders = () => {
             className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             title="Filter by order date"
           />
+          <button
+            onClick={handleDownloadOrdersReport}
+            className="border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors"
+          >
+            Download Excel
+          </button>
           {user?.role !== "franchise_admin" && (
             <button
               onClick={handleAdd}
@@ -2271,7 +2672,7 @@ const Orders = () => {
 
       {/* Status Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        {/* All Dine-In tile */}
+        {/* All Orders tile */}
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
@@ -2283,20 +2684,19 @@ const Orders = () => {
         >
           <div className="flex items-center justify-between mb-3">
             <div className="text-3xl font-bold tracking-tight text-[#3f291b]">
-              {orders.filter((o) => o.serviceType === "DINE_IN").length}
+              {orders.length}
             </div>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200">
               📦
             </div>
           </div>
           <div className="text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide">
-            All Dine-In
+            All Orders
           </div>
         </button>
 
         {Object.entries(
           orders
-            .filter((order) => order.serviceType === "DINE_IN")
             .reduce((acc, order) => {
               acc[order.status] = (acc[order.status] || 0) + 1;
               return acc;
@@ -2397,7 +2797,7 @@ const Orders = () => {
                                 Date & Time
                               </th>
                               <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                                Table
+                                Table / Takeaway
                               </th>
                               <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                                 Status
@@ -2437,7 +2837,7 @@ const Orders = () => {
                     Date & Time
                   </th>
                   <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                    Table
+                    Table / Takeaway
                   </th>
                   <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                     Status
@@ -2951,10 +3351,25 @@ const Orders = () => {
                             });
                           });
 
-                          if (allItems.length === 0) {
+                          const addonItems = (
+                            Array.isArray(currentOrder.selectedAddons)
+                              ? currentOrder.selectedAddons
+                              : []
+                          ).map((addon, addonIndex) => {
+                            const quantity = Number(addon?.quantity) || 1;
+                            const price = Number(addon?.price) || 0;
+                            return {
+                              addonIndex,
+                              name: sanitizeAddonName(addon?.name),
+                              quantity,
+                              price,
+                            };
+                          });
+
+                          if (allItems.length === 0 && addonItems.length === 0) {
                             return (
                               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-500">
-                                No active items in this order.
+                                No active items or add-ons in this order.
                               </div>
                             );
                           }
@@ -2963,6 +3378,9 @@ const Orders = () => {
                           const canModify = !["Cancelled", "Returned"].includes(
                             currentOrder.status || "",
                           );
+                          const isCurrentOrderTakeaway =
+                            isTakeawayServiceType(currentOrder?.serviceType) ||
+                            Boolean(resolveTakeawayOrderType(currentOrder));
 
                           return (
                             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -3061,68 +3479,7 @@ const Orders = () => {
                                                               res.data,
                                                             );
                                                             // Refresh orders list
-                                                            const ordersRes =
-                                                              await api.get(
-                                                                "/orders",
-                                                              );
-                                                            const allOrders =
-                                                              Array.isArray(
-                                                                ordersRes.data,
-                                                              )
-                                                                ? ordersRes.data
-                                                                : [];
-                                                            let dineInOrders =
-                                                              allOrders.filter(
-                                                                (o) =>
-                                                                  o.serviceType ===
-                                                                  "DINE_IN",
-                                                              );
-                                                            if (filterCafeId) {
-                                                              dineInOrders =
-                                                                dineInOrders.filter(
-                                                                  (order) => {
-                                                                    let orderCafeId =
-                                                                      order.cafeId;
-                                                                    if (
-                                                                      orderCafeId &&
-                                                                      typeof orderCafeId ===
-                                                                        "object"
-                                                                    ) {
-                                                                      orderCafeId =
-                                                                        orderCafeId._id ||
-                                                                        orderCafeId;
-                                                                    }
-                                                                    if (
-                                                                      !orderCafeId &&
-                                                                      order.table &&
-                                                                      order
-                                                                        .table
-                                                                        .cafeId
-                                                                    ) {
-                                                                      orderCafeId =
-                                                                        order
-                                                                          .table
-                                                                          .cafeId;
-                                                                      if (
-                                                                        typeof orderCafeId ===
-                                                                        "object"
-                                                                      ) {
-                                                                        orderCafeId =
-                                                                          orderCafeId._id ||
-                                                                          orderCafeId;
-                                                                      }
-                                                                    }
-                                                                    return (
-                                                                      orderCafeId &&
-                                                                      orderCafeId.toString() ===
-                                                                        filterCafeId
-                                                                    );
-                                                                  },
-                                                                );
-                                                            }
-                                                            setOrders(
-                                                              dineInOrders,
-                                                            );
+                                                            await refreshOrders();
                                                           } catch (err) {
                                                             if (
                                                               import.meta.env
@@ -3148,6 +3505,77 @@ const Orders = () => {
                                                         Cancel
                                                       </span>
                                                     </button>
+                                                    {!isCurrentOrderTakeaway &&
+                                                      !itemData.isTakeaway && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={async () => {
+                                                            // CRITICAL: window.confirm is now async, must await it
+                                                            const confirmed =
+                                                              await window.confirm(
+                                                                `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`,
+                                                              );
+                                                            if (confirmed) {
+                                                              try {
+                                                                await api.patch(
+                                                                  `/orders/${currentOrder._id}/convert-to-takeaway`,
+                                                                  {
+                                                                    itemIds: [
+                                                                      {
+                                                                        kotIndex:
+                                                                          itemData.kotIndex,
+                                                                        itemIndex:
+                                                                          itemData.itemIndex,
+                                                                      },
+                                                                    ],
+                                                                  },
+                                                                );
+                                                                alert(
+                                                                  "Item marked as takeaway in bill. Order remains as dine-in.",
+                                                                );
+                                                                // Refresh order data
+                                                                const res =
+                                                                  await api.get(
+                                                                    `/orders/${currentOrder._id}`,
+                                                                  );
+                                                                setCurrentOrder(
+                                                                  res.data,
+                                                                );
+                                                                // Refresh orders list
+                                                                await refreshOrders();
+                                                              } catch (err) {
+                                                                if (
+                                                                  import.meta
+                                                                    .env.DEV
+                                                                ) {
+                                                                  console.error(
+                                                                    "Failed to convert item to takeaway:",
+                                                                    err,
+                                                                  );
+                                                                }
+                                                                const errorMessage =
+                                                                  err.response
+                                                                    ?.data
+                                                                    ?.message ||
+                                                                  "Failed to convert item to takeaway. Please try again.";
+                                                                alert(
+                                                                  errorMessage,
+                                                                );
+                                                              }
+                                                            }
+                                                          }}
+                                                          className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium whitespace-nowrap"
+                                                        >
+                                                          📦{" "}
+                                                          <span className="hidden sm:inline">
+                                                            Takeaway
+                                                          </span>
+                                                        </button>
+                                                      )}
+                                                  </>
+                                                ) : (
+                                                  !isCurrentOrderTakeaway &&
+                                                  !itemData.isTakeaway && (
                                                     <button
                                                       type="button"
                                                       onClick={async () => {
@@ -3172,7 +3600,7 @@ const Orders = () => {
                                                               },
                                                             );
                                                             alert(
-                                                              "Item marked as takeaway in bill. Order remains as dine-in.",
+                                                              "Item converted to takeaway successfully!",
                                                             );
                                                             // Refresh order data
                                                             const res =
@@ -3183,78 +3611,12 @@ const Orders = () => {
                                                               res.data,
                                                             );
                                                             // Refresh orders list
-                                                            const ordersRes =
-                                                              await api.get(
-                                                                "/orders",
-                                                              );
-                                                            const allOrders =
-                                                              Array.isArray(
-                                                                ordersRes.data,
-                                                              )
-                                                                ? ordersRes.data
-                                                                : [];
-                                                            let dineInOrders =
-                                                              allOrders.filter(
-                                                                (o) =>
-                                                                  o.serviceType ===
-                                                                  "DINE_IN",
-                                                              );
-                                                            if (filterCafeId) {
-                                                              dineInOrders =
-                                                                dineInOrders.filter(
-                                                                  (order) => {
-                                                                    let orderCafeId =
-                                                                      order.cafeId;
-                                                                    if (
-                                                                      orderCafeId &&
-                                                                      typeof orderCafeId ===
-                                                                        "object"
-                                                                    ) {
-                                                                      orderCafeId =
-                                                                        orderCafeId._id ||
-                                                                        orderCafeId;
-                                                                    }
-                                                                    if (
-                                                                      !orderCafeId &&
-                                                                      order.table &&
-                                                                      order
-                                                                        .table
-                                                                        .cafeId
-                                                                    ) {
-                                                                      orderCafeId =
-                                                                        order
-                                                                          .table
-                                                                          .cafeId;
-                                                                      if (
-                                                                        typeof orderCafeId ===
-                                                                        "object"
-                                                                      ) {
-                                                                        orderCafeId =
-                                                                          orderCafeId._id ||
-                                                                          orderCafeId;
-                                                                      }
-                                                                    }
-                                                                    return (
-                                                                      orderCafeId &&
-                                                                      orderCafeId.toString() ===
-                                                                        filterCafeId
-                                                                    );
-                                                                  },
-                                                                );
-                                                            }
-                                                            setOrders(
-                                                              dineInOrders,
-                                                            );
+                                                            await refreshOrders();
                                                           } catch (err) {
-                                                            if (
-                                                              import.meta.env
-                                                                .DEV
-                                                            ) {
-                                                              console.error(
-                                                                "Failed to convert item to takeaway:",
-                                                                err,
-                                                              );
-                                                            }
+                                                            console.error(
+                                                              "Failed to convert item to takeaway:",
+                                                              err,
+                                                            );
                                                             const errorMessage =
                                                               err.response?.data
                                                                 ?.message ||
@@ -3270,124 +3632,7 @@ const Orders = () => {
                                                         Takeaway
                                                       </span>
                                                     </button>
-                                                  </>
-                                                ) : (
-                                                  <button
-                                                    type="button"
-                                                    onClick={async () => {
-                                                      // CRITICAL: window.confirm is now async, must await it
-                                                      const confirmed =
-                                                        await window.confirm(
-                                                          `Convert ${itemData.quantity}x ${itemData.name} to takeaway?`,
-                                                        );
-                                                      if (confirmed) {
-                                                        try {
-                                                          await api.patch(
-                                                            `/orders/${currentOrder._id}/convert-to-takeaway`,
-                                                            {
-                                                              itemIds: [
-                                                                {
-                                                                  kotIndex:
-                                                                    itemData.kotIndex,
-                                                                  itemIndex:
-                                                                    itemData.itemIndex,
-                                                                },
-                                                              ],
-                                                            },
-                                                          );
-                                                          alert(
-                                                            "Item converted to takeaway successfully!",
-                                                          );
-                                                          // Refresh order data
-                                                          const res =
-                                                            await api.get(
-                                                              `/orders/${currentOrder._id}`,
-                                                            );
-                                                          setCurrentOrder(
-                                                            res.data,
-                                                          );
-                                                          // Refresh orders list
-                                                          const ordersRes =
-                                                            await api.get(
-                                                              "/orders",
-                                                            );
-                                                          const allOrders =
-                                                            Array.isArray(
-                                                              ordersRes.data,
-                                                            )
-                                                              ? ordersRes.data
-                                                              : [];
-                                                          let dineInOrders =
-                                                            allOrders.filter(
-                                                              (o) =>
-                                                                o.serviceType ===
-                                                                "DINE_IN",
-                                                            );
-                                                          if (filterCafeId) {
-                                                            dineInOrders =
-                                                              dineInOrders.filter(
-                                                                (order) => {
-                                                                  let orderCafeId =
-                                                                    order.cafeId;
-                                                                  if (
-                                                                    orderCafeId &&
-                                                                    typeof orderCafeId ===
-                                                                      "object"
-                                                                  ) {
-                                                                    orderCafeId =
-                                                                      orderCafeId._id ||
-                                                                      orderCafeId;
-                                                                  }
-                                                                  if (
-                                                                    !orderCafeId &&
-                                                                    order.table &&
-                                                                    order.table
-                                                                      .cafeId
-                                                                  ) {
-                                                                    orderCafeId =
-                                                                      order
-                                                                        .table
-                                                                        .cafeId;
-                                                                    if (
-                                                                      typeof orderCafeId ===
-                                                                      "object"
-                                                                    ) {
-                                                                      orderCafeId =
-                                                                        orderCafeId._id ||
-                                                                        orderCafeId;
-                                                                    }
-                                                                  }
-                                                                  return (
-                                                                    orderCafeId &&
-                                                                    orderCafeId.toString() ===
-                                                                      filterCafeId
-                                                                  );
-                                                                },
-                                                              );
-                                                          }
-                                                          setOrders(
-                                                            dineInOrders,
-                                                          );
-                                                        } catch (err) {
-                                                          console.error(
-                                                            "Failed to convert item to takeaway:",
-                                                            err,
-                                                          );
-                                                          const errorMessage =
-                                                            err.response?.data
-                                                              ?.message ||
-                                                            "Failed to convert item to takeaway. Please try again.";
-                                                          alert(errorMessage);
-                                                        }
-                                                      }
-                                                    }}
-                                                    className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300 rounded hover:bg-green-200 font-medium whitespace-nowrap"
-                                                  >
-                                                    📦{" "}
-                                                    <span className="hidden sm:inline">
-                                                      Takeaway
-                                                    </span>
-                                                  </button>
+                                                  )
                                                 )}
                                               </div>
                                             )}
@@ -3405,6 +3650,58 @@ const Orders = () => {
                                           </td>
                                         </tr>
                                       ))}
+                                      {addonItems.map((addonData) => (
+                                        <tr
+                                          key={`addon-${addonData.addonIndex}`}
+                                          className="hover:bg-blue-50"
+                                        >
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-800 min-w-[120px]">
+                                            <span className="truncate block">
+                                              {addonData.name}
+                                            </span>
+                                            <span className="ml-1 sm:ml-2 text-blue-600 font-semibold text-[10px] sm:text-xs whitespace-nowrap">
+                                              ADD-ON
+                                            </span>
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                                            {addonData.quantity}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                                            {"\u20B9"}
+                                            {formatMoney(addonData.price)}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                                            {"\u20B9"}
+                                            {formatMoney(
+                                              addonData.price *
+                                                addonData.quantity,
+                                            )}
+                                          </td>
+                                          <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 text-xs sm:text-sm">
+                                            {canModify && !isPaid ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleCancelAddonLine(
+                                                    currentOrder._id,
+                                                    addonData.addonIndex,
+                                                  )
+                                                }
+                                                className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 font-medium whitespace-nowrap"
+                                              >
+                                                ❌{" "}
+                                                <span className="hidden sm:inline">
+                                                  Cancel
+                                                </span>
+                                              </button>
+                                            ) : (
+                                              <span className="text-xs text-gray-400 italic">
+                                                {canModify ? "N/A" : "Locked"}
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
                                     </tbody>
                                   </table>
                                 </div>
@@ -3413,15 +3710,17 @@ const Orders = () => {
                                 <p className="text-xs text-gray-600">
                                   {!isPaid ? (
                                     <>
-                                      💡 <strong>Before Payment:</strong> You
-                                      can cancel individual items or convert
-                                      them to takeaway from this order.
+                                      💡 <strong>Before Payment:</strong>{" "}
+                                      {isCurrentOrderTakeaway
+                                        ? "You can cancel individual items and add-ons from this takeaway order."
+                                        : "You can cancel individual items and add-ons, or convert items to takeaway from this order."}
                                     </>
                                   ) : (
                                     <>
-                                      💡 <strong>After Payment:</strong> You can
-                                      convert remaining items to takeaway for
-                                      customers to carry home.
+                                      💡 <strong>After Payment:</strong>{" "}
+                                      {isCurrentOrderTakeaway
+                                        ? "This is already a takeaway order."
+                                        : "You can convert remaining items to takeaway for customers to carry home."}
                                     </>
                                   )}
                                 </p>
@@ -3455,7 +3754,7 @@ const Orders = () => {
                       ) : (
                         <p className="text-sm text-gray-600 mb-4">
                           You can add more items to this order until payment is
-                          completed. Selected items will be added as a new KOT.
+                          completed. Selected items will be added to this order.
                         </p>
                       )}
                       {menuItems.length === 0 && !menuLoading && !menuError && (
@@ -3841,3 +4140,4 @@ const Orders = () => {
 };
 
 export default Orders;
+

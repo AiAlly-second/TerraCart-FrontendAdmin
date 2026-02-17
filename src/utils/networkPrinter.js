@@ -44,7 +44,7 @@ const generateESCPOS = (order, kot, kotIndex = 0) => {
   commands += `Order: ${(order._id || '').toString().slice(-8).toUpperCase()}\n`;
   
   // Table/Token Number
-  if (order.serviceType === 'TAKEAWAY' && order.takeawayToken) {
+  if (order.serviceType === 'TAKEAWAY' && order.orderType !== 'DELIVERY' && order.takeawayToken) {
     commands += '\n';
     commands += ESC + 'a' + '\x01'; // Center
     commands += ESC + '!' + '\x20'; // Double height

@@ -15,6 +15,7 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { printKOT } from "../utils/kotPrinter";
+import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 const sanitizeAddonName = (value) => {
@@ -39,6 +40,44 @@ const formatMoney = (value) => {
   if (Number.isNaN(num)) return "0.00";
   return num.toFixed(2);
 };
+
+const getValidDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getOrderCreatedDate = (order) => getValidDate(order?.createdAt);
+const getOrderUpdatedDate = (order) => getValidDate(order?.updatedAt);
+
+const formatOrderDateForFilter = (date) => {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatOrderDateTime = (date) => {
+  if (!date) {
+    return { dateLabel: "-", timeLabel: "-" };
+  }
+
+  return {
+    dateLabel: date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }),
+    timeLabel: date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+};
+
+const formatOrderDateTimeLong = (date) =>
+  date ? date.toLocaleString("en-US") : "-";
 
 const paiseToRupees = (value) => {
   if (value === undefined || value === null) return 0;
@@ -251,7 +290,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           order.paidAt || order.updatedAt || order.createdAt || Date.now(),
         ).toLocaleDateString()}</div>
         ${
-          order.serviceType === "TAKEAWAY" && order.takeawayToken
+          order.serviceType === "TAKEAWAY" &&
+          order.orderType !== "DELIVERY" &&
+          order.takeawayToken
             ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
             : ""
         }
@@ -269,7 +310,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                       ? "🚚 Delivery Order"
                       : "Takeaway Order"
                 }${
-                  order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
+                  order.orderType !== "DELIVERY" && order.takeawayToken
+                    ? ` - Token: ${order.takeawayToken}`
+                    : ""
                 }
               </div>
               ${
@@ -1378,6 +1421,84 @@ const TakeawayOrders = () => {
     }
   };
 
+  const handleCancelAddonLine = async (orderId, addonIndex) => {
+    const normalizedOrderId = normalizeId(orderId);
+    const sourceOrder =
+      orders.find((o) => normalizeId(o?._id) === normalizedOrderId) ||
+      (normalizeId(currentOrder?._id) === normalizedOrderId
+        ? currentOrder
+        : null);
+    if (!sourceOrder) return;
+
+    if (["Paid", "Cancelled", "Returned"].includes(sourceOrder.status)) {
+      alert(
+        `Cannot cancel add-ons from an order that is ${String(sourceOrder.status || "").toLowerCase()}.`,
+      );
+      return;
+    }
+
+    const existingAddons = Array.isArray(sourceOrder.selectedAddons)
+      ? sourceOrder.selectedAddons
+      : [];
+    const targetAddon = existingAddons[addonIndex];
+    if (!targetAddon) return;
+
+    const addonName = sanitizeAddonName(targetAddon.name);
+    const addonQty = Number(targetAddon.quantity) || 1;
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to cancel "${addonName}" (${addonQty}x) from this order?`,
+      {
+        title: "Cancel Add-on",
+        warningMessage: "Cancel Add-on",
+        danger: false,
+        confirmText: "Cancel Add-on",
+        cancelText: "Keep Add-on",
+      },
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const updatedAddons = existingAddons.filter(
+        (_, index) => index !== addonIndex,
+      );
+      const payload = updatedAddons.map((addon) => ({
+        addonId: addon.addonId || addon._id || addon.id,
+        name: addon.name,
+        price: addon.price,
+        quantity: addon.quantity,
+      }));
+
+      const response = await api.patch(`/orders/${sourceOrder._id}/addons`, {
+        selectedAddons: payload,
+      });
+
+      const updatedOrder = response?.data;
+      if (updatedOrder?._id) {
+        upsertOrder(updatedOrder);
+        if (
+          currentOrder &&
+          normalizeId(currentOrder._id) === normalizeId(updatedOrder._id)
+        ) {
+          setCurrentOrder(updatedOrder);
+        }
+      }
+
+      alert(`Add-on "${addonName}" has been cancelled successfully.`);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Cancel add-on failed:", err);
+      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to cancel add-on";
+      alert(errorMessage);
+    }
+  };
+
   const getStatusIcon = (status) => {
     switch (status) {
       case "Paid":
@@ -1550,12 +1671,10 @@ const TakeawayOrders = () => {
       // Date filter: compare order date with filter date
       let dateMatch = true;
       if (filterDate) {
-        const orderDate = new Date(order.createdAt);
-        const filterDateObj = new Date(filterDate);
-        // Compare dates (ignore time)
-        const orderDateStr = orderDate.toISOString().split("T")[0];
-        const filterDateStr = filterDateObj.toISOString().split("T")[0];
-        dateMatch = orderDateStr === filterDateStr;
+        const orderDate =
+          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
+        dateMatch =
+          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
       }
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
@@ -1577,6 +1696,50 @@ const TakeawayOrders = () => {
     filterStatus,
     filterDate,
   ]);
+
+  const handleDownloadTakeawayReport = () => {
+    const rows = filteredOrders.map((order) => {
+      const createdAtDate = getOrderCreatedDate(order);
+      const updatedAtDate = getOrderUpdatedDate(order);
+      const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
+      const selectedAddons = Array.isArray(order?.selectedAddons)
+        ? order.selectedAddons
+        : [];
+      const aggregatedItems = aggregateKotItems(kotLines, selectedAddons);
+      const totals = computeKotTotals(kotLines, aggregatedItems, order);
+      const totalItems = aggregatedItems.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0),
+        0,
+      );
+
+      return {
+        "Order ID": order._id || "",
+        "Invoice ID": buildInvoiceId(order),
+        "Created At": formatOrderDateTimeLong(createdAtDate),
+        "Updated At": formatOrderDateTimeLong(updatedAtDate),
+        Status: order.status || "",
+        "Service Type": order.serviceType || "TAKEAWAY",
+        "Order Type": order.orderType || "",
+        "Table / Counter": order.tableNumber || "",
+        Token: order.orderType === "DELIVERY" ? "" : order.takeawayToken ?? "",
+        Customer: order.customerName || "",
+        Mobile: order.customerMobile || "",
+        "Items Count": totalItems,
+        "Total Amount (Rs)": Number((totals?.totalAmount || 0).toFixed(2)),
+      };
+    });
+
+    const fileName = buildExcelFileName("takeaway-orders-report", filterDate);
+    const exported = exportRowsToExcel({
+      rows,
+      fileName,
+      sheetName: "TakeawayOrders",
+    });
+
+    if (!exported) {
+      alert("No takeaway orders available for the selected filters.");
+    }
+  };
 
   const tryAccept = (order) => {
     if (
@@ -1643,6 +1806,13 @@ const TakeawayOrders = () => {
               className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg text-xs sm:text-sm"
             >
               Reset
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadTakeawayReport}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs sm:text-sm whitespace-nowrap"
+            >
+              Download Excel
             </button>
             <button
               type="button"
@@ -1758,16 +1928,11 @@ const TakeawayOrders = () => {
               // Validate order exists before processing
               if (!order) return null;
 
-              const orderDate = new Date(order.updatedAt || order.createdAt);
-              const formattedDate = orderDate.toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              });
-              const formattedTime = orderDate.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const createdAtDate = getOrderCreatedDate(order);
+              const updatedAtDate = getOrderUpdatedDate(order);
+              const orderDate = createdAtDate || updatedAtDate;
+              const { dateLabel: formattedDate, timeLabel: formattedTime } =
+                formatOrderDateTime(orderDate);
 
               return (
                 <React.Fragment key={order._id}>
@@ -1804,7 +1969,10 @@ const TakeawayOrders = () => {
                         <div className="mt-1.5 text-[9px] sm:text-[10px] text-gray-600 space-y-0.5">
                           <div className="truncate">
                             Created:{" "}
-                            {new Date(order.createdAt).toLocaleString()}
+                            {formatOrderDateTimeLong(createdAtDate || orderDate)}
+                          </div>
+                          <div className="truncate">
+                            Updated: {formatOrderDateTimeLong(updatedAtDate)}
                           </div>
                           <div className="truncate">
                             Invoice:{" "}
@@ -1842,7 +2010,8 @@ const TakeawayOrders = () => {
                               </span>
                             </div>
                           )}
-                          {order.takeawayToken && (
+                          {order.orderType !== "DELIVERY" &&
+                            order.takeawayToken && (
                             <div className="font-semibold text-blue-600">
                               Token: {order.takeawayToken}
                             </div>
@@ -2026,7 +2195,8 @@ const TakeawayOrders = () => {
                               )}
                             </div>
                           )}
-                        {order.takeawayToken && (
+                        {order.orderType !== "DELIVERY" &&
+                          order.takeawayToken && (
                           <div className="text-xs mt-1.5 font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                             Token: {order.takeawayToken}
                           </div>
@@ -2286,11 +2456,35 @@ const TakeawayOrders = () => {
                                           <span className="px-1.5 py-0.5 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700">
                                             {qty}x
                                           </span>
-                                          <span className="text-gray-800">{name}</span>
+                                          <span className="text-gray-800">
+                                            {name}
+                                            <span className="ml-1 text-blue-600 font-semibold text-[10px] whitespace-nowrap">
+                                              ADD-ON
+                                            </span>
+                                          </span>
                                         </div>
-                                        <span className="text-gray-600">
-                                          ₹{(price * qty).toFixed(2)}
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-gray-600">
+                                            ₹{(price * qty).toFixed(2)}
+                                          </span>
+                                          {order.status !== "Paid" &&
+                                            order.status !== "Cancelled" &&
+                                            order.status !== "Returned" && (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleCancelAddonLine(
+                                                    order._id,
+                                                    aIdx,
+                                                  )
+                                                }
+                                                className="px-1.5 py-0.5 text-[11px] text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                                title="Cancel this add-on"
+                                              >
+                                                ❌ Cancel
+                                              </button>
+                                            )}
+                                        </div>
                                       </div>
                                     );
                                   })}
@@ -2613,8 +2807,10 @@ const TakeawayOrders = () => {
                       <h3 className="text-lg font-semibold text-gray-800">
                         Current Order Items
                       </h3>
-                      {!currentOrder?.kotLines ||
-                      currentOrder.kotLines.length === 0 ? (
+                      {((!currentOrder?.kotLines ||
+                        currentOrder.kotLines.length === 0) &&
+                        (!currentOrder?.selectedAddons ||
+                          currentOrder.selectedAddons.length === 0)) ? (
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                           No items in this order yet.
                         </div>
@@ -2700,9 +2896,35 @@ const TakeawayOrders = () => {
                                       <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700">
                                         {qty}x
                                       </span>
-                                      <span className="text-sm text-gray-800">{name}</span>
+                                      <span className="text-sm text-gray-800">
+                                        {name}
+                                        <span className="ml-1 text-blue-600 font-semibold text-[10px] whitespace-nowrap">
+                                          ADD-ON
+                                        </span>
+                                      </span>
                                     </div>
-                                    <span className="text-sm text-gray-600">₹{(price * qty).toFixed(2)}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">
+                                        ₹{(price * qty).toFixed(2)}
+                                      </span>
+                                      {currentOrder.status !== "Paid" &&
+                                        currentOrder.status !== "Cancelled" &&
+                                        currentOrder.status !== "Returned" && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleCancelAddonLine(
+                                                currentOrder._id,
+                                                aIdx,
+                                              )
+                                            }
+                                            className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                            title="Cancel this add-on"
+                                          >
+                                            ❌ Cancel
+                                          </button>
+                                        )}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -2729,8 +2951,8 @@ const TakeawayOrders = () => {
                         <>
                           <p className="text-xs text-gray-500">
                             Select items from the menu below to add more items
-                            to this takeaway order. These will be added as a new
-                            KOT.
+                            to this takeaway order. These will be added to this
+                            order.
                           </p>
                           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                             <div className="xl:col-span-2 space-y-4">
@@ -3057,4 +3279,6 @@ const TakeawayOrders = () => {
 };
 
 export default TakeawayOrders;
+
+
 

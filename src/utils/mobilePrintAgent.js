@@ -127,7 +127,11 @@ function formatKOT(order, kot, kotIndex = 0) {
 
   // Table/Token
   printer.align('ct').style('b');
-  if (order.serviceType === "TAKEAWAY" && order.takeawayToken) {
+  if (
+    order.serviceType === "TAKEAWAY" &&
+    order.orderType !== "DELIVERY" &&
+    order.takeawayToken
+  ) {
     printer.text("        TOKEN NUMBER");
     printer.size(2, 2).text(`        ${order.takeawayToken.toUpperCase()}`);
   } else if (order.tableNumber) {
