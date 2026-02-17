@@ -66,6 +66,15 @@ const DefaultMenu = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userRole = user?.role;
+  const normalizedRole = String(userRole || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const isSuperAdmin =
+    normalizedRole === "super_admin" || normalizedRole === "superadmin";
+  const isFranchiseAdmin =
+    normalizedRole === "franchise_admin" ||
+    normalizedRole === "franchiseadmin";
   const [defaultMenu, setDefaultMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -176,12 +185,12 @@ const DefaultMenu = () => {
       
       // Super Admin: Fetch franchise admins to push menu to franchises
       // Franchise Admin: Fetch cart admins under their franchise to push menu to carts
-      if (userRole === "super_admin") {
+      if (isSuperAdmin) {
         const franchiseUsers = (response.data || []).filter(
           (u) => u.role === "franchise_admin"
         );
         setFranchises(franchiseUsers);
-      } else if (userRole === "franchise_admin") {
+      } else if (isFranchiseAdmin) {
         const cartUsers = (response.data || []).filter(
           (u) => u.role === "admin" && u.franchiseId?.toString() === user._id?.toString()
         );
@@ -252,7 +261,7 @@ const DefaultMenu = () => {
 
   const handlePushToFranchises = async () => {
     if (selectedFranchises.size === 0) {
-      alert(`Please select at least one ${userRole === "super_admin" ? "franchise" : "cart"}.`);
+      alert(`Please select at least one ${isSuperAdmin ? "franchise" : "cart"}.`);
       return;
     }
 
@@ -264,18 +273,19 @@ const DefaultMenu = () => {
       })
       .join(", ");
 
-    const targetType = userRole === "super_admin" ? "franchise" : "cart";
-    const targetTypePlural = userRole === "super_admin" ? "franchises" : "carts";
+    const targetType = isSuperAdmin ? "franchise" : "cart";
+    const targetTypePlural = isSuperAdmin ? "franchises" : "carts";
 
     // CRITICAL: window.confirm is now async, must await it
     const confirmed = await window.confirm(
       `Push default menu to ${selectedFranchises.size} ${targetType}(s)?\n\n` +
-        `${userRole === "super_admin" ? "Franchises" : "Carts"}: ${targetNames}\n\n` +
+        `${isSuperAdmin ? "Franchises" : "Carts"}: ${targetNames}\n\n` +
         `This will:\n` +
-        `${userRole === "super_admin" 
-          ? `• Replace the default menu for each selected franchise\n• The franchise menu will then automatically sync to all their carts` 
-          : `• Replace the menu for each selected cart`
+        `${isSuperAdmin
+          ? `- Replace the default menu for each selected franchise\n- The franchise menu will then automatically sync to all their carts`
+          : `- Replace the menu for each selected cart`
         }\n\n` +
+        `${isSuperAdmin ? `- Global add-ons will also be pushed automatically\n\n` : ""}` +
         `Continue?`
     );
     if (!confirmed) {
@@ -286,20 +296,30 @@ const DefaultMenu = () => {
     const results = [];
 
     // Super Admin pushes to franchises, Franchise Admin pushes to carts
-    const endpoint = userRole === "super_admin" ? "franchise" : "cafe";
+    const endpoint = isSuperAdmin ? "franchise" : "cafe";
 
     for (const targetId of selectedList) {
       const target = franchises.find((f) => f._id === targetId);
       try {
         const response = await api.post(
-          `/default-menu/push/${endpoint}/${targetId}`
+          `/default-menu/push/${endpoint}/${targetId}`,
+          {
+            includeAddons: isSuperAdmin,
+          }
         );
+        const addonMessage =
+          isSuperAdmin &&
+          response?.data?.addonsResult
+            ? response.data.addonsResult.success
+              ? ` | Add-ons: ${response.data.addonsResult.templatesFound || 0} template(s) to ${response.data.addonsResult.cartsUpdated || 0} cart(s)`
+              : ` | Add-ons: ${response.data.addonsResult.message || "Not pushed"}`
+            : "";
         results.push({
           franchiseId: targetId,
           franchiseName: target?.name || target?.cartName || "Unknown",
           success: true,
-          message: userRole === "super_admin" 
-            ? `Updated ${response.data.cafesUpdated || 0} carts`
+          message: isSuperAdmin 
+            ? `Updated ${response.data.cafesUpdated || 0} carts${addonMessage}`
             : `Menu pushed successfully`,
           data: response.data,
         });
@@ -598,6 +618,15 @@ const DefaultMenu = () => {
             <FaPlus className="mr-1.5 sm:mr-2" />
             <span className="whitespace-nowrap">Add Category</span>
           </button>
+          {(isSuperAdmin || isFranchiseAdmin) && (
+            <button
+              onClick={() => navigate("/addons")}
+              className="flex items-center px-3 sm:px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm sm:text-base flex-1 sm:flex-initial justify-center"
+            >
+              <FaPlus className="mr-1.5 sm:mr-2" />
+              <span className="whitespace-nowrap">Global Add-ons</span>
+            </button>
+          )}
           <button
             onClick={handleOpenPushModal}
             disabled={
@@ -607,7 +636,7 @@ const DefaultMenu = () => {
           >
             <FaSync className="mr-1.5 sm:mr-2" />
             <span className="whitespace-nowrap">
-              Push to {userRole === "super_admin" ? "Franchises" : "Carts"}
+              Push to {isSuperAdmin ? "Franchises" : "Carts"}
             </span>
           </button>
         </div>
@@ -634,7 +663,7 @@ const DefaultMenu = () => {
               2
             </span>
             <span className="whitespace-nowrap truncate">
-              {userRole === "super_admin" ? "Push to Franchises" : "Push to Carts"}
+              {isSuperAdmin ? "Push to Franchises" : "Push to Carts"}
             </span>
           </div>
           <span className="hidden sm:inline text-blue-500">→</span>
@@ -644,7 +673,7 @@ const DefaultMenu = () => {
               3
             </span>
             <span className="whitespace-nowrap truncate">
-              {userRole === "super_admin" ? "Franchise pushes to Carts" : "Cart Admin toggles availability"}
+              {isSuperAdmin ? "Franchise pushes to Carts" : "Cart Admin toggles availability"}
             </span>
           </div>
           <span className="hidden sm:inline text-blue-500">→</span>
@@ -872,8 +901,8 @@ const DefaultMenu = () => {
                                 </div>
 
                                 {/* Define BOM / Recipe shortcut into Finances for Super/Franchise Admin */}
-                                {(userRole === "super_admin" ||
-                                  userRole === "franchise_admin") && (
+                                {(isSuperAdmin ||
+                                  isFranchiseAdmin) && (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -952,7 +981,7 @@ const DefaultMenu = () => {
               <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                 <FaBuilding className="text-purple-600 flex-shrink-0 text-sm sm:text-base md:text-lg" />
                 <span className="truncate">
-                  Push Menu to {userRole === "super_admin" ? "Franchises" : "Carts"}
+                  Push Menu to {isSuperAdmin ? "Franchises" : "Carts"}
                 </span>
               </h2>
               <button
@@ -1018,7 +1047,7 @@ const DefaultMenu = () => {
               // Show franchise selection
               <div className="space-y-3 sm:space-y-4">
                 <p className="text-gray-600 text-xs sm:text-sm">
-                  {userRole === "super_admin" 
+                  {isSuperAdmin 
                     ? "Select the franchises you want to push the default menu to. Each franchise will receive a copy of this menu, which they can then customize and push to their carts."
                     : "Select the carts you want to push the default menu to. Each cart will receive a copy of this menu."
                   }
@@ -1036,7 +1065,7 @@ const DefaultMenu = () => {
                       className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                     />
                     <span className="font-medium text-xs sm:text-sm md:text-base">
-                      Select All ({franchises.length} {userRole === "super_admin" ? "franchises" : "carts"})
+                      Select All ({franchises.length} {isSuperAdmin ? "franchises" : "carts"})
                     </span>
                   </label>
                   <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
@@ -1086,7 +1115,7 @@ const DefaultMenu = () => {
                     <div className="text-center py-6 sm:py-8 text-gray-500">
                       <FaBuilding className="mx-auto text-2xl sm:text-3xl mb-2" />
                       <p className="text-xs sm:text-sm">
-                        No {userRole === "super_admin" ? "franchises" : "carts"} found
+                        No {isSuperAdmin ? "franchises" : "carts"} found
                       </p>
                     </div>
                   )}
@@ -1495,3 +1524,5 @@ const DefaultMenu = () => {
 };
 
 export default DefaultMenu;
+
+

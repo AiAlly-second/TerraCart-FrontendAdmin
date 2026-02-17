@@ -244,7 +244,7 @@ export const printKOT = (order, kot, kotIndex = 0) => {
           </div>
         </div>
 
-        ${order.serviceType === 'TAKEAWAY' && order.takeawayToken ? `
+        ${order.serviceType === 'TAKEAWAY' && order.orderType !== 'DELIVERY' && order.takeawayToken ? `
         <div class="highlight-box">
           <span class="label">TOKEN NUMBER</span>
           <span class="value">${order.takeawayToken.toUpperCase()}</span>

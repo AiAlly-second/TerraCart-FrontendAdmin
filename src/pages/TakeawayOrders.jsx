@@ -15,8 +15,15 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { printKOT } from "../utils/kotPrinter";
+import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
 
 const buildInvoiceId = (order) => {
   if (!order) return "";
@@ -34,6 +41,44 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const getValidDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getOrderCreatedDate = (order) => getValidDate(order?.createdAt);
+const getOrderUpdatedDate = (order) => getValidDate(order?.updatedAt);
+
+const formatOrderDateForFilter = (date) => {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatOrderDateTime = (date) => {
+  if (!date) {
+    return { dateLabel: "-", timeLabel: "-" };
+  }
+
+  return {
+    dateLabel: date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }),
+    timeLabel: date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+};
+
+const formatOrderDateTimeLong = (date) =>
+  date ? date.toLocaleString("en-US") : "-";
+
 const paiseToRupees = (value) => {
   if (value === undefined || value === null) return 0;
   const num = Number(value);
@@ -41,8 +86,8 @@ const paiseToRupees = (value) => {
   return num / 100;
 };
 
-// Aggregate all items from all KOTs
-const aggregateKotItems = (kotLines = []) => {
+// Aggregate all items from all KOTs and selected add-ons
+const aggregateKotItems = (kotLines = [], selectedAddons = []) => {
   const map = new Map();
   (kotLines || []).forEach((kot) => {
     (kot?.items || []).forEach((item) => {
@@ -66,6 +111,28 @@ const aggregateKotItems = (kotLines = []) => {
       }
     });
   });
+
+  (selectedAddons || []).forEach((addon) => {
+    if (!addon) return;
+    const addonName = sanitizeAddonName(addon.name);
+    const addonKey = `addon:${normalizeId(
+      addon.addonId || addon._id || addon.id || `${addonName}-${addon.price || 0}`,
+    )}`;
+    const quantity = Number(addon.quantity) || 1;
+    const unitPrice = Number(addon.price) || 0; // Add-ons are in rupees
+    if (!map.has(addonKey)) {
+      map.set(addonKey, {
+        name: addonName,
+        unitPrice,
+        quantity: 0,
+        amount: 0,
+      });
+    }
+    const entry = map.get(addonKey);
+    entry.quantity += quantity;
+    entry.amount += unitPrice * quantity;
+  });
+
   return Array.from(map.values());
 };
 
@@ -108,7 +175,10 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
   if (!order) return "";
   const invoiceNumber = buildInvoiceId(order);
   const kotLines = Array.isArray(order.kotLines) ? order.kotLines : [];
-  const aggregatedItems = aggregateKotItems(kotLines);
+  const selectedAddons = Array.isArray(order.selectedAddons)
+    ? order.selectedAddons
+    : [];
+  const aggregatedItems = aggregateKotItems(kotLines, selectedAddons);
   const totals = computeKotTotals(kotLines, aggregatedItems, order);
 
   // Get cart address (prefer address, fallback to location)
@@ -220,7 +290,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           order.paidAt || order.updatedAt || order.createdAt || Date.now(),
         ).toLocaleDateString()}</div>
         ${
-          order.serviceType === "TAKEAWAY" && order.takeawayToken
+          order.serviceType === "TAKEAWAY" &&
+          order.orderType !== "DELIVERY" &&
+          order.takeawayToken
             ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
             : ""
         }
@@ -238,7 +310,9 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                       ? "🚚 Delivery Order"
                       : "Takeaway Order"
                 }${
-                  order.takeawayToken ? ` - Token: ${order.takeawayToken}` : ""
+                  order.orderType !== "DELIVERY" && order.takeawayToken
+                    ? ` - Token: ${order.takeawayToken}`
+                    : ""
                 }
               </div>
               ${
@@ -554,6 +628,13 @@ const TakeawayOrders = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
+  const [reasonModal, setReasonModal] = useState({
+    open: false,
+    orderId: null,
+    status: null,
+    title: "",
+  });
+  const [reasonInput, setReasonInput] = useState("");
 
   // Auto-print preference (default: false - disabled to prevent automatic popups)
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
@@ -694,7 +775,12 @@ const TakeawayOrders = () => {
           : Array.isArray(raw?.addons)
             ? raw.addons
             : [];
-      const list = addonsList.filter((a) => a && (a.name != null || a._id != null || a.id != null));
+      const list = addonsList.filter(
+        (a) =>
+          a &&
+          a.isAvailable !== false &&
+          (a.name != null || a._id != null || a.id != null),
+      );
       setAddonList(list);
     } catch (err) {
       if (import.meta.env.DEV) {
@@ -940,7 +1026,12 @@ const TakeawayOrders = () => {
         const addon = addonList.find((a) => (a._id || a.id) === id);
         if (!addon) return null;
         const price = Number(addon.price) || 0;
-        return { id, name: addon.name || "Add-on", price, quantity: Number(quantity) || 0 };
+        return {
+          id,
+          name: sanitizeAddonName(addon.name),
+          price,
+          quantity: Number(quantity) || 0,
+        };
       })
       .filter(Boolean);
   }, [draftAddonSelections, addonList]);
@@ -1020,13 +1111,24 @@ const TakeawayOrders = () => {
     });
   }, []);
 
-  const changeStatus = async (orderId, newStatus) => {
+  const changeStatus = async (orderId, newStatus, reason = null) => {
     try {
       const response = await api.patch(`/orders/${orderId}/status`, {
         status: newStatus,
+        reason,
       });
       upsertOrder(response.data);
+      if (reasonModal.open) {
+        closeReasonModal();
+      }
     } catch (e) {
+      if (
+        e.name === "AbortError" ||
+        e.name === "CanceledError" ||
+        e.code === "ERR_CANCELED"
+      ) {
+        return;
+      }
       if (import.meta.env.DEV) {
         console.error("Status change failed:", e);
       }
@@ -1034,6 +1136,29 @@ const TakeawayOrders = () => {
         e.response?.data?.message || e.message || "Status update failed";
       alert(`Failed to change status: ${errorMessage}`);
     }
+  };
+
+  const openReasonModal = (orderId, status) => {
+    setReasonModal({
+      open: true,
+      orderId,
+      status,
+      title: status === "Cancelled" ? "Cancel Order" : "Return Order",
+    });
+    setReasonInput("");
+  };
+
+  const closeReasonModal = () => {
+    setReasonModal({ open: false, orderId: null, status: null, title: "" });
+    setReasonInput("");
+  };
+
+  const handleReasonSubmit = () => {
+    if (!reasonInput.trim()) {
+      alert("Please provide a reason.");
+      return;
+    }
+    changeStatus(reasonModal.orderId, reasonModal.status, reasonInput.trim());
   };
 
   const acceptOrderTakeaway = async (orderId) => {
@@ -1117,7 +1242,9 @@ const TakeawayOrders = () => {
           quantity: a.quantity,
         }));
         const mergedAddons = [...existingAddons, ...newAddons];
-        await api.patch(`/orders/${currentOrder._id}`, { selectedAddons: mergedAddons });
+        await api.patch(`/orders/${currentOrder._id}/addons`, {
+          selectedAddons: mergedAddons,
+        });
       }
 
       // Refresh orders list by fetching again
@@ -1294,6 +1421,84 @@ const TakeawayOrders = () => {
     }
   };
 
+  const handleCancelAddonLine = async (orderId, addonIndex) => {
+    const normalizedOrderId = normalizeId(orderId);
+    const sourceOrder =
+      orders.find((o) => normalizeId(o?._id) === normalizedOrderId) ||
+      (normalizeId(currentOrder?._id) === normalizedOrderId
+        ? currentOrder
+        : null);
+    if (!sourceOrder) return;
+
+    if (["Paid", "Cancelled", "Returned"].includes(sourceOrder.status)) {
+      alert(
+        `Cannot cancel add-ons from an order that is ${String(sourceOrder.status || "").toLowerCase()}.`,
+      );
+      return;
+    }
+
+    const existingAddons = Array.isArray(sourceOrder.selectedAddons)
+      ? sourceOrder.selectedAddons
+      : [];
+    const targetAddon = existingAddons[addonIndex];
+    if (!targetAddon) return;
+
+    const addonName = sanitizeAddonName(targetAddon.name);
+    const addonQty = Number(targetAddon.quantity) || 1;
+
+    const { confirm } = await import("../utils/confirm");
+    const confirmed = await confirm(
+      `Are you sure you want to cancel "${addonName}" (${addonQty}x) from this order?`,
+      {
+        title: "Cancel Add-on",
+        warningMessage: "Cancel Add-on",
+        danger: false,
+        confirmText: "Cancel Add-on",
+        cancelText: "Keep Add-on",
+      },
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const updatedAddons = existingAddons.filter(
+        (_, index) => index !== addonIndex,
+      );
+      const payload = updatedAddons.map((addon) => ({
+        addonId: addon.addonId || addon._id || addon.id,
+        name: addon.name,
+        price: addon.price,
+        quantity: addon.quantity,
+      }));
+
+      const response = await api.patch(`/orders/${sourceOrder._id}/addons`, {
+        selectedAddons: payload,
+      });
+
+      const updatedOrder = response?.data;
+      if (updatedOrder?._id) {
+        upsertOrder(updatedOrder);
+        if (
+          currentOrder &&
+          normalizeId(currentOrder._id) === normalizeId(updatedOrder._id)
+        ) {
+          setCurrentOrder(updatedOrder);
+        }
+      }
+
+      alert(`Add-on "${addonName}" has been cancelled successfully.`);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Cancel add-on failed:", err);
+      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to cancel add-on";
+      alert(errorMessage);
+    }
+  };
+
   const getStatusIcon = (status) => {
     switch (status) {
       case "Paid":
@@ -1323,6 +1528,61 @@ const TakeawayOrders = () => {
         return "↩️";
       default:
         return "📦";
+    }
+  };
+
+  const getTakeawayTileTheme = (status) => {
+    switch (status) {
+      case "Paid":
+      case "Completed":
+        return {
+          card: "bg-emerald-50/70 border-emerald-200/80",
+          icon: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+        };
+      case "Confirmed":
+      case "Accepted":
+        return {
+          card: "bg-amber-50/70 border-amber-200/80",
+          icon: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+        };
+      case "Preparing":
+      case "Being Prepared":
+      case "BeingPrepared":
+        return {
+          card: "bg-blue-50/70 border-blue-200/80",
+          icon: "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+        };
+      case "Ready":
+      case "Served":
+        return {
+          card: "bg-indigo-50/70 border-indigo-200/80",
+          icon: "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200",
+        };
+      case "Finalized":
+        return {
+          card: "bg-cyan-50/70 border-cyan-200/80",
+          icon: "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200",
+        };
+      case "Pending":
+        return {
+          card: "bg-orange-50/70 border-orange-200/80",
+          icon: "bg-orange-100 text-orange-700 ring-1 ring-orange-200",
+        };
+      case "Cancelled":
+        return {
+          card: "bg-red-50/70 border-red-200/80",
+          icon: "bg-red-100 text-red-700 ring-1 ring-red-200",
+        };
+      case "Returned":
+        return {
+          card: "bg-rose-50/70 border-rose-200/80",
+          icon: "bg-rose-100 text-rose-700 ring-1 ring-rose-200",
+        };
+      default:
+        return {
+          card: "bg-slate-50/70 border-slate-200/80",
+          icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+        };
     }
   };
 
@@ -1411,12 +1671,10 @@ const TakeawayOrders = () => {
       // Date filter: compare order date with filter date
       let dateMatch = true;
       if (filterDate) {
-        const orderDate = new Date(order.createdAt);
-        const filterDateObj = new Date(filterDate);
-        // Compare dates (ignore time)
-        const orderDateStr = orderDate.toISOString().split("T")[0];
-        const filterDateStr = filterDateObj.toISOString().split("T")[0];
-        dateMatch = orderDateStr === filterDateStr;
+        const orderDate =
+          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
+        dateMatch =
+          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
       }
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
@@ -1438,6 +1696,50 @@ const TakeawayOrders = () => {
     filterStatus,
     filterDate,
   ]);
+
+  const handleDownloadTakeawayReport = () => {
+    const rows = filteredOrders.map((order) => {
+      const createdAtDate = getOrderCreatedDate(order);
+      const updatedAtDate = getOrderUpdatedDate(order);
+      const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
+      const selectedAddons = Array.isArray(order?.selectedAddons)
+        ? order.selectedAddons
+        : [];
+      const aggregatedItems = aggregateKotItems(kotLines, selectedAddons);
+      const totals = computeKotTotals(kotLines, aggregatedItems, order);
+      const totalItems = aggregatedItems.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0),
+        0,
+      );
+
+      return {
+        "Order ID": order._id || "",
+        "Invoice ID": buildInvoiceId(order),
+        "Created At": formatOrderDateTimeLong(createdAtDate),
+        "Updated At": formatOrderDateTimeLong(updatedAtDate),
+        Status: order.status || "",
+        "Service Type": order.serviceType || "TAKEAWAY",
+        "Order Type": order.orderType || "",
+        "Table / Counter": order.tableNumber || "",
+        Token: order.orderType === "DELIVERY" ? "" : order.takeawayToken ?? "",
+        Customer: order.customerName || "",
+        Mobile: order.customerMobile || "",
+        "Items Count": totalItems,
+        "Total Amount (Rs)": Number((totals?.totalAmount || 0).toFixed(2)),
+      };
+    });
+
+    const fileName = buildExcelFileName("takeaway-orders-report", filterDate);
+    const exported = exportRowsToExcel({
+      rows,
+      fileName,
+      sheetName: "TakeawayOrders",
+    });
+
+    if (!exported) {
+      alert("No takeaway orders available for the selected filters.");
+    }
+  };
 
   const tryAccept = (order) => {
     if (
@@ -1507,6 +1809,13 @@ const TakeawayOrders = () => {
             </button>
             <button
               type="button"
+              onClick={handleDownloadTakeawayReport}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs sm:text-sm whitespace-nowrap"
+            >
+              Download Excel
+            </button>
+            <button
+              type="button"
               onClick={handleNewTakeawayOrder}
               className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
             >
@@ -1518,24 +1827,26 @@ const TakeawayOrders = () => {
       </div>
 
       {/* Status summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <button
           type="button"
           onClick={() => setFilterStatus("all")}
-          className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-            filterStatus === "all" ? "ring-2 ring-blue-400" : ""
+          className={`rounded-2xl border p-3 sm:p-4 md:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+            filterStatus === "all"
+              ? "ring-2 ring-[#e0662f] shadow-md border-[#e8c3ab] bg-orange-50/70"
+              : "shadow-sm border-[#ead7ca] bg-white"
           }`}
         >
-          <div className="flex items-center justify-between gap-1 sm:gap-2">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#3f291b] leading-none">
                 {statusSummary.total}
               </div>
-              <div className="text-[10px] sm:text-xs md:text-sm truncate">
+              <div className="mt-2 text-xs sm:text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide truncate">
                 All Takeaway
               </div>
             </div>
-            <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200 flex-shrink-0">
               🥡
             </div>
           </div>
@@ -1557,46 +1868,25 @@ const TakeawayOrders = () => {
               type="button"
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`p-2 sm:p-3 md:p-4 rounded-lg border shadow-sm text-left transition outline-none hover:shadow-md ${
-                filterStatus === status ? "ring-2 ring-blue-400" : ""
-              }`}
+              className={`rounded-2xl border p-3 sm:p-4 md:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+                filterStatus === status
+                  ? "ring-2 ring-[#e0662f] shadow-md"
+                  : "shadow-sm"
+              } ${getTakeawayTileTheme(status).card}`}
             >
-              <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">
+                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#3f291b] leading-none">
                     {String(countToShow).padStart(2, "0")}
                   </div>
-                  <div className="text-[10px] sm:text-xs md:text-sm truncate">
+                  <div className="mt-2 text-xs sm:text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide truncate">
                     {status}
                   </div>
                 </div>
-                <div className="text-base sm:text-lg md:text-xl lg:text-2xl flex-shrink-0">
-                  {status === "Pending"
-                    ? "⏳"
-                    : status === "Accepted"
-                      ? "✅"
-                      : status === "Being Prepared" ||
-                          status === "BeingPrepared"
-                        ? "🔥"
-                        : status === "Completed"
-                          ? "📦"
-                          : status === "Confirmed"
-                            ? "👨‍🍳"
-                            : status === "Preparing"
-                              ? "🔥"
-                              : status === "Ready"
-                                ? "🍽️"
-                                : status === "Served"
-                                  ? "🍴"
-                                  : status === "Finalized"
-                                    ? "📋"
-                                    : status === "Paid"
-                                      ? "✅"
-                                      : status === "Returned"
-                                        ? "↩️"
-                                        : status === "Cancelled"
-                                          ? "❌"
-                                          : "📦"}
+                                <div
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-lg sm:text-xl flex-shrink-0 ${getTakeawayTileTheme(status).icon}`}
+                >
+                  {getStatusIcon(status)}
                 </div>
               </div>
             </button>
@@ -1638,16 +1928,11 @@ const TakeawayOrders = () => {
               // Validate order exists before processing
               if (!order) return null;
 
-              const orderDate = new Date(order.updatedAt || order.createdAt);
-              const formattedDate = orderDate.toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              });
-              const formattedTime = orderDate.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const createdAtDate = getOrderCreatedDate(order);
+              const updatedAtDate = getOrderUpdatedDate(order);
+              const orderDate = createdAtDate || updatedAtDate;
+              const { dateLabel: formattedDate, timeLabel: formattedTime } =
+                formatOrderDateTime(orderDate);
 
               return (
                 <React.Fragment key={order._id}>
@@ -1656,7 +1941,7 @@ const TakeawayOrders = () => {
                       order.status === "Pending" ? "bg-orange-50" : ""
                     }`}
                   >
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs">
                       <div
                         className="font-mono text-[9px] text-gray-400 mb-1 select-all"
                         title="Order ID"
@@ -1681,10 +1966,13 @@ const TakeawayOrders = () => {
                         )}
                       </button>
                       {expanded[order._id] !== false && (
-                        <div className="mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-600 space-y-0.5 sm:space-y-1">
+                        <div className="mt-1.5 text-[9px] sm:text-[10px] text-gray-600 space-y-0.5">
                           <div className="truncate">
                             Created:{" "}
-                            {new Date(order.createdAt).toLocaleString()}
+                            {formatOrderDateTimeLong(createdAtDate || orderDate)}
+                          </div>
+                          <div className="truncate">
+                            Updated: {formatOrderDateTimeLong(updatedAtDate)}
                           </div>
                           <div className="truncate">
                             Invoice:{" "}
@@ -1722,7 +2010,8 @@ const TakeawayOrders = () => {
                               </span>
                             </div>
                           )}
-                          {order.takeawayToken && (
+                          {order.orderType !== "DELIVERY" &&
+                            order.takeawayToken && (
                             <div className="font-semibold text-blue-600">
                               Token: {order.takeawayToken}
                             </div>
@@ -1829,7 +2118,7 @@ const TakeawayOrders = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs text-gray-600 hidden md:table-cell">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium text-gray-900 text-xs sm:text-sm">
                           {formattedDate}
@@ -1839,13 +2128,13 @@ const TakeawayOrders = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 hidden sm:table-cell">
-                      <div className="flex flex-col gap-2">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 hidden sm:table-cell">
+                      <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg sm:text-xl md:text-2xl flex-shrink-0">
+                          <span className="text-base sm:text-lg flex-shrink-0">
                             🥡
                           </span>
-                          <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
+                          <span className="text-xs sm:text-sm md:text-sm lg:text-base font-semibold text-gray-700 truncate">
                             {order.tableNumber || "TAKEAWAY"}
                           </span>
                         </div>
@@ -1906,15 +2195,16 @@ const TakeawayOrders = () => {
                               )}
                             </div>
                           )}
-                        {order.takeawayToken && (
-                          <div className="text-sm mt-2 font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                        {order.orderType !== "DELIVERY" &&
+                          order.takeawayToken && (
+                          <div className="text-xs mt-1.5 font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                             Token: {order.takeawayToken}
                           </div>
                         )}
                         {/* Session token hidden from UI - data still used for backend */}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2">
                       <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
                         <span
                           className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${statusBadgeClass(
@@ -1998,7 +2288,7 @@ const TakeawayOrders = () => {
                                 <button
                                   key="return"
                                   onClick={() =>
-                                    changeStatus(order._id, "Returned")
+                                    openReasonModal(order._id, "Returned")
                                   }
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                                 >
@@ -2013,7 +2303,7 @@ const TakeawayOrders = () => {
                                 <button
                                   key="cancel"
                                   onClick={() =>
-                                    changeStatus(order._id, "Cancelled")
+                                    openReasonModal(order._id, "Cancelled")
                                   }
                                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                                 >
@@ -2030,7 +2320,7 @@ const TakeawayOrders = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-xs sm:text-sm">
+                    <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs">
                       <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
                         {/* Modify Order button - only show for unpaid orders */}
                         {order.status !== "Paid" &&
@@ -2064,8 +2354,8 @@ const TakeawayOrders = () => {
 
                   {expanded[order._id] !== false && (
                     <tr className="bg-gray-50">
-                      <td colSpan="5" className="px-6 py-4">
-                        <div className="space-y-4">
+                      <td colSpan="5" className="px-3 sm:px-4 md:px-5 py-2.5 sm:py-3">
+                        <div className="space-y-2.5">
                           {/* Whole order panel (KOT items + add-ons) */}
                           {(() => {
                             const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
@@ -2084,43 +2374,43 @@ const TakeawayOrders = () => {
                             const hasAny = flatItems.length > 0 || selectedAddons.length > 0;
                             if (!hasAny) {
                               return (
-                                <div className="bg-white p-4 rounded-lg border shadow-sm">
-                                  <div className="text-sm text-gray-500">No items in this order yet.</div>
+                                <div className="bg-white p-3 rounded-lg border shadow-sm">
+                                  <div className="text-xs text-gray-500">No items in this order yet.</div>
                                 </div>
                               );
                             }
                             return (
-                              <div className="bg-white p-4 rounded-lg border shadow-sm">
-                                <div className="flex justify-between items-center mb-3">
+                              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                                <div className="flex justify-between items-center mb-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="text-lg font-semibold text-gray-800">Order</div>
+                                    <div className="text-base font-semibold text-gray-800">Order</div>
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         kotLines.forEach((kot, idx) => printKOT(order, kot, idx));
                                       }}
-                                      className="p-1 px-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
+                                      className="px-1.5 py-0.5 text-[11px] text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 bg-white"
                                       title="Print Order"
                                     >
                                       🖨️ Print Order
                                     </button>
                                   </div>
-                                  <div className="text-lg font-bold text-green-600">
+                                  <div className="text-base font-bold text-green-600">
                                     ₹{(totals.totalAmount + addonsTotal).toFixed(2)}
                                   </div>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                   {flatItems.map(({ item, kotIdx, itemIdx }, keyIdx) => (
                                     <div
                                       key={`k-${keyIdx}`}
-                                      className={`flex justify-between items-center py-2 border-b ${
+                                      className={`flex justify-between items-center py-1.5 border-b ${
                                         item.returned ? "opacity-50 bg-gray-100" : ""
                                       }`}
                                     >
                                       <div className="flex items-center gap-2 flex-1">
                                         <span
-                                          className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                                          className={`px-1.5 py-0.5 rounded-lg text-[11px] font-bold ${
                                             item.returned ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
@@ -2133,7 +2423,7 @@ const TakeawayOrders = () => {
                                           <span className="text-xs text-red-600 font-semibold">(Cancelled)</span>
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
                                         <span className={item.returned ? "line-through text-gray-600" : "text-gray-600"}>
                                           ₹{(((item.price || 0) / 100) * (item.quantity || 1)).toFixed(2)}
                                         </span>
@@ -2144,7 +2434,7 @@ const TakeawayOrders = () => {
                                             <button
                                               type="button"
                                               onClick={() => handleCancelItem(order._id, kotIdx, itemIdx)}
-                                              className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                              className="px-1.5 py-0.5 text-[11px] text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
                                               title="Cancel this item"
                                             >
                                               ❌ Cancel
@@ -2156,21 +2446,45 @@ const TakeawayOrders = () => {
                                   {selectedAddons.map((addon, aIdx) => {
                                     const qty = Number(addon.quantity) || 1;
                                     const price = Number(addon.price) || 0;
-                                    const name = addon.name || "Add-on";
+                                    const name = sanitizeAddonName(addon.name);
                                     return (
                                       <div
                                         key={`a-${aIdx}`}
-                                        className="flex justify-between items-center py-2 border-b border-gray-100"
+                                        className="flex justify-between items-center py-1.5 border-b border-gray-100"
                                       >
                                         <div className="flex items-center gap-2 flex-1">
-                                          <span className="px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                                          <span className="px-1.5 py-0.5 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700">
                                             {qty}x
                                           </span>
-                                          <span className="text-gray-800">(+) {name}</span>
+                                          <span className="text-gray-800">
+                                            {name}
+                                            <span className="ml-1 text-blue-600 font-semibold text-[10px] whitespace-nowrap">
+                                              ADD-ON
+                                            </span>
+                                          </span>
                                         </div>
-                                        <span className="text-gray-600">
-                                          ₹{(price * qty).toFixed(2)}
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-gray-600">
+                                            ₹{(price * qty).toFixed(2)}
+                                          </span>
+                                          {order.status !== "Paid" &&
+                                            order.status !== "Cancelled" &&
+                                            order.status !== "Returned" && (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleCancelAddonLine(
+                                                    order._id,
+                                                    aIdx,
+                                                  )
+                                                }
+                                                className="px-1.5 py-0.5 text-[11px] text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                                title="Cancel this add-on"
+                                              >
+                                                ❌ Cancel
+                                              </button>
+                                            )}
+                                        </div>
                                       </div>
                                     );
                                   })}
@@ -2346,7 +2660,9 @@ const TakeawayOrders = () => {
                                       className="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-50"
                                     >
                                       <div>
-                                        <div className="text-sm font-medium text-gray-800">(+) {addon.name}</div>
+                                        <div className="text-sm font-medium text-gray-800">
+                                          {sanitizeAddonName(addon.name)}
+                                        </div>
                                         <div className="text-xs text-gray-500">₹{formatMoney(addon.price || 0)}</div>
                                       </div>
                                       <div className="flex items-center gap-2">
@@ -2409,7 +2725,7 @@ const TakeawayOrders = () => {
                                     key={entry.id}
                                     className="flex justify-between items-center"
                                   >
-                                    <span>(+) {entry.name} × {entry.quantity}</span>
+                                    <span>{entry.name} × {entry.quantity}</span>
                                     <span>₹{formatMoney(entry.price * entry.quantity)}</span>
                                   </div>
                                 ))}
@@ -2491,8 +2807,10 @@ const TakeawayOrders = () => {
                       <h3 className="text-lg font-semibold text-gray-800">
                         Current Order Items
                       </h3>
-                      {!currentOrder?.kotLines ||
-                      currentOrder.kotLines.length === 0 ? (
+                      {((!currentOrder?.kotLines ||
+                        currentOrder.kotLines.length === 0) &&
+                        (!currentOrder?.selectedAddons ||
+                          currentOrder.selectedAddons.length === 0)) ? (
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                           No items in this order yet.
                         </div>
@@ -2568,7 +2886,7 @@ const TakeawayOrders = () => {
                               {selectedAddons.map((addon, aIdx) => {
                                 const qty = Number(addon.quantity) || 1;
                                 const price = Number(addon.price) || 0;
-                                const name = addon.name || "Add-on";
+                                const name = sanitizeAddonName(addon.name);
                                 return (
                                   <div
                                     key={`a-${aIdx}`}
@@ -2578,9 +2896,35 @@ const TakeawayOrders = () => {
                                       <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700">
                                         {qty}x
                                       </span>
-                                      <span className="text-sm text-gray-800">(+) {name}</span>
+                                      <span className="text-sm text-gray-800">
+                                        {name}
+                                        <span className="ml-1 text-blue-600 font-semibold text-[10px] whitespace-nowrap">
+                                          ADD-ON
+                                        </span>
+                                      </span>
                                     </div>
-                                    <span className="text-sm text-gray-600">₹{(price * qty).toFixed(2)}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">
+                                        ₹{(price * qty).toFixed(2)}
+                                      </span>
+                                      {currentOrder.status !== "Paid" &&
+                                        currentOrder.status !== "Cancelled" &&
+                                        currentOrder.status !== "Returned" && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleCancelAddonLine(
+                                                currentOrder._id,
+                                                aIdx,
+                                              )
+                                            }
+                                            className="px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                            title="Cancel this add-on"
+                                          >
+                                            ❌ Cancel
+                                          </button>
+                                        )}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -2607,8 +2951,8 @@ const TakeawayOrders = () => {
                         <>
                           <p className="text-xs text-gray-500">
                             Select items from the menu below to add more items
-                            to this takeaway order. These will be added as a new
-                            KOT.
+                            to this takeaway order. These will be added to this
+                            order.
                           </p>
                           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                             <div className="xl:col-span-2 space-y-4">
@@ -2743,7 +3087,7 @@ const TakeawayOrders = () => {
                                         >
                                           <div>
                                             <div className="text-sm font-medium text-gray-800">
-                                              (+) {addon.name}
+                                              {sanitizeAddonName(addon.name)}
                                             </div>
                                             <div className="text-xs text-gray-500">
                                               ₹{formatMoney(addon.price || 0)}
@@ -2810,7 +3154,7 @@ const TakeawayOrders = () => {
                                         className="flex justify-between items-center"
                                       >
                                         <span>
-                                          (+) {entry.name} × {entry.quantity}
+                                          {entry.name} × {entry.quantity}
                                         </span>
                                         <span>
                                           ₹{formatMoney(entry.price * entry.quantity)}
@@ -2879,8 +3223,62 @@ const TakeawayOrders = () => {
           </div>
         </div>
       )}
+
+      {reasonModal.open && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
+            <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg text-gray-800">
+                {reasonModal.title}
+              </h3>
+              <button
+                onClick={closeReasonModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                type="button"
+              >
+                x
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Please provide a reason:
+              </label>
+              <textarea
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[100px]"
+                placeholder="Type here..."
+                autoFocus
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
+              <button
+                onClick={closeReasonModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleReasonSubmit}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${
+                  reasonModal.status === "Cancelled"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+                type="button"
+              >
+                Confirm {reasonModal.status === "Cancelled" ? "Cancel" : "Return"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default TakeawayOrders;
+
+
+

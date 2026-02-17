@@ -8,6 +8,13 @@ import React, {
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import api from "../utils/api";
+import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
 
 const aggregateKotItems = (order) => {
   if (!order) return [];
@@ -49,13 +56,14 @@ const aggregateKotItems = (order) => {
   // Process Selected Add-ons
   const addons = order.selectedAddons || [];
   addons.forEach(addon => {
-     const name = `(+) ${addon.name}`;
-     const quantity = 1; // Assuming 1 per entry in array
+     const addonName = sanitizeAddonName(addon.name);
+     const addonKey = `addon:${addon.addonId || addon._id || addon.id || `${addonName}-${addon.price || 0}`}`;
+     const quantity = Number(addon.quantity) || 1;
      const unitPrice = Number(addon.price) || 0; // Addons are in Rupees
      
-     if (!map.has(name)) {
-       map.set(name, {
-         name,
+     if (!map.has(addonKey)) {
+       map.set(addonKey, {
+         name: addonName,
          unitPrice,
          quantity: 0,
          returnedQuantity: 0,
@@ -63,7 +71,7 @@ const aggregateKotItems = (order) => {
          amount: 0,
        });
      }
-     const entry = map.get(name);
+     const entry = map.get(addonKey);
      entry.quantity += quantity;
      entry.amount += unitPrice * quantity;
   });
@@ -449,6 +457,52 @@ const Invoices = () => {
     return (paid || selectedPayments[0]).method || null;
   }, [selectedPayments]);
 
+  const handleDownloadInvoicesReport = () => {
+    const rows = paidOrders.map((order) => {
+      const invoiceItems = aggregateKotItems(order);
+      const totals = computeKotTotals(invoiceItems);
+      const orderPayments = paymentsByOrder?.[order._id] || [];
+      const paidPayment =
+        orderPayments.find((payment) => payment.status === "PAID") ||
+        orderPayments[0] ||
+        null;
+
+      return {
+        "Order ID": order._id || "",
+        "Invoice ID": getInvoiceNumber(order),
+        "Created At": order.createdAt
+          ? new Date(order.createdAt).toLocaleString()
+          : "",
+        "Paid At": (order.paidAt || paidPayment?.paidAt)
+          ? new Date(order.paidAt || paidPayment?.paidAt).toLocaleString()
+          : "",
+        Status: order.status || "",
+        "Service Type": order.serviceType || "",
+        "Table / Counter": order.tableNumber || "",
+        "Payment Method":
+          paidPayment?.method || order.paymentMode || order.paymentMethod || "",
+        "Payment Status": paidPayment?.status || "",
+        "Items Count": invoiceItems.reduce(
+          (sum, item) => sum + (Number(item.quantity) || 0),
+          0,
+        ),
+        "Subtotal (Rs)": Number((totals?.subtotal || 0).toFixed(2)),
+        "Total Amount (Rs)": Number((totals?.totalAmount || 0).toFixed(2)),
+      };
+    });
+
+    const fileName = buildExcelFileName("invoices-report", filterDate);
+    const exported = exportRowsToExcel({
+      rows,
+      fileName,
+      sheetName: "Invoices",
+    });
+
+    if (!exported) {
+      alert("No invoice data available for the selected filters.");
+    }
+  };
+
   const handlePrint = () => {
     if (!printRef.current) return;
     const iframe = document.createElement("iframe");
@@ -604,6 +658,12 @@ const Invoices = () => {
             disabled={syncingPayments}
           >
             {syncingPayments ? "Syncing…" : "Sync paid orders"}
+          </button>
+          <button
+            onClick={handleDownloadInvoicesReport}
+            className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 whitespace-nowrap"
+          >
+            Download Excel
           </button>
         </div>
       </div>
@@ -771,4 +831,3 @@ const Invoices = () => {
 };
 
 export default Invoices;
-

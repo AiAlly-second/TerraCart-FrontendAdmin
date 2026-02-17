@@ -211,6 +211,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Ignore intentionally canceled requests (AbortController / axios cancel).
+    const isCanceledRequest =
+      error?.code === "ERR_CANCELED" ||
+      error?.name === "CanceledError" ||
+      error?.name === "AbortError" ||
+      error?.message === "canceled";
+    if (isCanceledRequest) {
+      return Promise.reject(error);
+    }
+
     // Enhanced error logging for debugging
     const errorDetails = {
       status: error.response?.status,

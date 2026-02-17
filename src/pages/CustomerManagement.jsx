@@ -118,6 +118,15 @@ const CustomerManagement = () => {
     return `₹${Number(amount || 0).toFixed(2)}`;
   };
 
+  const getFeedbackComment = (feedback) => {
+    if (!feedback) return "";
+    return (
+      feedback.orderFeedback?.comments ||
+      feedback.overallExperience?.overallComments ||
+      ""
+    );
+  };
+
   if (loading && customers.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -467,6 +476,65 @@ const CustomerManagement = () => {
                 </div>
               </div>
 
+              {/* Raw Feedback Entries */}
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  Feedback Entries ({selectedCustomer.feedbacks?.length || 0})
+                </h3>
+                <div className="space-y-3">
+                  {selectedCustomer.feedbacks &&
+                  selectedCustomer.feedbacks.length > 0 ? (
+                    selectedCustomer.feedbacks.map((feedback) => (
+                      <div
+                        key={feedback._id}
+                        className="border border-gray-200 rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="text-lg font-semibold text-yellow-700">
+                              {getRatingStars(feedback.overallRating)} (
+                              {feedback.overallRating}/5)
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {formatDate(feedback.createdAt)}
+                            </div>
+                          </div>
+                          {feedback.orderId && (
+                            <div className="text-xs text-gray-500">
+                              Order: {feedback.orderId}
+                            </div>
+                          )}
+                        </div>
+
+                        {(feedback.customerName ||
+                          feedback.customerPhone ||
+                          feedback.customerEmail) && (
+                          <div className="text-xs text-gray-600 mb-2">
+                            {feedback.customerName && (
+                              <span>Name: {feedback.customerName} </span>
+                            )}
+                            {feedback.customerPhone && (
+                              <span>Phone: {feedback.customerPhone} </span>
+                            )}
+                            {feedback.customerEmail && (
+                              <span>Email: {feedback.customerEmail}</span>
+                            )}
+                          </div>
+                        )}
+
+                        {getFeedbackComment(feedback) && (
+                          <div className="text-sm text-gray-700 mt-2">
+                            {getFeedbackComment(feedback)}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500">No feedback entries yet</div>
+                  )}
+                </div>
+              </div>
+
               {/* Recent Orders */}
               {selectedCustomer.orders &&
                 selectedCustomer.orders.length > 0 && (
@@ -515,3 +583,4 @@ const CustomerManagement = () => {
 };
 
 export default CustomerManagement;
+

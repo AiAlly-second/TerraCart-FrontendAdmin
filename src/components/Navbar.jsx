@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { FaPowerOff, FaUserCircle } from 'react-icons/fa';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { FaPowerOff, FaUserCircle } from "react-icons/fa";
 
 const Navbar = ({ onMenuToggle }) => {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ const Navbar = ({ onMenuToggle }) => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   // State to hold the current date and time
@@ -28,28 +28,28 @@ const Navbar = ({ onMenuToggle }) => {
 
   // Format time as HH:MM:SS AM/PM
   const formatTime = (date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
       hour12: true,
-      timeZone: 'Asia/Kolkata',
+      timeZone: "Asia/Kolkata",
     });
   };
 
   // Format date as "Tuesday, January 13, 2026"
   const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      timeZone: 'Asia/Kolkata',
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "Asia/Kolkata",
     });
   };
 
   const getUserInitial = () => {
-    return user?.name?.charAt(0).toUpperCase() || 'A';
+    return user?.name?.charAt(0).toUpperCase() || "A";
   };
 
   return (
@@ -62,15 +62,29 @@ const Navbar = ({ onMenuToggle }) => {
           className="lg:hidden text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded-lg"
           aria-label="Toggle menu"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 12h16M4 18h16"
+            />
           </svg>
         </button>
 
         {/* Date and Time Display */}
         <div className="text-gray-800">
-          <p className="font-bold text-xl md:text-2xl">{formatTime(currentDateTime)}</p>
-          <p className="text-xs text-gray-500 hidden sm:block">{formatDate(currentDateTime)}</p>
+          <p className="font-bold text-xl md:text-2xl">
+            {formatTime(currentDateTime)}
+          </p>
+          <p className="text-xs text-gray-500 hidden sm:block">
+            {formatDate(currentDateTime)}
+          </p>
         </div>
       </div>
 
@@ -78,7 +92,7 @@ const Navbar = ({ onMenuToggle }) => {
       <div className="flex items-center space-x-3">
         {/* User Name (hidden on mobile) */}
         <span className="text-gray-700 font-medium text-sm hidden md:block">
-          {user?.name || 'Admin'}
+          {user?.name || "Admin"}
         </span>
 
         {/* Logout Button */}

@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import AccessibilityButton from "./components/AccessibilityButton";
 import Login from "./pages/Login";
 import { getSocket } from "./utils/socket";
 
@@ -19,7 +20,6 @@ import Settings from "./pages/Settings";
 
 // TerraCart Admin pages
 import Orders from "./pages/Orders";
-import TakeawayOrders from "./pages/TakeawayOrders";
 import Invoices from "./pages/Invoices";
 import Tables from "./pages/Tables";
 import MenuManager from "./pages/MenuManager";
@@ -32,7 +32,6 @@ import TableDashboard from "./pages/TableDashboard";
 import { lazy } from "react";
 const AttendanceManagement = lazy(() => import("./pages/AttendanceManagement"));
 const Payments = lazy(() => import("./pages/Payments"));
-import FeedbackManagement from "./pages/FeedbackManagement";
 import CustomerManagement from "./pages/CustomerManagement";
 import InventoryManagement from "./pages/InventoryManagement";
 
@@ -150,7 +149,7 @@ function App() {
                     path="/takeaway-orders"
                     element={
                       <ProtectedRoute allowedRoles={["admin"]}>
-                        <TakeawayOrders />
+                        <Navigate to="/orders" replace />
                       </ProtectedRoute>
                     }
                   />
@@ -173,7 +172,7 @@ function App() {
                   <Route
                     path="/addons"
                     element={
-                      <ProtectedRoute allowedRoles={["admin", "franchise_admin"]}>
+                      <ProtectedRoute allowedRoles={["super_admin", "franchise_admin"]}>
                         <GlobalAddons />
                       </ProtectedRoute>
                     }
@@ -222,7 +221,7 @@ function App() {
                     path="/feedback"
                     element={
                       <ProtectedRoute allowedRoles={["admin", "cart_admin"]}>
-                        <FeedbackManagement />
+                        <Navigate to="/customers" replace />
                       </ProtectedRoute>
                     }
                   />
@@ -434,6 +433,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
+              {showLayout && <AccessibilityButton />}
             </div>
           </div>
         </ConfirmProvider>
