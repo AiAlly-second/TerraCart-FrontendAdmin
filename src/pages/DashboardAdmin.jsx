@@ -340,14 +340,53 @@ function getShelfDaysRemaining(ing) {
   return Math.floor((expiry - today) / msPerDay);
 }
 
-const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved }) => {
+const normalizeAlertId = (id) => (id == null ? null : String(id));
+
+const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved, dismissedAlertsScope = 'global' }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+  const dismissedAlertsStorageKey = useMemo(
+    () => `dashboard_admin_dismissed_alerts_${dismissedAlertsScope || 'global'}`,
+    [dismissedAlertsScope]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem(dismissedAlertsStorageKey);
+      if (!stored) {
+        setDismissedAlerts(new Set());
+        return;
+      }
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setDismissedAlerts(new Set(parsed.map((id) => String(id))));
+      } else {
+        setDismissedAlerts(new Set());
+      }
+    } catch {
+      setDismissedAlerts(new Set());
+    }
+  }, [dismissedAlertsStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        dismissedAlertsStorageKey,
+        JSON.stringify(Array.from(dismissedAlerts))
+      );
+    } catch {
+      // Ignore storage write errors.
+    }
+  }, [dismissedAlerts, dismissedAlertsStorageKey]);
 
   const addToDismissed = (id) => {
+    const normalizedId = normalizeAlertId(id);
+    if (!normalizedId) return;
     setDismissedAlerts(prev => {
       const next = new Set(prev);
-      next.add(id);
+      next.add(normalizedId);
       return next;
     });
   };
@@ -506,7 +545,10 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
     const combined = [...formattedRequests, ...kitchenDelays, ...tableOverstays, ...shelfAlerts];
     // Filter out dismissed alerts
     return combined
-        .filter(alert => !dismissedAlerts.has(alert.id))
+        .filter(alert => {
+          const alertId = normalizeAlertId(alert.id);
+          return !alertId || !dismissedAlerts.has(alertId);
+        })
         .sort((a, b) => new Date(b.createdAt || b.paidAt || 0) - new Date(a.createdAt || a.paidAt || 0));
   }, [formattedRequests, kitchenDelays, tableOverstays, shelfAlerts, dismissedAlerts]);
   
@@ -1277,7 +1319,15 @@ const DashboardAdmin = () => {
       {/* Bottom Section: Live Orders & Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
          <UnifiedOrderList dineInOrders={liveDineIn} takeawayOrders={liveTakeaway} navigate={navigate} />
-         <AlertsPanel customerRequests={pendingRequests} orders={todayOrders} tables={tables} ingredients={ingredients} navigate={navigate} onCustomerRequestResolved={refetchPendingRequests} />
+         <AlertsPanel
+           customerRequests={pendingRequests}
+           orders={todayOrders}
+           tables={tables}
+           ingredients={ingredients}
+           navigate={navigate}
+           onCustomerRequestResolved={refetchPendingRequests}
+           dismissedAlertsScope={user?._id || user?.id || user?.cartCode || 'global'}
+         />
       </div>
 
       {/* Final Row: Timeline & Recent Activity - fixed height to prevent page expansion */}
