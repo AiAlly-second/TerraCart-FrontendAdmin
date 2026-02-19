@@ -62,6 +62,46 @@ const getImageUrl = (imagePath) => {
   return `${normalizedApiBase}/uploads/${imagePath}`;
 };
 
+// Decode common HTML entities coming from backend payloads (e.g. "&amp;" => "&")
+const htmlEntityDecoder =
+  typeof document !== "undefined" ? document.createElement("textarea") : null;
+
+const decodeHtmlEntities = (value) => {
+  if (typeof value !== "string") return value ?? "";
+  if (!value.includes("&") || !htmlEntityDecoder) return value;
+  htmlEntityDecoder.innerHTML = value;
+  return htmlEntityDecoder.value;
+};
+
+const decodeDefaultMenuPayload = (payload) => {
+  const categories = Array.isArray(payload?.categories) ? payload.categories : [];
+  return {
+    ...(payload || {}),
+    categories: categories.map((category) => ({
+      ...category,
+      name: decodeHtmlEntities(category?.name || ""),
+      description: decodeHtmlEntities(category?.description || ""),
+      items: (Array.isArray(category?.items) ? category.items : []).map((item) => ({
+        ...item,
+        name: decodeHtmlEntities(item?.name || ""),
+        description: decodeHtmlEntities(item?.description || ""),
+        tags: Array.isArray(item?.tags)
+          ? item.tags
+              .map((tag) => decodeHtmlEntities(String(tag || "")).trim())
+              .filter(Boolean)
+          : [],
+        allergens: Array.isArray(item?.allergens)
+          ? item.allergens
+              .map((allergen) =>
+                decodeHtmlEntities(String(allergen || "")).trim()
+              )
+              .filter(Boolean)
+          : [],
+      })),
+    })),
+  };
+};
+
 const DefaultMenu = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -161,11 +201,12 @@ const DefaultMenu = () => {
     try {
       setLoading(true);
       const response = await api.get("/default-menu");
-      setDefaultMenu(response.data);
+      const normalizedMenu = decodeDefaultMenuPayload(response.data);
+      setDefaultMenu(normalizedMenu);
       // Expand all categories by default
-      if (response.data?.categories) {
+      if (normalizedMenu?.categories) {
         setExpandedCategories(
-          new Set(response.data.categories.map((_, idx) => idx))
+          new Set(normalizedMenu.categories.map((_, idx) => idx))
         );
       }
     } catch (error) {
@@ -378,7 +419,11 @@ const DefaultMenu = () => {
 
   const handleEditCategory = (category, index) => {
     setEditingCategory(index);
-    setCategoryFormData({ ...category });
+    setCategoryFormData({
+      ...category,
+      name: decodeHtmlEntities(category?.name || ""),
+      description: decodeHtmlEntities(category?.description || ""),
+    });
     setShowCategoryModal(true);
   };
 
@@ -430,16 +475,27 @@ const DefaultMenu = () => {
   };
 
   const handleSaveCategory = () => {
+    const normalizedCategoryFormData = {
+      ...categoryFormData,
+      name: decodeHtmlEntities(categoryFormData.name || "").trim(),
+      description: decodeHtmlEntities(categoryFormData.description || ""),
+    };
+
+    if (!normalizedCategoryFormData.name) {
+      alert("Category name is required");
+      return;
+    }
+
     const newCategories = [...(defaultMenu?.categories || [])];
     if (editingCategory !== null) {
       newCategories[editingCategory] = {
         ...newCategories[editingCategory],
-        ...categoryFormData,
+        ...normalizedCategoryFormData,
         items: newCategories[editingCategory].items || [],
       };
     } else {
       newCategories.push({
-        ...categoryFormData,
+        ...normalizedCategoryFormData,
         items: [],
       });
     }
@@ -475,7 +531,21 @@ const DefaultMenu = () => {
   const handleEditItem = (item, categoryIndex, itemIndex) => {
     setEditingItem(itemIndex);
     setEditingItemCategoryIndex(categoryIndex);
-    setItemFormData({ ...item });
+    setItemFormData({
+      ...item,
+      name: decodeHtmlEntities(item?.name || ""),
+      description: decodeHtmlEntities(item?.description || ""),
+      tags: Array.isArray(item?.tags)
+        ? item.tags
+            .map((tag) => decodeHtmlEntities(String(tag || "")).trim())
+            .filter(Boolean)
+        : [],
+      allergens: Array.isArray(item?.allergens)
+        ? item.allergens
+            .map((allergen) => decodeHtmlEntities(String(allergen || "")).trim())
+            .filter(Boolean)
+        : [],
+    });
     setShowItemModal(true);
   };
 
@@ -508,6 +578,27 @@ const DefaultMenu = () => {
   };
 
   const handleSaveItem = () => {
+    const normalizedItemFormData = {
+      ...itemFormData,
+      name: decodeHtmlEntities(itemFormData.name || "").trim(),
+      description: decodeHtmlEntities(itemFormData.description || ""),
+      tags: Array.isArray(itemFormData.tags)
+        ? itemFormData.tags
+            .map((tag) => decodeHtmlEntities(String(tag || "")).trim())
+            .filter(Boolean)
+        : [],
+      allergens: Array.isArray(itemFormData.allergens)
+        ? itemFormData.allergens
+            .map((allergen) => decodeHtmlEntities(String(allergen || "")).trim())
+            .filter(Boolean)
+        : [],
+    };
+
+    if (!normalizedItemFormData.name) {
+      alert("Item name is required");
+      return;
+    }
+
     const newCategories = [...(defaultMenu?.categories || [])];
     const category = newCategories[editingItemCategoryIndex];
 
@@ -517,16 +608,16 @@ const DefaultMenu = () => {
 
     if (editingItem !== null) {
       category.items[editingItem] = {
-        ...itemFormData,
-        calories: itemFormData.calories
-          ? Number(itemFormData.calories)
+        ...normalizedItemFormData,
+        calories: normalizedItemFormData.calories
+          ? Number(normalizedItemFormData.calories)
           : undefined,
       };
     } else {
       category.items.push({
-        ...itemFormData,
-        calories: itemFormData.calories
-          ? Number(itemFormData.calories)
+        ...normalizedItemFormData,
+        calories: normalizedItemFormData.calories
+          ? Number(normalizedItemFormData.calories)
           : undefined,
       });
     }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
+import { FaDownload } from "react-icons/fa";
 import api from "../utils/api";
 import { createSocketConnection } from "../utils/socket";
 import { withCancellation } from "../utils/requestManager";
@@ -50,6 +51,59 @@ if (import.meta.env.PROD) {
 
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 
+const downloadQrAsPng = async (svgElement, fileName) => {
+  if (!svgElement) {
+    throw new Error("QR code SVG not found");
+  }
+
+  const serializer = new XMLSerializer();
+  const rawSvg = serializer.serializeToString(svgElement);
+  const svgMarkup = rawSvg.includes("xmlns=")
+    ? rawSvg
+    : rawSvg.replace(
+        "<svg",
+        '<svg xmlns="http://www.w3.org/2000/svg"'
+      );
+
+  const svgBlob = new Blob([svgMarkup], {
+    type: "image/svg+xml;charset=utf-8",
+  });
+  const objectUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = new Image();
+    const imageLoaded = new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+    });
+    image.src = objectUrl;
+    await imageLoaded;
+
+    const exportSize = 1024;
+    const canvas = document.createElement("canvas");
+    canvas.width = exportSize;
+    canvas.height = exportSize;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Canvas context is unavailable");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, exportSize, exportSize);
+    context.drawImage(image, 0, 0, exportSize, exportSize);
+
+    const downloadLink = document.createElement("a");
+    downloadLink.href = canvas.toDataURL("image/png");
+    downloadLink.download = `${fileName}.png`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 const TableCard = ({
   table,
   onUpdateStatus,
@@ -59,12 +113,26 @@ const TableCard = ({
   onViewWaitlist,
   busy,
 }) => {
+  const qrContainerRef = useRef(null);
   // Determine if table is merged (secondary table merged into another)
   const isMerged = table.status === "MERGED" || table.mergedWith;
   // Use MERGED status for display if table is merged, otherwise use actual status
   const displayStatus = isMerged ? "MERGED" : table.status;
   const statusMeta = STATUS_MAP[displayStatus] || STATUS_MAP.AVAILABLE;
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
+  const qrFileName = `table-${table.number}-qr`;
+
+  const handleDownloadQr = async () => {
+    try {
+      const svgElement = qrContainerRef.current?.querySelector("svg");
+      await downloadQrAsPng(svgElement, qrFileName);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Failed to download table QR code:", err);
+      }
+      alert("Could not download QR code");
+    }
+  };
 
   return (
     <div className="min-w-0 p-5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col gap-4">
@@ -155,7 +223,10 @@ const TableCard = ({
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg py-4">
+      <div
+        ref={qrContainerRef}
+        className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg py-4"
+      >
         <QRCode value={qrUrl} size={128} bgColor="#ffffff" fgColor="#1f2937" />
         <div className="text-xs text-slate-500 break-all text-center px-2">
           {qrUrl}
@@ -174,6 +245,15 @@ const TableCard = ({
             disabled={busy}
           >
             New QR
+          </button>
+          <button
+            onClick={handleDownloadQr}
+            className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            disabled={busy}
+            title="Download QR"
+            aria-label={`Download QR for table ${table.number}`}
+          >
+            <FaDownload className="text-xs" />
           </button>
         </div>
       </div>
@@ -227,6 +307,7 @@ const Tables = () => {
     message: null,
   });
   const socketRef = useRef(null);
+  const takeawayQrRef = useRef(null);
   const [cartId, setCartId] = useState(null);
 
   const sortedTables = useMemo(() => {
@@ -467,6 +548,19 @@ const Tables = () => {
       alert("Link copied to clipboard");
     } catch {
       alert("Could not copy link");
+    }
+  };
+
+  const handleDownloadTakeawayQr = async () => {
+    if (!cartId) return;
+    try {
+      const svgElement = takeawayQrRef.current?.querySelector("svg");
+      await downloadQrAsPng(svgElement, `takeaway-qr-${cartId}`);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Failed to download takeaway QR code:", err);
+      }
+      alert("Could not download takeaway QR code");
     }
   };
 
@@ -731,7 +825,10 @@ const Tables = () => {
                 </div>
               )}
           </div>
-          <div className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg px-4 py-4">
+          <div
+            ref={takeawayQrRef}
+            className="flex flex-col items-center gap-2 bg-slate-50 rounded-lg px-4 py-4"
+          >
             {(() => {
               const takeawayUrl = `${customerBaseUrl}/?takeaway=1&cart=${encodeURIComponent(
                 cartId
@@ -747,12 +844,22 @@ const Tables = () => {
                   <div className="text-xs text-slate-500 break-all text-center px-2">
                     {takeawayUrl}
                   </div>
-                  <button
-                    onClick={() => handleCopyLink(takeawayUrl)}
-                    className="text-xs px-3 py-1.5 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  >
-                    Copy link
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCopyLink(takeawayUrl)}
+                      className="text-xs px-3 py-1.5 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200"
+                    >
+                      Copy link
+                    </button>
+                    <button
+                      onClick={handleDownloadTakeawayQr}
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                      title="Download takeaway QR"
+                      aria-label="Download takeaway QR code"
+                    >
+                      <FaDownload className="text-xs" />
+                    </button>
+                  </div>
                 </>
               );
             })()}

@@ -2180,11 +2180,8 @@ const Franchises = () => {
                   errors.fssaiNumber = "FSSAI Number must be 14 digits";
                 }
 
-                // Validate required documents only for create mode (Aadhar and PAN are now optional)
+                // Validate required documents only for create mode (Shop Act, Aadhar and PAN are optional)
                 if (!editingCart) {
-                  if (!cartFiles.shopActLicense) {
-                    errors.shopActLicense = "Shop Act License is required";
-                  }
                   if (!cartFiles.fssaiLicense) {
                     errors.fssaiLicense = "FSSAI License is required";
                   }
@@ -2786,7 +2783,7 @@ const Franchises = () => {
                   📄{" "}
                   {editingCart
                     ? "Upload new files to update existing documents. Leave blank to keep current documents."
-                    : "Shop Act License and FSSAI License are required. Aadhar and PAN are optional."}
+                    : "FSSAI License is required. Shop Act License, Aadhar and PAN are optional."}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -2923,11 +2920,7 @@ const Franchises = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#4a2e1f]">
                       Shop Act License{" "}
-                      {editingCart ? (
-                        ""
-                      ) : (
-                        <span className="text-red-500">*</span>
-                      )}
+                      <span className="text-gray-400 text-xs">(Optional)</span>
                     </label>
                     {editingCart && cartExistingDocs.shopActLicense && (
                       <p className="text-xs text-gray-600 mb-1">
@@ -3095,7 +3088,7 @@ const Franchises = () => {
                 <p className="mt-4 text-xs text-[#6b4423]">
                   {editingCart
                     ? "Upload new files to update existing documents. "
-                    : "All documents are required. "}
+                    : "FSSAI License is required. Shop Act License, Aadhar and PAN are optional. "}
                   Accepted formats: PDF, JPG, PNG, WEBP (Max 5MB per file)
                 </p>
               </div>
