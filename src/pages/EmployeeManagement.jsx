@@ -17,10 +17,95 @@ import { useAuth } from "../context/AuthContext";
 // Minimum age as per Indian Labor Laws (18 years for general employment)
 const MINIMUM_WORKING_AGE = 18;
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const normalizeTwoDigitYear = (year) => {
+  if (year >= 100) return year;
+  const currentYear = new Date().getFullYear();
+  const currentCentury = Math.floor(currentYear / 100) * 100;
+  const currentYearTwoDigits = currentYear % 100;
+  return year <= currentYearTwoDigits
+    ? currentCentury + year
+    : currentCentury - 100 + year;
+};
+
+const parseDOBToLocalDate = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  // Primary input format from <input type="date">
+  const yyyyMmDdMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (yyyyMmDdMatch) {
+    const year = Number(yyyyMmDdMatch[1]);
+    const month = Number(yyyyMmDdMatch[2]);
+    const day = Number(yyyyMmDdMatch[3]);
+    return new Date(year, month - 1, day);
+  }
+
+  // Support legacy dd/mm/yy, dd/mm/yyyy, dd-mm-yy and dd-mm-yyyy
+  const ddMmYyyyMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (ddMmYyyyMatch) {
+    const day = Number(ddMmYyyyMatch[1]);
+    const month = Number(ddMmYyyyMatch[2]);
+    const rawYear = Number(ddMmYyyyMatch[3]);
+    const year = normalizeTwoDigitYear(rawYear);
+    return new Date(year, month - 1, day);
+  }
+
+  // Fallback for ISO date-time values from backend
+  const parsedDate = new Date(normalized);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+  return normalized.includes("T")
+    ? new Date(
+        parsedDate.getUTCFullYear(),
+        parsedDate.getUTCMonth(),
+        parsedDate.getUTCDate()
+      )
+    : new Date(
+        parsedDate.getFullYear(),
+        parsedDate.getMonth(),
+        parsedDate.getDate()
+      );
+};
+
+const formatDateForDateInput = (value) => {
+  if (!value) return "";
+
+  const normalized = String(value).trim();
+  const yyyyMmDdMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (yyyyMmDdMatch) {
+    return `${yyyyMmDdMatch[1]}-${yyyyMmDdMatch[2]}-${yyyyMmDdMatch[3]}`;
+  }
+
+  const ddMmYyyyMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (ddMmYyyyMatch) {
+    const day = pad2(ddMmYyyyMatch[1]);
+    const month = pad2(ddMmYyyyMatch[2]);
+    const year = String(normalizeTwoDigitYear(Number(ddMmYyyyMatch[3])));
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+  // Use UTC components to avoid timezone-shifted day values from backend ISO strings.
+  return `${parsedDate.getUTCFullYear()}-${pad2(
+    parsedDate.getUTCMonth() + 1
+  )}-${pad2(parsedDate.getUTCDate())}`;
+};
+
 // Helper function to calculate age from DOB
 const calculateAge = (dateOfBirth) => {
+  const birthDate = parseDOBToLocalDate(dateOfBirth);
+  if (!birthDate) return 0;
+
   const today = new Date();
-  const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
   if (
@@ -40,7 +125,9 @@ const getMaxDOBDate = () => {
     today.getMonth(),
     today.getDate()
   );
-  return maxDate.toISOString().split("T")[0];
+  return `${maxDate.getFullYear()}-${pad2(maxDate.getMonth() + 1)}-${pad2(
+    maxDate.getDate()
+  )}`;
 };
 
 // Validation functions
@@ -81,10 +168,18 @@ const validateIMEI = (imei) => {
 
 const validateDateOfBirth = (dob) => {
   if (!dob) return false;
-  const dobDate = new Date(dob);
+  const dobDate = parseDOBToLocalDate(dob);
+  if (!dobDate || Number.isNaN(dobDate.getTime())) return false;
+
   const today = new Date();
+  const normalizedToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
   // Date should not be in the future
-  if (dobDate > today) return false;
+  if (dobDate > normalizedToday) return false;
+
   // Date should be reasonable (not more than 100 years ago)
   const minDate = new Date(
     today.getFullYear() - 100,
@@ -355,9 +450,7 @@ const EmployeeManagement = () => {
     try {
       const submitData = {
         ...trimmedData,
-        dateOfBirth: trimmedData.dateOfBirth
-          ? new Date(trimmedData.dateOfBirth)
-          : undefined,
+        dateOfBirth: trimmedData.dateOfBirth || undefined,
         franchiseId: selectedFranchise || trimmedData.franchiseId || undefined,
         cafeId: selectedCafe || trimmedData.cafeId || undefined,
         employeeRole: trimmedData.role, // Map role to employeeRole for Employee model compatibility
@@ -653,26 +746,8 @@ const EmployeeManagement = () => {
       fullEmployeeData = employee;
     }
 
-    // Format date for input - handle various date formats
-    let dob = "";
-    if (fullEmployeeData.dateOfBirth) {
-      try {
-        const dateObj = new Date(fullEmployeeData.dateOfBirth);
-        if (!isNaN(dateObj.getTime())) {
-          // Format as YYYY-MM-DD for date input
-          const year = dateObj.getFullYear();
-          const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-          const day = String(dateObj.getDate()).padStart(2, "0");
-          dob = `${year}-${month}-${day}`;
-        }
-      } catch (dateError) {
-        console.warn(
-          "Error formatting date:",
-          dateError,
-          fullEmployeeData.dateOfBirth
-        );
-      }
-    }
+    // Format date for input and support legacy dd/mm/yy-style values.
+    const dob = formatDateForDateInput(fullEmployeeData.dateOfBirth);
 
     // Extract franchise and cafe IDs (handle both populated and non-populated)
     const franchiseId = isCartAdmin
@@ -1458,6 +1533,7 @@ const EmployeeManagement = () => {
                     type="date"
                     name="dateOfBirth"
                     required
+                    lang="en-GB"
                     max={getMaxDOBDate()}
                     value={formData.dateOfBirth}
                     onChange={(e) => {

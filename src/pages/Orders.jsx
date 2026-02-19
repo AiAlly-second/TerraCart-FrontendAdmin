@@ -1030,11 +1030,22 @@ const Orders = () => {
       if (import.meta.env.DEV) {
         console.error("Accept order failed:", e);
       }
+      if (e?.response?.status === 409) {
+        // Another staff member accepted first; refresh list to sync assignee/status.
+        await refreshOrders();
+      }
       const errorMessage =
         e.response?.data?.message || e.message || "Failed to accept order";
       alert(errorMessage);
     }
   };
+
+  const isOrderAccepted = (order) =>
+    Boolean(
+      order?.acceptedBy?.employeeId ||
+      order?.acceptedBy?._id ||
+      order?.acceptedBy?.employeeName,
+    );
 
   // Render order row (reusable for both grouped and flat views)
   const renderOrderRow = (order) => {
@@ -1285,12 +1296,17 @@ const Orders = () => {
                   const isTakeaway =
                     isTakeawayServiceType(order.serviceType) ||
                     Boolean(resolveTakeawayOrderType(order));
+                  const alreadyAccepted = isOrderAccepted(order);
                   const nextStatus = isTakeaway
                     ? getNextStatusTakeaway(order.status)
                     : getNextStatus(order.status, order.serviceType);
                   const buttons = [];
+                  const canShowTakeawayAccept =
+                    !alreadyAccepted && isTakeaway && canAcceptTakeaway(order.status);
+                  const canShowDirectAccept =
+                    !alreadyAccepted && !isTakeaway && canAccept(order.status);
 
-                  if (isTakeaway && canAcceptTakeaway(order.status)) {
+                  if (canShowTakeawayAccept) {
                     buttons.push(
                       <button
                         key="accept-takeaway"
@@ -1302,7 +1318,7 @@ const Orders = () => {
                         ✅ <span className="hidden sm:inline">Accept</span>
                       </button>,
                     );
-                  } else if (canAccept(order.status)) {
+                  } else if (canShowDirectAccept) {
                     buttons.push(
                       <button
                         key="accept"
@@ -1319,8 +1335,8 @@ const Orders = () => {
                   // Show next sequential step button (but skip if accept action is available)
                   if (
                     nextStatus &&
-                    !canAccept(order.status) &&
-                    !(isTakeaway && canAcceptTakeaway(order.status))
+                    !canShowDirectAccept &&
+                    !canShowTakeawayAccept
                   ) {
                     buttons.push(
                       <button
@@ -1510,6 +1526,455 @@ const Orders = () => {
     );
   };
 
+  const renderOrderCard = (order) => {
+    const createdAtDate = getOrderCreatedDate(order);
+    const updatedAtDate = getOrderUpdatedDate(order);
+    const orderDate = createdAtDate || updatedAtDate;
+    const normalizedServiceType = String(order?.serviceType || "").toUpperCase();
+    const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
+    const customerName = getOrderCustomerName(order);
+    const customerMobile = getOrderCustomerMobile(order);
+    const isTakeawayOrder =
+      isTakeawayServiceType(order.serviceType) ||
+      Boolean(resolvedTakeawayOrderType);
+    const serviceTypeLabel =
+      normalizedServiceType === "DINE_IN"
+        ? "Dine-In"
+        : normalizedServiceType === "TAKEAWAY"
+          ? "Takeaway"
+          : normalizedServiceType === "PICKUP"
+            ? "Pickup"
+            : normalizedServiceType === "DELIVERY"
+              ? "Delivery"
+              : isTakeawayOrder
+                ? "Takeaway"
+                : "Dine-In";
+    const takeawayOrderTypeLabel =
+      resolvedTakeawayOrderType === "DELIVERY"
+        ? "Delivery"
+        : resolvedTakeawayOrderType === "PICKUP"
+          ? "Pickup"
+          : "Takeaway";
+    const shouldShowOrderTypeMeta =
+      Boolean(resolvedTakeawayOrderType) &&
+      resolvedTakeawayOrderType !== normalizedServiceType;
+    const pickupAddress =
+      order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
+    const deliveryAddress =
+      order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const hasTakeawayToken =
+      resolvedTakeawayOrderType !== "DELIVERY" &&
+      order.takeawayToken !== undefined &&
+      order.takeawayToken !== null;
+    const hasTakeawayCustomerInfo = Boolean(customerName || customerMobile);
+    const hasTakeawayMeta =
+      isTakeawayOrder &&
+      (hasTakeawayCustomerInfo ||
+        hasTakeawayToken ||
+        resolvedTakeawayOrderType ||
+        (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
+        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+    const isExpanded = Boolean(expanded[order._id]);
+    const { dateLabel: formattedDate, timeLabel: formattedTime } =
+      formatOrderDateTime(orderDate);
+
+    const statusActionButtons = (() => {
+      const isTakeaway =
+        isTakeawayServiceType(order.serviceType) ||
+        Boolean(resolveTakeawayOrderType(order));
+      const alreadyAccepted = isOrderAccepted(order);
+      const nextStatus = isTakeaway
+        ? getNextStatusTakeaway(order.status)
+        : getNextStatus(order.status, order.serviceType);
+      const buttons = [];
+      const canShowTakeawayAccept =
+        !alreadyAccepted && isTakeaway && canAcceptTakeaway(order.status);
+      const canShowDirectAccept =
+        !alreadyAccepted && !isTakeaway && canAccept(order.status);
+
+      if (canShowTakeawayAccept) {
+        buttons.push(
+          <button
+            key="accept-takeaway"
+            type="button"
+            onClick={() => acceptOrderTakeaway(order._id)}
+            title="Accept Order"
+            className="px-2 py-1 text-xs font-semibold rounded-md border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
+          >
+            Accept
+          </button>,
+        );
+      } else if (canShowDirectAccept) {
+        buttons.push(
+          <button
+            key="accept"
+            type="button"
+            onClick={() => tryAccept(order)}
+            title="Accept Order"
+            className="px-2 py-1 text-xs font-semibold rounded-md border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
+          >
+            Accept
+          </button>,
+        );
+      }
+
+      if (
+        nextStatus &&
+        !canShowDirectAccept &&
+        !canShowTakeawayAccept
+      ) {
+        buttons.push(
+          <button
+            key="next"
+            type="button"
+            onClick={() => changeStatus(order._id, nextStatus)}
+            title={`Move to ${nextStatus}`}
+            className="px-2 py-1 text-xs font-semibold rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50 bg-blue-50 whitespace-nowrap"
+          >
+            {nextStatus}
+          </button>,
+        );
+      }
+
+      if (canReturn(order.status)) {
+        buttons.push(
+          <button
+            key="return"
+            type="button"
+            onClick={() => openReasonModal(order._id, "Returned")}
+            title="Return Order"
+            className="px-2 py-1 text-xs font-semibold rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
+          >
+            Return
+          </button>,
+        );
+      } else if (canCancel(order.status)) {
+        buttons.push(
+          <button
+            key="cancel"
+            type="button"
+            onClick={() => openReasonModal(order._id, "Cancelled")}
+            title="Cancel Order"
+            className="px-2 py-1 text-xs font-semibold rounded-md border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
+          >
+            Cancel
+          </button>,
+        );
+      }
+
+      return buttons;
+    })();
+
+    return (
+      <article
+        key={order._id}
+        className={`rounded-xl border shadow-sm p-3 space-y-3 ${
+          order.status === "Pending"
+            ? "bg-orange-50 border-orange-200"
+            : "bg-white border-slate-200"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div
+              className="font-mono text-[10px] text-gray-400 mb-1 truncate select-all"
+              title="Order ID"
+            >
+              {order._id}
+            </div>
+            <button
+              onClick={() => toggleExpand(order._id)}
+              className="flex items-center gap-1.5 text-left min-w-0"
+            >
+              <span className="font-mono text-[11px] text-gray-600 truncate">
+                {buildInvoiceId(order)}
+              </span>
+              <span className="text-[11px] text-gray-400">|</span>
+              <span className="text-xs font-medium text-gray-900">
+                {formattedTime}
+              </span>
+            </button>
+            <div className="text-[11px] text-gray-500 mt-1">{formattedDate}</div>
+          </div>
+          <span
+            className={`px-2 py-1 inline-flex items-center gap-1 text-xs font-semibold rounded-full border whitespace-nowrap ${getStatusClass(
+              order.status,
+            )}`}
+          >
+            <span>{getStatusIcon(order.status)}</span>
+            <span>{order.status}</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-slate-500">
+              Service
+            </div>
+            <div className="text-xs font-semibold text-slate-700 mt-0.5">
+              {serviceTypeLabel}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-slate-500">
+              Table / Takeaway
+            </div>
+            <div className="text-xs font-semibold text-slate-700 mt-0.5 truncate">
+              {isTakeawayOrder
+                ? resolvedTakeawayOrderType
+                  ? takeawayOrderTypeLabel
+                  : order.tableNumber || "Takeaway"
+                : order.tableNumber || "N/A"}
+            </div>
+          </div>
+        </div>
+
+        {order.specialInstructions && (
+          <div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+              <span className="mr-1">Note:</span> {order.specialInstructions}
+            </span>
+          </div>
+        )}
+
+        {hasTakeawayMeta && (
+          <div className="space-y-1 text-xs text-slate-600">
+            {resolvedTakeawayOrderType && (
+              <div className="font-semibold text-emerald-700">
+                Type: {takeawayOrderTypeLabel}
+              </div>
+            )}
+            {customerName && <div>Customer: {customerName}</div>}
+            {customerMobile && <div>Mobile: {customerMobile}</div>}
+            {resolvedTakeawayOrderType === "PICKUP" && (
+              <div>Pickup: {pickupAddress || "Address not set"}</div>
+            )}
+            {resolvedTakeawayOrderType === "DELIVERY" && (
+              <div>Address: {deliveryAddress || "Address not set"}</div>
+            )}
+            {hasTakeawayToken && (
+              <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                Token: {order.takeawayToken}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+            Status Flow
+          </div>
+          <div className="flex flex-wrap gap-1.5">{statusActionButtons}</div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+            Actions
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {user?.role !== "franchise_admin" &&
+              order.status !== "Paid" &&
+              order.status !== "Cancelled" &&
+              order.status !== "Returned" && (
+                <button
+                  onClick={() => handleEdit(order)}
+                  className="px-2 py-1 text-xs text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium whitespace-nowrap"
+                  title="Add more items to this order"
+                >
+                  Modify
+                </button>
+              )}
+            {user?.role !== "franchise_admin" && (
+              <button
+                onClick={() => handleEdit(order)}
+                className="px-2 py-1 text-xs text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50 whitespace-nowrap"
+                title="Edit order"
+              >
+                Edit
+              </button>
+            )}
+            {user?.role !== "admin" && user?.role !== "franchise_admin" && (
+              <button
+                type="button"
+                onClick={(e) => handleDelete(e, order._id)}
+                className="px-2 py-1 text-xs text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50 whitespace-nowrap"
+                title="Delete order"
+              >
+                Delete
+              </button>
+            )}
+            <button
+              onClick={() => printOrderInvoice(order)}
+              className="px-2 py-1 text-xs rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100 whitespace-nowrap"
+              title="Print invoice"
+            >
+              Print
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => toggleExpand(order._id)}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+        >
+          {isExpanded ? "Hide order items" : "View order items"}
+        </button>
+
+        {isExpanded && (
+          <div className="pt-1 space-y-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600 space-y-1">
+              <div>Created: {formatOrderDateTimeLong(createdAtDate || orderDate)}</div>
+              <div>Updated: {formatOrderDateTimeLong(updatedAtDate)}</div>
+              <div>
+                Invoice: <span className="font-mono">{buildInvoiceId(order)}</span>
+              </div>
+              <div>
+                Service Type:{" "}
+                <span className="font-semibold text-gray-700">{serviceTypeLabel}</span>
+              </div>
+              {shouldShowOrderTypeMeta && (
+                <div>
+                  Order Type:{" "}
+                  <span className="font-semibold text-emerald-700">
+                    {takeawayOrderTypeLabel}
+                  </span>
+                </div>
+              )}
+              {resolvedTakeawayOrderType === "PICKUP" && (
+                <div>Pickup Address: {pickupAddress || "Address not set"}</div>
+              )}
+              {resolvedTakeawayOrderType === "DELIVERY" && (
+                <>
+                  <div>Delivery Address: {deliveryAddress || "Address not set"}</div>
+                  {order.deliveryInfo?.distance != null && (
+                    <div>
+                      Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
+                    </div>
+                  )}
+                  {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                    <div className="text-green-700">
+                      Delivery Charge: {"\u20B9"}
+                      {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                    </div>
+                  )}
+                  {isPresentValue(order.deliveryInfo?.estimatedTime) &&
+                    !Number.isNaN(Number(order.deliveryInfo.estimatedTime)) &&
+                    Number(order.deliveryInfo.estimatedTime) > 0 && (
+                      <div>Est. Time: {order.deliveryInfo.estimatedTime} min</div>
+                    )}
+                </>
+              )}
+              {hasTakeawayToken && (
+                <div>
+                  Token:{" "}
+                  <span className="font-semibold text-blue-700">
+                    {order.takeawayToken}
+                  </span>
+                </div>
+              )}
+              {order.cancellationReason &&
+                (order.status === "Cancelled" || order.status === "Returned") && (
+                  <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded border border-red-100">
+                    Reason: {order.cancellationReason}
+                  </div>
+                )}
+            </div>
+
+            {(() => {
+              const lineItems = buildOrderLineItems(order, {
+                includeReturned: true,
+              });
+
+              if (!lineItems.length) {
+                return (
+                  <div className="bg-white p-3 rounded-lg border shadow-sm text-sm text-gray-500">
+                    No items in this order yet.
+                  </div>
+                );
+              }
+
+              const orderTotal = lineItems.reduce(
+                (sum, line) => sum + (line.returned ? 0 : line.total || 0),
+                0,
+              );
+
+              return (
+                <div className="bg-white p-3 rounded-lg border shadow-sm">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-sm font-semibold text-gray-800">
+                      Order Items
+                    </div>
+                    <div className="text-sm font-bold text-green-600">
+                      {"\u20B9"}
+                      {formatMoney(orderTotal)}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {lineItems.map((line) => (
+                      <div
+                        key={line.key}
+                        className={`flex items-center justify-between gap-2 py-1 border-b ${
+                          line.returned ? "opacity-60 bg-gray-100" : ""
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap flex-shrink-0 ${
+                                line.type === "addon"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : line.isTakeaway
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-orange-100 text-orange-800"
+                              }`}
+                            >
+                              {line.quantity}x
+                            </span>
+                            <span className="text-xs text-gray-800 truncate">
+                              <span className={line.returned ? "line-through" : ""}>
+                                {line.name}
+                              </span>
+                              {line.type === "addon" && (
+                                <span className="ml-2 text-blue-600 font-semibold text-[10px] whitespace-nowrap">
+                                  ADD-ON
+                                </span>
+                              )}
+                              {line.isTakeaway && line.type !== "addon" && (
+                                <span className="ml-2 text-green-600 font-semibold text-[10px] whitespace-nowrap">
+                                  TAKEAWAY
+                                </span>
+                              )}
+                              {line.returned && (
+                                <span className="ml-2 text-red-600 font-semibold text-[10px] whitespace-nowrap">
+                                  (Cancelled)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-xs whitespace-nowrap ${
+                            line.returned
+                              ? "text-gray-500 line-through"
+                              : "text-gray-600"
+                          }`}
+                        >
+                          {"\u20B9"}
+                          {formatMoney(line.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </article>
+    );
+  };
+
   const refreshOrders = useCallback(async () => {
     const ordersRes = await api.get("/orders");
     const allOrders = normalizeOrdersPayload(ordersRes.data);
@@ -1593,68 +2058,74 @@ const Orders = () => {
 
     fetchData();
 
-    // Join the appropriate socket room for real-time updates
-    if (socket && user) {
-      if (user.role === "admin") {
-        // Cafe admin joins their own room
-        socket.emit("join:cafe", user._id);
-        console.log(`[Orders] Joined socket room: cafe:${user._id}`);
-      } else if (filterCafeId) {
-        // Franchise admin viewing specific cafe joins that cafe's room
-        socket.emit("join:cafe", filterCafeId);
-        console.log(`[Orders] Joined socket room: cafe:${filterCafeId}`);
-      }
-    }
+    const getTargetCafeId = () => {
+      if (filterCafeId) return filterCafeId.toString();
+      if (user?.role === "admin" && user?._id) return user._id.toString();
+      return null;
+    };
 
-    socket.on("newOrder", (order) => {
-      // Only add if it matches the filter (if any)
-      if (!filterCafeId) {
-        upsertOrder(order, { prepend: true });
-        // Auto-print new order if enabled
-      } else {
-        let orderCafeId = order.cafeId;
-        if (orderCafeId && typeof orderCafeId === "object") {
-          orderCafeId = orderCafeId._id || orderCafeId;
-        }
-        if (orderCafeId && orderCafeId.toString() === filterCafeId) {
-          upsertOrder(order, { prepend: true });
-        }
+    const joinOrderRooms = () => {
+      const targetCafeId = getTargetCafeId();
+      if (!targetCafeId) return;
+      socket.emit("join:cafe", targetCafeId);
+      socket.emit("join:cart", targetCafeId);
+      if (import.meta.env.DEV) {
+        console.log(`[Orders] Joined socket rooms: cafe:${targetCafeId}, cart:${targetCafeId}`);
       }
-    });
+    };
 
-    socket.on("orderUpdated", (updatedOrder) => {
-      // Only process if matches filter
-      let matches = true;
-      if (filterCafeId) {
-        let orderCafeId = updatedOrder.cafeId;
-        if (orderCafeId && typeof orderCafeId === "object") {
-          orderCafeId = orderCafeId._id || orderCafeId;
-        }
-        if (!orderCafeId || orderCafeId.toString() !== filterCafeId) {
-          matches = false;
-        }
-      }
+    const matchesActiveFilter = (orderPayload) => {
+      if (!filterCafeId) return true;
+      const payloadCafeId = getOrderCafeId(orderPayload);
+      return payloadCafeId?.toString() === filterCafeId.toString();
+    };
 
-      if (matches) {
+    const handleOrderCreated = (orderPayload) => {
+      if (!matchesActiveFilter(orderPayload)) return;
+      upsertOrder(orderPayload, { prepend: true });
+    };
+
+    const handleOrderUpdated = (updatedOrder) => {
+      if (!updatedOrder) return;
+      if (matchesActiveFilter(updatedOrder)) {
         upsertOrder(updatedOrder);
-      } else {
-        // Remove if it no longer matches filter
-        setOrders((prev) =>
-          prev.filter((order) => order._id !== updatedOrder._id),
-        );
+        return;
       }
-    });
 
-    socket.on("orderDeleted", ({ id }) => {
-      setOrders((prev) => prev.filter((order) => order._id !== id));
-    });
+      const updatedOrderId = normalizeId(updatedOrder._id);
+      if (!updatedOrderId) return;
+      setOrders((prev) =>
+        prev.filter((order) => normalizeId(order?._id) !== updatedOrderId),
+      );
+    };
+
+    const handleOrderDeleted = (payload = {}) => {
+      const deletedOrderId = normalizeId(payload.id || payload._id);
+      if (!deletedOrderId) return;
+      setOrders((prev) =>
+        prev.filter((order) => normalizeId(order?._id) !== deletedOrderId),
+      );
+    };
+
+    joinOrderRooms();
+    socket.on("connect", joinOrderRooms);
+    socket.on("newOrder", handleOrderCreated);
+    socket.on("order:created", handleOrderCreated);
+    socket.on("orderUpdated", handleOrderUpdated);
+    socket.on("order:status:updated", handleOrderUpdated);
+    socket.on("orderDeleted", handleOrderDeleted);
+    socket.on("order:deleted", handleOrderDeleted);
 
     return () => {
-      socket.off("newOrder");
-      socket.off("orderUpdated");
-      socket.off("orderDeleted");
+      socket.off("connect", joinOrderRooms);
+      socket.off("newOrder", handleOrderCreated);
+      socket.off("order:created", handleOrderCreated);
+      socket.off("orderUpdated", handleOrderUpdated);
+      socket.off("order:status:updated", handleOrderUpdated);
+      socket.off("orderDeleted", handleOrderDeleted);
+      socket.off("order:deleted", handleOrderDeleted);
     };
-  }, [upsertOrder, filterCafeId, user, refreshOrders]);
+  }, [upsertOrder, filterCafeId, user?._id, user?.role, refreshOrders]);
 
   const handleAdd = () => {
     setCurrentOrder({ isNew: true });
@@ -2670,69 +3141,69 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Status Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        {/* All Orders tile */}
+
+{/* Status Summary Cards */}
+<div className="mb-6">
+  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-2.5">
+    {/* All Orders tile */}
+    <button
+      type="button"
+      onClick={() => setFilterStatus("all")}
+      className={`rounded-xl border px-3 py-2.5 sm:px-3.5 sm:py-3 text-left transition-all duration-200 min-h-[82px] sm:min-h-[92px] ${
+        filterStatus === "all"
+          ? "ring-1 ring-[#e0662f]/45 border-[#e8c3ab] shadow-sm bg-orange-50/70"
+          : "border-[#ead7ca] bg-white shadow-[0_1px_0_rgba(15,23,42,0.03)] hover:shadow-sm"
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[#3f291b]">
+          {orders.length}
+        </div>
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm bg-orange-100 text-orange-700 ring-1 ring-orange-200">
+          ALL
+        </div>
+      </div>
+      <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
+        All Orders
+      </div>
+    </button>
+
+    {Object.entries(
+      orders.reduce((acc, order) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+      }, {}),
+    ).map(([status, count]) => {
+      const theme = getSummaryTileTheme(status);
+      return (
         <button
           type="button"
-          onClick={() => setFilterStatus("all")}
-          className={`rounded-2xl border p-4 sm:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
-            filterStatus === "all"
-              ? "ring-2 ring-[#e0662f] shadow-md border-[#e8c3ab]"
-              : "shadow-sm border-[#ead7ca]"
-          }`}
+          key={status}
+          onClick={() => setFilterStatus(status)}
+          className={`rounded-xl border px-3 py-2.5 sm:px-3.5 sm:py-3 text-left transition-all duration-200 min-h-[82px] sm:min-h-[92px] ${
+            filterStatus === status
+              ? "ring-1 ring-[#e0662f]/45 border-[#e8c3ab] shadow-sm"
+              : "shadow-[0_1px_0_rgba(15,23,42,0.03)] hover:shadow-sm"
+          } ${theme.card}`}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-3xl font-bold tracking-tight text-[#3f291b]">
-              {orders.length}
+          <div className="flex items-start justify-between">
+            <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[#3f291b]">
+              {count}
             </div>
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200">
-              📦
+            <div
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm ${theme.icon}`}
+            >
+              {getStatusIcon(status)}
             </div>
           </div>
-          <div className="text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide">
-            All Orders
+          <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
+            {status}
           </div>
         </button>
-
-        {Object.entries(
-          orders
-            .reduce((acc, order) => {
-              acc[order.status] = (acc[order.status] || 0) + 1;
-              return acc;
-            }, {}),
-        ).map(([status, count]) => {
-          const theme = getSummaryTileTheme(status);
-          return (
-            <button
-              type="button"
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={`rounded-2xl border p-4 sm:p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
-                filterStatus === status
-                  ? "ring-2 ring-[#e0662f] shadow-md"
-                  : "shadow-sm"
-              } ${theme.card}`}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-3xl font-bold tracking-tight text-[#3f291b]">
-                  {count}
-                </div>
-                <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${theme.icon}`}
-                >
-                  {getStatusIcon(status)}
-                </div>
-              </div>
-              <div
-                className="text-[13px] text-[#6f5240] font-semibold uppercase tracking-wide"
-              >
-                {status}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      );
+    })}
+  </div>
+</div>
 
       <div className="overflow-x-auto bg-white rounded-lg shadow-md -mx-2 sm:mx-0">
         {user?.role === "franchise_admin" && !filterCafeId && ordersByCart ? (
@@ -2786,33 +3257,38 @@ const Orders = () => {
 
                     {/* Orders for this cart */}
                     {isExpanded && (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-xs sm:text-sm">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                                Order Details
-                              </th>
-                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                                Date & Time
-                              </th>
-                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                                Table / Takeaway
-                              </th>
-                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                                Status
-                              </th>
-                              <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            {filteredCartOrders.map((order) =>
-                              renderOrderRow(order),
-                            )}
-                          </tbody>
-                        </table>
+                      <div>
+                        <div className="lg:hidden px-2 sm:px-3 py-3 space-y-3">
+                          {filteredCartOrders.map((order) => renderOrderCard(order))}
+                        </div>
+                        <div className="hidden lg:block overflow-x-auto">
+                          <table className="min-w-full text-xs sm:text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                  Order Details
+                                </th>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                                  Date & Time
+                                </th>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                  Table / Takeaway
+                                </th>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                  Status
+                                </th>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {filteredCartOrders.map((order) =>
+                                renderOrderRow(order),
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2826,41 +3302,52 @@ const Orders = () => {
           </div>
         ) : (
           // Regular flat view
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs sm:text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                    Order Details
-                  </th>
-                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                    Date & Time
-                  </th>
-                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                    Table / Takeaway
-                  </th>
-                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                    Status
-                  </th>
-                  <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredOrders.length === 0 && (
+          <div>
+            <div className="lg:hidden px-2 sm:px-3 py-3 space-y-3">
+              {filteredOrders.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                  No orders found.
+                </div>
+              ) : (
+                filteredOrders.map((order) => renderOrderCard(order))
+              )}
+            </div>
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="min-w-full text-xs sm:text-sm">
+                <thead className="bg-gray-50">
                   <tr>
-                    <td
-                      colSpan="5"
-                      className="px-3 sm:px-4 md:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm"
-                    >
-                      No orders found.
-                    </td>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                      Order Details
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                      Date & Time
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                      Table / Takeaway
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                      Actions
+                    </th>
                   </tr>
-                )}
-                {filteredOrders.map((order) => renderOrderRow(order))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredOrders.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="px-3 sm:px-4 md:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm"
+                      >
+                        No orders found.
+                      </td>
+                    </tr>
+                  )}
+                  {filteredOrders.map((order) => renderOrderRow(order))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

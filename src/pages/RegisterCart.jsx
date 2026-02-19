@@ -173,18 +173,11 @@ const RegisterCart = () => {
         [name]: null,
       });
       // Set error if this is a required field
-      const requiredFields = [
-        "shopActLicense",
-        "fssaiLicense",
-      ];
+      const requiredFields = ["fssaiLicense"];
       if (requiredFields.includes(name)) {
         setFormErrors({
           ...formErrors,
-          [name]: `${
-            name === "shopActLicense"
-              ? "Shop Act License"
-              : "FSSAI License"
-          } is required`,
+          [name]: "FSSAI License is required",
         });
       }
     }
@@ -265,10 +258,7 @@ const RegisterCart = () => {
        errors.fssaiNumber = "FSSAI Number must be 14 digits";
     }
 
-    // Validate required documents (Aadhar and PAN are now optional)
-    if (!files.shopActLicense) {
-      errors.shopActLicense = "Shop Act License is required";
-    }
+    // Validate required documents (Shop Act, Aadhar and PAN are optional)
     if (!files.fssaiLicense) {
       errors.fssaiLicense = "FSSAI License is required";
     }
@@ -817,7 +807,7 @@ const RegisterCart = () => {
               Owner Documents
             </h3>
             <p className="text-sm text-[#6b4423] mb-4">
-              📄 Upload required documents. Aadhar and PAN are optional.
+              📄 FSSAI License is required. Shop Act License, Aadhar and PAN are optional.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -885,7 +875,8 @@ const RegisterCart = () => {
                   htmlFor="shopActLicense"
                   className="block text-sm font-medium text-[#4a2e1f]"
                 >
-                  Shop Act License <span className="text-red-500">*</span>
+                  Shop Act License{" "}
+                  <span className="text-gray-400 text-xs">(Optional)</span>
                 </label>
                 <input
                   id="shopActLicense"
@@ -965,7 +956,7 @@ const RegisterCart = () => {
               </div>
             </div>
             <p className="mt-4 text-xs text-[#6b4423]">
-              Shop Act License and FSSAI License are required. Aadhar and PAN are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 5MB per file)
+              FSSAI License is required. Shop Act License, Aadhar and PAN are optional. Accepted formats: PDF, JPG, PNG, WEBP (Max 5MB per file)
             </p>
           </div>
 

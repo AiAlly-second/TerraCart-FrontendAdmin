@@ -364,6 +364,13 @@ const normalizeAlertId = (id) => {
   return fallback && fallback !== "[object Object]" ? fallback : null;
 };
 
+const parseTakeawayTokenFromText = (text) => {
+  const value = String(text || "");
+  if (!value) return null;
+  const match = value.match(/\btoken\s*#?:?\s*([a-z0-9-]+)/i);
+  return match?.[1] ? String(match[1]).trim() : null;
+};
+
 const resolveOrderAlertIds = (order) => {
   const ids = [
     normalizeAlertId(order?._id),
@@ -529,6 +536,9 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
         type: 'kitchen_delay',
         orderId: alertId,
         tableNumber: o.tableNumber,
+        serviceType: String(o.serviceType || "").toUpperCase(),
+        orderType: String(o.orderType || "").toUpperCase(),
+        takeawayToken: o.takeawayToken || null,
         minutesElapsed: Math.floor((now - new Date(o.createdAt)) / 60000),
         createdAt: o.createdAt
       };
@@ -603,6 +613,23 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
         normalizeAlertId(r.id),
       ].filter(Boolean);
       const alertId = requestCandidates[0];
+      const orderRef =
+        r.orderId && typeof r.orderId === "object" ? r.orderId : null;
+      const requestNotes = r.customerNotes || r.message || "";
+      const serviceType = String(
+        orderRef?.serviceType || r.serviceType || "",
+      ).toUpperCase();
+      const orderType = String(
+        orderRef?.orderType || r.orderType || "",
+      ).toUpperCase();
+      const takeawayToken =
+        orderRef?.takeawayToken ||
+        r.takeawayToken ||
+        parseTakeawayTokenFromText(requestNotes);
+      const isTakeawayLike =
+        ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(serviceType) ||
+        ["PICKUP", "DELIVERY"].includes(orderType) ||
+        Boolean(takeawayToken);
       
       // Extract table number
       let tableNum = null;
@@ -615,6 +642,9 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       } else if (typeof r.tableId === 'number') {
         tableNum = r.tableId;
       }
+      if (isTakeawayLike && String(tableNum || "").toUpperCase() === "TAKEAWAY") {
+        tableNum = null;
+      }
       
       return {
         id: alertId,
@@ -622,7 +652,10 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
         type: 'customer_request',
         requestType: r.requestType,
         tableNumber: tableNum,
-        message: r.message,
+        serviceType,
+        orderType,
+        takeawayToken,
+        message: requestNotes,
         createdAt: r.createdAt,
         _id: r._id
       };
@@ -733,6 +766,23 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
             const isOverstay = alert.type === 'table_overstay';
             const isShelfExpired = alert.type === 'shelf_expired';
             const isShelfNear = alert.type === 'shelf_near_expiry';
+            const alertServiceType = String(alert.serviceType || "").toUpperCase();
+            const alertOrderType = String(alert.orderType || "").toUpperCase();
+            const isTakeawayLikeAlert =
+              ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(alertServiceType) ||
+              ["PICKUP", "DELIVERY"].includes(alertOrderType) ||
+              Boolean(alert.takeawayToken);
+            const alertLocationLabel = isTakeawayLikeAlert
+              ? alertOrderType === "DELIVERY" || alertServiceType === "DELIVERY"
+                ? "Delivery"
+                : alertOrderType === "PICKUP" || alertServiceType === "PICKUP"
+                  ? "Pickup"
+                  : alert.takeawayToken
+                    ? `Token ${alert.takeawayToken}`
+                    : "Takeaway"
+              : alert.tableNumber
+                ? `Table ${alert.tableNumber}`
+                : "Table ?";
             
             return (
               <div key={alert.id || idx} className={`p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow animate-fadeIn ${
@@ -751,7 +801,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                             <FiUser className="text-blue-600" size={14} />
                           </span>
                           <span className="font-bold text-[#4a2e1f]">
-                            {alert.tableNumber ? `Table ${alert.tableNumber}` : 'Table ?'} - {alert.requestType?.toUpperCase() || 'REQUEST'}
+                            {alertLocationLabel} - {alert.requestType?.toUpperCase() || 'REQUEST'}
                           </span>
                         </>
                       )}
@@ -761,7 +811,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                             <FaFire className="text-red-600" size={14} />
                           </span>
                           <span className="font-bold text-[#4a2e1f]">
-                            Kitchen Delay - {alert.tableNumber ? `Table ${alert.tableNumber}` : `Order ${(alert.orderId || '').slice(-4)}`}
+                            Kitchen Delay - {isTakeawayLikeAlert ? alertLocationLabel : (alert.tableNumber ? `Table ${alert.tableNumber}` : `Order ${(alert.orderId || '').slice(-4)}`)}
                           </span>
                         </>
                       )}

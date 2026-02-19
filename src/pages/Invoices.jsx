@@ -290,6 +290,7 @@ const Invoices = () => {
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // Search query for Order ID
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
   const printRef = useRef(null);
 
@@ -503,6 +504,15 @@ const Invoices = () => {
     }
   };
 
+  const handleOpenInvoiceModal = useCallback((order) => {
+    setSelected(order);
+    setIsInvoiceModalOpen(true);
+  }, []);
+
+  const handleCloseInvoiceModal = useCallback(() => {
+    setIsInvoiceModalOpen(false);
+  }, []);
+
   const handlePrint = () => {
     if (!printRef.current) return;
     const iframe = document.createElement("iframe");
@@ -618,6 +628,25 @@ const Invoices = () => {
     }
   };
 
+  useEffect(() => {
+    if (!isInvoiceModalOpen) return undefined;
+
+    const originalOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsInvoiceModalOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isInvoiceModalOpen]);
+
   return (
     <div className="p-3 sm:p-4">
       <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
@@ -674,15 +703,15 @@ const Invoices = () => {
       {error && <div className="text-sm text-red-600">{error}</div>}
 
       {!loading && !error && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="lg:col-span-1 space-y-2 sm:space-y-3">
+        <div className="max-w-4xl space-y-2 sm:space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {paidOrders.length === 0 && (
               <div className="text-sm text-gray-500">No paid orders match your criteria.</div>
             )}
             {paidOrders.map((order) => (
               <button
                 key={order._id}
-                onClick={() => setSelected(order)}
+                onClick={() => handleOpenInvoiceModal(order)}
                 className={`w-full text-left p-3 sm:p-4 rounded-lg border shadow-sm hover:shadow transition ${
                   selected?._id === order._id ? "ring-2 ring-blue-400" : ""
                 }`}
@@ -707,109 +736,119 @@ const Invoices = () => {
                   </div>
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                  Click to preview invoice
+                  Click to open invoice popup
                 </div>
               </button>
             ))}
           </div>
+        </div>
+      )}
 
-          <div className="lg:col-span-2">
-            {!selected && (
-              <div className="text-sm text-gray-500">
-                Select a paid order to preview the invoice.
+      {isInvoiceModalOpen && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <button
+            type="button"
+            aria-label="Close invoice preview"
+            className="absolute inset-0 bg-black/40"
+            onClick={handleCloseInvoiceModal}
+          />
+          <div className="relative z-10 w-full max-w-4xl max-h-[94vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-3 py-3 sm:px-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800">
+                    Invoice Preview
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 truncate">
+                    Invoice #{getInvoiceNumber(selected)}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseInvoiceModal}
+                  className="px-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100"
+                >
+                  Close
+                </button>
               </div>
-            )}
-            {selected && (
-              <div>
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                    <h2 className="text-lg sm:text-xl font-bold text-gray-800">
-                      Invoice Preview
-                    </h2>
-                    <p className="text-xs sm:text-sm text-gray-500">
-                      Invoice #{getInvoiceNumber(selected)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handlePrint}
-                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm"
-                    >
-                      Print
-                    </button>
-                    <button
-                      onClick={handleDownloadPdf}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                    >
-                      Download PDF
-                    </button>
-                  </div>
-                </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handlePrint}
+                  className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm"
+                >
+                  Print
+                </button>
+                <button
+                  onClick={handleDownloadPdf}
+                  className="px-3 sm:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs sm:text-sm"
+                >
+                  Download PDF
+                </button>
+              </div>
+            </div>
 
-                <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-slate-800">
-                      Payment records
-                    </h3>
-                    <button
-                      onClick={loadPayments}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  {paymentsLoading ? (
-                    <p className="text-xs text-slate-500">
-                      Loading payment data…
-                    </p>
-                  ) : selectedPayments.length === 0 ? (
-                    <p className="text-xs text-slate-500">
-                      No payment records found for this order. Use “Sync paid
-                      orders” to create payment entries.
-                    </p>
-                  ) : (
-                    <div className="space-y-2 text-xs text-slate-700">
-                      {selectedPayments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 border border-slate-200 rounded-md px-3 py-2 bg-white"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-slate-600">
-                              {payment.id}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full border border-slate-300 text-slate-600">
-                              {payment.method.toLowerCase()}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full border ${
-                                payment.status === "PAID"
-                                  ? "border-green-300 text-green-700 bg-green-50"
-                                  : "border-yellow-300 text-yellow-700 bg-yellow-50"
-                              }`}
-                            >
-                              {payment.status.replace("_", " ")}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="font-semibold text-slate-800">
-                              ₹{payment.amount?.toFixed(2)}
-                            </span>
-                            <span className="text-slate-500">
-                              {new Date(
-                                payment.updatedAt || payment.createdAt
-                              ).toLocaleString()}
-                            </span>
-                          </div>
+            <div className="max-h-[calc(94vh-110px)] overflow-y-auto p-3 sm:p-4">
+              <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    Payment records
+                  </h3>
+                  <button
+                    onClick={loadPayments}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {paymentsLoading ? (
+                  <p className="text-xs text-slate-500">Loading payment data...</p>
+                ) : selectedPayments.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No payment records found for this order. Use "Sync paid orders" to create payment entries.
+                  </p>
+                ) : (
+                  <div className="space-y-2 text-xs text-slate-700">
+                    {selectedPayments.map((payment) => (
+                      <div
+                        key={payment.id}
+                        className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 border border-slate-200 rounded-md px-3 py-2 bg-white"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-slate-600">
+                            {payment.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full border border-slate-300 text-slate-600">
+                            {payment.method.toLowerCase()}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full border ${
+                              payment.status === "PAID"
+                                ? "border-green-300 text-green-700 bg-green-50"
+                                : "border-yellow-300 text-yellow-700 bg-yellow-50"
+                            }`}
+                          >
+                            {payment.status.replace("_", " ")}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="font-semibold text-slate-800">
+                            Rs {payment.amount?.toFixed(2)}
+                          </span>
+                          <span className="text-slate-500">
+                            {new Date(
+                              payment.updatedAt || payment.createdAt
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
+              <div className="bg-slate-100 border border-slate-200 rounded-lg p-2 sm:p-4">
                 <div
                   ref={printRef}
-                  className="bg-white rounded-lg shadow border"
+                  className="mx-auto w-fit bg-white rounded-lg shadow border"
                   dangerouslySetInnerHTML={{
                     __html: buildInvoiceMarkup(
                       selected,
@@ -822,7 +861,7 @@ const Invoices = () => {
                   }}
                 />
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
