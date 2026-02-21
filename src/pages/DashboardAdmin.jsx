@@ -26,7 +26,7 @@ import {
   MdReceiptLong,
 } from "react-icons/md";
 import { BiDish, BiReceipt } from "react-icons/bi";
-import { FaMoneyBillWave, FaFire, FaUserCircle } from "react-icons/fa";
+import { FaMoneyBillWave, FaFire, FaUserCircle, FaStar } from "react-icons/fa";
 import { getIngredients } from "../services/costingV2Api";
 
 // --- Components ---
@@ -141,6 +141,36 @@ const TotalOrdersCard = ({ preparing, served, paid, cartId }) => {
              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
              <span className="text-xs text-[#8b5e3c]">Paid</span>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const OverallRatingCard = ({ averageRating, totalFeedback }) => {
+  const safeAverage = Number.isFinite(Number(averageRating))
+    ? Number(averageRating)
+    : 0;
+  const displayRating = safeAverage > 0 ? safeAverage.toFixed(2) : "0.00";
+
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] flex flex-col justify-between h-full relative overflow-hidden">
+      <div className="absolute top-0 right-0 p-3 opacity-10">
+        <FaStar size={60} color="#d86d2a" />
+      </div>
+      <div>
+        <h3 className="text-[#4a2e1f] font-semibold text-sm mb-2">
+          Overall Rating
+        </h3>
+        <div className="flex items-end gap-2">
+          <span className="text-3xl font-bold text-[#4a2e1f] leading-none">
+            {displayRating}
+          </span>
+          <span className="text-sm font-semibold text-[#8b5e3c] mb-1">/ 5</span>
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-xs text-[#8b5e3c]">
+          <FaStar className="text-yellow-500" />
+          <span>{totalFeedback || 0} customer ratings</span>
         </div>
       </div>
     </div>
@@ -1295,6 +1325,10 @@ const DashboardAdmin = () => {
   const [todayOrders, setTodayOrders] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [ingredients, setIngredients] = useState([]);
+  const [feedbackStats, setFeedbackStats] = useState({
+    averageRating: 0,
+    total: 0,
+  });
   
   // Fetch Data
   useEffect(() => {
@@ -1347,6 +1381,20 @@ const DashboardAdmin = () => {
             setIngredients(Array.isArray(ingData) ? ingData : []);
         } catch (ingErr) {
             if (import.meta.env.DEV) console.warn("Failed to fetch ingredients for shelf alerts:", ingErr);
+        }
+
+        // Fetch overall customer rating stats
+        try {
+          const feedbackRes = await api.get("/feedback/stats");
+          const stats = feedbackRes?.data || {};
+          const avg = Number.parseFloat(stats.averageRating);
+          const total = Number.parseInt(stats.total, 10);
+          setFeedbackStats({
+            averageRating: Number.isFinite(avg) ? avg : 0,
+            total: Number.isFinite(total) ? total : 0,
+          });
+        } catch (feedbackErr) {
+          console.warn("Failed to fetch feedback stats:", feedbackErr);
         }
 
       } catch (err) {
@@ -1446,10 +1494,14 @@ const DashboardAdmin = () => {
     <div className="min-h-screen bg-[#f8f9fa] p-4 md:p-6 lg:p-8 font-sans text-[#4a2e1f]">
       
       {/* Top Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
         <RevenueCard revenueDineIn={revenueDineIn} revenueTakeaway={revenueTakeaway} />
         <PendingActionsCard pendingOrders={pendingCount} billRequests={billReqCount} />
         <TotalOrdersCard preparing={prepCount} served={servedCount} paid={paidCount} cartId={user?.cartCode} />
+        <OverallRatingCard
+          averageRating={feedbackStats.averageRating}
+          totalFeedback={feedbackStats.total}
+        />
       </div>
 
       {/* Secondary Stats Row - removed as per request */}

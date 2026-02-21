@@ -285,7 +285,17 @@ const Ingredients = () => {
       setPushing(true);
       const res = await pushToCartAdmins({});
       if (res.data.success) {
-        const results = res.data.data;
+        const results = res.data.data || {};
+        if (results.shared?.mode === "shared") {
+          alert(
+            `Shared mode active.\n\n` +
+              `Carts covered: ${results.cartAdmins?.length || 0}\n` +
+              `Shared ingredients: ${results.shared.ingredients || 0}\n` +
+              `Shared BOMs: ${results.shared.recipes || 0}\n\n` +
+              `No cart-wise copies are created.`
+          );
+          return;
+        }
         const message =
           `Successfully pushed data to ${results.cartAdmins.length} cart admin(s)!\n\n` +
           `Ingredients: ${results.ingredients.created} created, ${results.ingredients.updated} updated\n` +
@@ -359,7 +369,7 @@ const Ingredients = () => {
 
       for (const cartId of selectedOutlets) {
         try {
-          const res = await pushToCartAdmins({ outletId: cartId }); // Backward compatibility - API still accepts outletId
+          const res = await pushToCartAdmins({ cartId });
           if (res.data.success) {
             results.success++;
             results.details.push({
@@ -416,6 +426,16 @@ const Ingredients = () => {
             0
           );
         message += `Ingredients: ${totalCreated} created, ${totalUpdated} updated\n`;
+
+        const sharedResult = results.details.find(
+          (d) => d.success && d.data?.shared?.mode === "shared"
+        );
+        if (sharedResult) {
+          message +=
+            `\nShared mode active (no duplicates created).\n` +
+            `Shared ingredients available: ${sharedResult.data.shared.ingredients || 0}\n` +
+            `Shared BOMs available: ${sharedResult.data.shared.recipes || 0}\n`;
+        }
       }
 
       if (results.failed > 0) {
