@@ -114,6 +114,15 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const resolveDisplayAddress = (...candidates) => {
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+};
+
 const buildInvoiceMarkup = (
   order,
   invoiceItems,
@@ -133,7 +142,13 @@ const buildInvoiceMarkup = (
   })();
 
   // Get cart address (prefer address, fallback to location)
-  const cartAddress = cartData?.address || "—";
+  const cartAddress =
+    resolveDisplayAddress(
+      cartData?.address,
+      cartData?.location,
+      order?.cafe?.address,
+      order?.cafe?.location
+    ) || "—";
   // Get franchise FSSAI number (fallback to GST for backward comp)
   const franchiseFSSAI = franchiseData?.fssaiNumber || franchiseData?.gstNumber || "—";
 
@@ -341,13 +356,28 @@ const Invoices = () => {
         }
       }
 
-      // 2. Fetch Cart Data
+      // 2. Fetch Cart Data (prefer Cart document for address from registration/settings)
       if (order.cartId) {
-        // Handle if cartId is an object or string
         const cartId = typeof order.cartId === 'object' ? order.cartId._id : order.cartId;
         if (cartId) {
-            const cRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
-            setCartData(cRes.data);
+          try {
+            const cRes = await api.get(`/carts/by-admin/${cartId}`, { skipErrorLogging: true });
+            if (cRes.data?.data) {
+              // Cart document: address is resolved string, fallback to location
+              setCartData({
+                address: cRes.data.data.address || null,
+                location: cRes.data.data.location || null,
+              });
+              return;
+            }
+          } catch (e) {
+            if (e.response?.status !== 404 && e.response?.status !== 403) {
+              console.warn("Cart by-admin fetch failed, falling back to user:", e);
+            }
+          }
+          // Fallback: User (cart admin) for address/location
+          const uRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          setCartData(uRes.data);
         }
       }
     } catch (err) {

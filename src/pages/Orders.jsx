@@ -598,16 +598,32 @@ const printOrderInvoice = async (order) => {
       }
     }
 
-    // Fetch cart data if cartId exists
+    // Fetch cart data if cartId exists (prefer Cart document for address)
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`, {
-        skipErrorLogging: true,
-      });
-      if (cartRes.data) {
-        cartData = {
-          address: cartRes.data.address || cartRes.data.location || null,
-          cartName: cartRes.data.cartName || cartRes.data.name || null,
-        };
+      const cartId = typeof order.cartId === "object" ? order.cartId._id : order.cartId;
+      if (cartId) {
+        try {
+          const cartRes = await api.get(`/carts/by-admin/${cartId}`, { skipErrorLogging: true });
+          if (cartRes.data?.data) {
+            cartData = {
+              address: cartRes.data.data.address || cartRes.data.data.location || null,
+              cartName: cartRes.data.data.name || null,
+            };
+          }
+        } catch (e) {
+          if (e.response?.status !== 404 && e.response?.status !== 403) {
+            console.warn("Cart by-admin fetch failed, falling back to user:", e);
+          }
+        }
+        if (!cartData) {
+          const userRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          if (userRes.data) {
+            cartData = {
+              address: userRes.data.address || userRes.data.location || null,
+              cartName: userRes.data.cartName || userRes.data.name || null,
+            };
+          }
+        }
       }
     }
   } catch (err) {
@@ -707,16 +723,32 @@ const downloadOrderInvoice = async (order) => {
       }
     }
 
-    // Fetch cart data if cartId exists
+    // Fetch cart data if cartId exists (prefer Cart document for address)
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`, {
-        skipErrorLogging: true,
-      });
-      if (cartRes.data) {
-        cartData = {
-          address: cartRes.data.address || cartRes.data.location || null,
-          cartName: cartRes.data.cartName || cartRes.data.name || null,
-        };
+      const cartId = typeof order.cartId === "object" ? order.cartId._id : order.cartId;
+      if (cartId) {
+        try {
+          const cartRes = await api.get(`/carts/by-admin/${cartId}`, { skipErrorLogging: true });
+          if (cartRes.data?.data) {
+            cartData = {
+              address: cartRes.data.data.address || cartRes.data.data.location || null,
+              cartName: cartRes.data.data.name || null,
+            };
+          }
+        } catch (e) {
+          if (e.response?.status !== 404 && e.response?.status !== 403) {
+            console.warn("Cart by-admin fetch failed, falling back to user:", e);
+          }
+        }
+        if (!cartData) {
+          const userRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          if (userRes.data) {
+            cartData = {
+              address: userRes.data.address || userRes.data.location || null,
+              cartName: userRes.data.cartName || userRes.data.name || null,
+            };
+          }
+        }
       }
     }
   } catch (err) {
@@ -798,7 +830,7 @@ const Orders = () => {
   const [searchInvoice, setSearchInvoice] = useState("");
   const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [expanded, setExpanded] = useState({}); // track expanded rows
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("active"); // "active" = exclude Cancelled/Returned (default for cart admin)
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState("");
   const [menuItems, setMenuItems] = useState([]);
@@ -896,6 +928,8 @@ const Orders = () => {
         return "bg-red-100 text-red-800 border-red-200";
       case "Returned":
         return "bg-rose-100 text-rose-800 border-rose-200";
+      case "active":
+        return "bg-teal-100 text-teal-800 border-teal-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
@@ -921,6 +955,8 @@ const Orders = () => {
         return "❌";
       case "Returned":
         return "↩️";
+      case "active":
+        return "📋";
       default:
         return "⚪";
     }
@@ -972,6 +1008,11 @@ const Orders = () => {
         return {
           card: "bg-rose-50/70 border-rose-200/80",
           icon: "bg-rose-100 text-rose-700 ring-1 ring-rose-200",
+        };
+      case "active":
+        return {
+          card: "bg-teal-50/70 border-teal-200/80",
+          icon: "bg-teal-100 text-teal-700 ring-1 ring-teal-200",
         };
       default:
         return {
@@ -2682,6 +2723,10 @@ const Orders = () => {
     });
 
     if (filterStatus === "all") return matches;
+    if (filterStatus === "active")
+      return matches.filter(
+        (o) => !["Cancelled", "Returned"].includes(o.status || "")
+      );
     return matches.filter((o) => o.status === filterStatus);
   })();
 
@@ -2772,6 +2817,10 @@ const Orders = () => {
     });
 
     if (filterStatus === "all") return matches;
+    if (filterStatus === "active")
+      return matches.filter(
+        (o) => !["Cancelled", "Returned"].includes(o.status || "")
+      );
     return matches.filter((o) => o.status === filterStatus);
   };
 
@@ -3167,6 +3216,39 @@ const Orders = () => {
         All Orders
       </div>
     </button>
+
+    {/* Active Orders tile (excludes Cancelled/Returned) - default view for cart admin */}
+    {(() => {
+      const activeCount = orders.filter(
+        (o) => !["Cancelled", "Returned"].includes(o.status || "")
+      ).length;
+      const theme = getSummaryTileTheme("active");
+      return (
+        <button
+          type="button"
+          onClick={() => setFilterStatus("active")}
+          className={`rounded-xl border px-3 py-2.5 sm:px-3.5 sm:py-3 text-left transition-all duration-200 min-h-[82px] sm:min-h-[92px] ${
+            filterStatus === "active"
+              ? "ring-1 ring-[#e0662f]/45 border-[#e8c3ab] shadow-sm"
+              : "shadow-[0_1px_0_rgba(15,23,42,0.03)] hover:shadow-sm"
+          } ${theme.card}`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[#3f291b]">
+              {activeCount}
+            </div>
+            <div
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm ${theme.icon}`}
+            >
+              {getStatusIcon("active")}
+            </div>
+          </div>
+          <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
+            Active
+          </div>
+        </button>
+      );
+    })()}
 
     {Object.entries(
       orders.reduce((acc, order) => {
