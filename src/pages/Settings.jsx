@@ -60,6 +60,8 @@ const Settings = () => {
     deliveryRadius: 5,
     deliveryCharge: 0,
     pinCode: "",
+    contactPhone: "",
+    contactEmail: "",
     address: {
       street: "",
       city: "",
@@ -134,6 +136,8 @@ const Settings = () => {
           deliveryRadius: cart.deliveryRadius || 5,
           deliveryCharge: cart.deliveryCharge || 0,
           pinCode: cart.pinCode || "",
+          contactPhone: cart.contactPhone || "",
+          contactEmail: cart.contactEmail || "",
           address: cart.address || {
             street: "",
             city: "",
@@ -1190,6 +1194,53 @@ const Settings = () => {
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    {/* Contact us */}
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <h3 className="font-semibold text-gray-800 mb-3 sm:mb-4">
+                        Contact us
+                      </h3>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
+                        Phone and email shown to customers on the menu page for
+                        contact
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                            Contact Phone
+                          </label>
+                          <input
+                            type="text"
+                            value={cartSettings.contactPhone || ""}
+                            onChange={(e) =>
+                              setCartSettings({
+                                ...cartSettings,
+                                contactPhone: e.target.value.trim(),
+                              })
+                            }
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            placeholder="e.g., 9876543210"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                            Contact Email
+                          </label>
+                          <input
+                            type="email"
+                            value={cartSettings.contactEmail || ""}
+                            onChange={(e) =>
+                              setCartSettings({
+                                ...cartSettings,
+                                contactEmail: e.target.value.trim(),
+                              })
+                            }
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            placeholder="e.g., cart@example.com"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Store Location */}
