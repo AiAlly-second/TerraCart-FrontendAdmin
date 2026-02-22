@@ -25,6 +25,42 @@ const sanitizeAddonName = (value) => {
     .trim();
   return normalized || "Add-on";
 };
+const htmlEntityDecoder =
+  typeof document !== "undefined" ? document.createElement("textarea") : null;
+const decodeHtmlEntities = (value) => {
+  const input = String(value ?? "");
+  if (!input.includes("&")) return input;
+  if (!htmlEntityDecoder) return input;
+  let decoded = input;
+  for (let i = 0; i < 2; i += 1) {
+    htmlEntityDecoder.innerHTML = decoded;
+    const next = htmlEntityDecoder.value;
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
+};
+const normalizeMenuPayload = (payload) =>
+  (Array.isArray(payload) ? payload : []).map((category) => ({
+    ...category,
+    name: decodeHtmlEntities(category?.name || ""),
+    description: decodeHtmlEntities(category?.description || ""),
+    icon: decodeHtmlEntities(category?.icon || ""),
+    items: (Array.isArray(category?.items) ? category.items : []).map((item) => ({
+      ...item,
+      name: decodeHtmlEntities(item?.name || ""),
+      description: decodeHtmlEntities(item?.description || ""),
+      image: decodeHtmlEntities(item?.image || ""),
+      tags: Array.isArray(item?.tags)
+        ? item.tags.map((tag) => decodeHtmlEntities(String(tag || "")))
+        : item?.tags,
+      allergens: Array.isArray(item?.allergens)
+        ? item.allergens.map((allergen) =>
+            decodeHtmlEntities(String(allergen || ""))
+          )
+        : item?.allergens,
+    })),
+  }));
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
 
@@ -135,7 +171,7 @@ const MenuManager = () => {
         api.get("/menu"),
         api.get("/menu/meta/spice-levels").catch(() => null),
       ]);
-      const menuData = menuRes.data || [];
+      const menuData = normalizeMenuPayload(menuRes.data || []);
 
       // Log menu data (development only)
       if (import.meta.env.DEV) {
@@ -161,8 +197,8 @@ const MenuManager = () => {
       if (spiceRes?.data?.spiceLevels) {
         setSpiceLevels(spiceRes.data.spiceLevels);
       }
-      if (menuRes.data?.length && !selectedCategoryId && menuRes.data[0]?._id) {
-        setSelectedCategoryId(menuRes.data[0]._id);
+      if (menuData.length && !selectedCategoryId && menuData[0]?._id) {
+        setSelectedCategoryId(menuData[0]._id);
       }
     } catch (err) {
       if (import.meta.env.DEV) {
