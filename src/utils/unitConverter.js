@@ -12,11 +12,11 @@ const UNIT_CONVERSIONS = {
   l: { base: "ml", factor: 1000, displayName: "l" },
   ml: { base: "ml", factor: 1, displayName: "ml" },
   
-  // Count-based (no conversion)
+  // Count-based (default 1:1 with pcs unless customized elsewhere)
   pcs: { base: "pcs", factor: 1, displayName: "pcs" },
-  pack: { base: "pack", factor: 1, displayName: "pack" },
-  box: { base: "box", factor: 1, displayName: "box" },
-  bottle: { base: "bottle", factor: 1, displayName: "bottle" },
+  pack: { base: "pcs", factor: 1, displayName: "pack" },
+  box: { base: "pcs", factor: 1, displayName: "box" },
+  bottle: { base: "pcs", factor: 1, displayName: "bottle" },
   dozen: { base: "pcs", factor: 12, displayName: "dozen" },
 };
 
