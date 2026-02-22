@@ -336,7 +336,17 @@ const Recipes = () => {
       setPushing(true);
       const res = await pushToCartAdmins({});
       if (res.data.success) {
-        const results = res.data.data;
+        const results = res.data.data || {};
+        if (results.shared?.mode === "shared") {
+          alert(
+            `Shared mode active.\n\n` +
+              `Carts covered: ${results.cartAdmins?.length || 0}\n` +
+              `Shared ingredients: ${results.shared.ingredients || 0}\n` +
+              `Shared BOMs: ${results.shared.recipes || 0}\n\n` +
+              `No cart-wise copies are created.`
+          );
+          return;
+        }
         const message =
           `Successfully pushed data to ${results.cartAdmins.length} cart admin(s)!\n\n` +
           `Ingredients: ${results.ingredients.created} created, ${results.ingredients.updated} updated\n` +

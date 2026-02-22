@@ -435,14 +435,32 @@ const printOrderInvoice = async (order) => {
       }
     }
 
-    // Fetch cart data if cartId exists
+    // Fetch cart data if cartId exists (prefer Cart document for address)
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`);
-      if (cartRes.data) {
-        cartData = {
-          address: cartRes.data.address || cartRes.data.location || null,
-          cartName: cartRes.data.cartName || cartRes.data.name || null,
-        };
+      const cartId = typeof order.cartId === "object" ? order.cartId._id : order.cartId;
+      if (cartId) {
+        try {
+          const cartRes = await api.get(`/carts/by-admin/${cartId}`, { skipErrorLogging: true });
+          if (cartRes.data?.data) {
+            cartData = {
+              address: cartRes.data.data.address || cartRes.data.data.location || null,
+              cartName: cartRes.data.data.name || null,
+            };
+          }
+        } catch (e) {
+          if (e.response?.status !== 404 && e.response?.status !== 403) {
+            console.warn("Cart by-admin fetch failed, falling back to user:", e);
+          }
+        }
+        if (!cartData) {
+          const userRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          if (userRes.data) {
+            cartData = {
+              address: userRes.data.address || userRes.data.location || null,
+              cartName: userRes.data.cartName || userRes.data.name || null,
+            };
+          }
+        }
       }
     }
   } catch (err) {
@@ -539,14 +557,32 @@ const downloadOrderInvoice = async (order) => {
       }
     }
 
-    // Fetch cart data if cartId exists
+    // Fetch cart data if cartId exists (prefer Cart document for address)
     if (order.cartId) {
-      const cartRes = await api.get(`/users/${order.cartId}`);
-      if (cartRes.data) {
-        cartData = {
-          address: cartRes.data.address || cartRes.data.location || null,
-          cartName: cartRes.data.cartName || cartRes.data.name || null,
-        };
+      const cartId = typeof order.cartId === "object" ? order.cartId._id : order.cartId;
+      if (cartId) {
+        try {
+          const cartRes = await api.get(`/carts/by-admin/${cartId}`, { skipErrorLogging: true });
+          if (cartRes.data?.data) {
+            cartData = {
+              address: cartRes.data.data.address || cartRes.data.data.location || null,
+              cartName: cartRes.data.data.name || null,
+            };
+          }
+        } catch (e) {
+          if (e.response?.status !== 404 && e.response?.status !== 403) {
+            console.warn("Cart by-admin fetch failed, falling back to user:", e);
+          }
+        }
+        if (!cartData) {
+          const userRes = await api.get(`/users/${cartId}`, { skipErrorLogging: true });
+          if (userRes.data) {
+            cartData = {
+              address: userRes.data.address || userRes.data.location || null,
+              cartName: userRes.data.cartName || userRes.data.name || null,
+            };
+          }
+        }
       }
     }
   } catch (err) {

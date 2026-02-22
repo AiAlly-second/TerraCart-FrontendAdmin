@@ -14,96 +14,6 @@ const resolveAssetUrl = (url) => {
   return `${nodeApi}/${url}`;
 };
 
-const extractUpiIdFromPayload = (payload) => {
-  if (!payload || typeof payload !== "string") return "";
-  const match = payload.match(/[?&]pa=([^&]+)/i);
-  return match ? decodeURIComponent(match[1]) : "";
-};
-
-const parseAmountCandidates = (text) => {
-  if (!text) return [];
-  const matches = text.match(/\d+(?:[.,]\d{1,2})?/g) || [];
-  const values = matches
-    .map((value) => Number(value.replace(/,/g, "")))
-    .filter((value) => Number.isFinite(value) && value > 0 && value < 1000000);
-  return [...new Set(values)];
-};
-
-const extractReferenceId = (text) => {
-  if (!text) return "";
-  const patterns = [
-    /utr[\s:.-]*([a-z0-9]{8,})/i,
-    /upi[\s]*(?:ref(?:erence)?|id)?[\s:.-]*([a-z0-9]{8,})/i,
-    /txn[\s]*(?:id|no|number)?[\s:.-]*([a-z0-9]{8,})/i,
-    /ref(?:erence)?[\s]*(?:id|no|number)?[\s:.-]*([a-z0-9]{8,})/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1].toUpperCase();
-  }
-
-  const longDigit = text.match(/\b\d{10,18}\b/);
-  return longDigit ? longDigit[0] : "";
-};
-
-const validateReceiptText = ({ rawText, amount, upiId, orderId }) => {
-  const normalizedText = String(rawText || "").toLowerCase();
-  const expectedAmount = Number(amount || 0);
-  const amountCandidates = parseAmountCandidates(normalizedText);
-  const amountMatch = amountCandidates.find(
-    (candidate) => Math.abs(candidate - expectedAmount) <= 1
-  );
-
-  const successKeywords = [
-    "success",
-    "successful",
-    "paid",
-    "completed",
-    "debited",
-    "credited",
-    "transaction",
-    "upi",
-  ];
-  const failureKeywords = ["failed", "failure", "reversed", "declined", "pending"];
-
-  const successCount = successKeywords.reduce(
-    (count, keyword) => count + (normalizedText.includes(keyword) ? 1 : 0),
-    0
-  );
-  const hasFailureKeyword = failureKeywords.some((keyword) =>
-    normalizedText.includes(keyword)
-  );
-
-  const expectedUpiId = String(upiId || "").trim().toLowerCase();
-  const upiMatched =
-    expectedUpiId.length > 0 && normalizedText.includes(expectedUpiId);
-
-  const referenceId = extractReferenceId(normalizedText);
-  const orderTail = String(orderId || "").slice(-5).toLowerCase();
-  const orderHintMatched =
-    orderTail.length >= 4 ? normalizedText.includes(orderTail) : false;
-
-  let score = 0;
-  if (amountMatch) score += 2;
-  if (referenceId) score += 1;
-  if (upiMatched) score += 1;
-  if (successCount > 0) score += 1;
-  if (orderHintMatched) score += 1;
-  if (hasFailureKeyword) score -= 2;
-
-  return {
-    amountMatched: Boolean(amountMatch),
-    detectedAmount: amountMatch || null,
-    referenceId,
-    upiMatched,
-    successCount,
-    hasFailureKeyword,
-    orderHintMatched,
-    isValid: Boolean(amountMatch) && score >= 3 && !hasFailureKeyword,
-  };
-};
-
 const STATUS_BADGE = {
   PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
   PROCESSING: "bg-blue-100 text-blue-700 border-blue-200",
@@ -132,12 +42,6 @@ const Payments = () => {
     upiId: "",
     gatewayName: "",
   });
-  const [receiptFile, setReceiptFile] = useState(null);
-  const [receiptPreview, setReceiptPreview] = useState("");
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrError, setOcrError] = useState("");
-  const [ocrResult, setOcrResult] = useState(null);
-
   const loadPayments = async () => {
     setLoading(true);
     setError(null);
@@ -180,24 +84,6 @@ const Payments = () => {
     loadPayments();
     loadActiveQR();
   }, []);
-
-  useEffect(() => {
-    return () => {
-      if (receiptPreview) {
-        URL.revokeObjectURL(receiptPreview);
-      }
-    };
-  }, [receiptPreview]);
-
-  useEffect(() => {
-    if (receiptPreview) {
-      URL.revokeObjectURL(receiptPreview);
-    }
-    setReceiptFile(null);
-    setReceiptPreview("");
-    setOcrError("");
-    setOcrResult(null);
-  }, [selectedPayment?.id]);
 
   const filteredPayments = useMemo(() => {
     let filtered = payments;
@@ -343,67 +229,6 @@ const Payments = () => {
       setQrError(err.response?.data?.message || "Failed to delete payment QR");
     } finally {
       setQrDeleting(false);
-    }
-  };
-
-  const handleReceiptFileChange = (event) => {
-    const file = event.target.files?.[0] || null;
-    if (receiptPreview) {
-      URL.revokeObjectURL(receiptPreview);
-    }
-    setReceiptFile(file);
-    setOcrResult(null);
-    setOcrError("");
-    if (!file) {
-      setReceiptPreview("");
-      return;
-    }
-    setReceiptPreview(URL.createObjectURL(file));
-  };
-
-  const handleScanReceipt = async () => {
-    if (!selectedPayment) {
-      setOcrError("Select a payment first.");
-      return;
-    }
-    if (!receiptFile) {
-      setOcrError("Please upload a receipt image first.");
-      return;
-    }
-
-    const expectedUpiId =
-      activeQR?.upiId || extractUpiIdFromPayload(selectedPayment?.upiPayload);
-
-    setOcrLoading(true);
-    setOcrError("");
-    try {
-      const Tesseract = await import("tesseract.js");
-      const result = await Tesseract.recognize(receiptFile, "eng", {
-        logger: () => {},
-      });
-      const rawText = String(result?.data?.text || "").trim();
-      if (!rawText) {
-        throw new Error("No readable text found in receipt image.");
-      }
-
-      const validation = validateReceiptText({
-        rawText,
-        amount: selectedPayment.amount,
-        upiId: expectedUpiId,
-        orderId: selectedPayment.orderId,
-      });
-      setOcrResult({
-        ...validation,
-        rawText,
-      });
-    } catch (err) {
-      setOcrResult(null);
-      setOcrError(
-        err?.message ||
-          "Could not scan receipt. Please upload a clear screenshot."
-      );
-    } finally {
-      setOcrLoading(false);
     }
   };
 
@@ -645,85 +470,6 @@ const Payments = () => {
                   </div>
                 )}
 
-                <div className="space-y-2 border-t border-slate-200 pt-3">
-                  <h3 className="text-sm font-semibold text-slate-800">
-                    Receipt OCR check
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Upload customer receipt screenshot to check if payment looks
-                    real.
-                  </p>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleReceiptFileChange}
-                    className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
-                  />
-
-                  {receiptPreview && (
-                    <img
-                      src={receiptPreview}
-                      alt="Receipt preview"
-                      className="w-full max-h-56 object-contain rounded-lg border border-slate-200 bg-slate-50 p-2"
-                    />
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleScanReceipt}
-                    disabled={!receiptFile || ocrLoading}
-                    className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    {ocrLoading ? "Scanning..." : "Scan receipt"}
-                  </button>
-
-                  {ocrError && (
-                    <p className="text-xs text-red-600">{ocrError}</p>
-                  )}
-
-                  {ocrResult && (
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-xs space-y-1 ${
-                        ocrResult.isValid
-                          ? "border-green-200 bg-green-50 text-green-800"
-                          : "border-amber-200 bg-amber-50 text-amber-800"
-                      }`}
-                    >
-                      <p className="font-semibold">
-                        {ocrResult.isValid
-                          ? "Receipt looks valid"
-                          : "Needs manual review"}
-                      </p>
-                      <p>
-                        Amount match:{" "}
-                        <strong>
-                          {ocrResult.amountMatched
-                            ? `Yes (Rs ${Number(
-                                ocrResult.detectedAmount || 0
-                              ).toFixed(2)})`
-                            : "No"}
-                        </strong>
-                      </p>
-                      <p>
-                        Reference:{" "}
-                        <strong>{ocrResult.referenceId || "Not found"}</strong>
-                      </p>
-                      <p>
-                        UPI ID match:{" "}
-                        <strong>{ocrResult.upiMatched ? "Yes" : "No"}</strong>
-                      </p>
-                      <details className="mt-1">
-                        <summary className="cursor-pointer font-semibold">
-                          Extracted text
-                        </summary>
-                        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-slate-200 bg-white p-2 text-[11px] text-slate-700">
-                          {ocrResult.rawText}
-                        </pre>
-                      </details>
-                    </div>
-                  )}
-                </div>
               </>
             )}
           </div>
