@@ -14,10 +14,13 @@ import {
   FaChevronDown,
   FaChevronRight,
   FaCalendarAlt,
+  FaDownload,
 } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { useAuth } from "../../context/AuthContext";
 import { formatUnit, convertUnit } from "../../utils/unitConverter";
+import api from "../../utils/api";
+import { exportRowsToExcel } from "../../utils/excelReport";
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -28,6 +31,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [expandedFranchises, setExpandedFranchises] = useState(new Set());
+  const [exportingRevenue, setExportingRevenue] = useState(false);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -113,6 +117,74 @@ const Dashboard = () => {
     setExpandedFranchises(newExpanded);
   };
 
+  const handleExportDateWiseRevenue = async () => {
+    if (user?.role !== "franchise_admin") return;
+
+    if (!dateRange.from || !dateRange.to) {
+      alert("Please select both From and To dates.");
+      return;
+    }
+    if (dateRange.from > dateRange.to) {
+      alert("From date cannot be after To date.");
+      return;
+    }
+
+    try {
+      setExportingRevenue(true);
+      const response = await api.get("/revenue/franchise", {
+        params: {
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+        },
+      });
+
+      const payload = response?.data?.data || {};
+      const dailyBreakdown = Array.isArray(payload?.dailyBreakdown)
+        ? payload.dailyBreakdown
+        : [];
+
+      if (dailyBreakdown.length === 0) {
+        alert("No date-wise revenue data available for selected dates.");
+        return;
+      }
+
+      const franchiseName = payload?.franchiseName || user?.name || "Franchise";
+      const rangeLabel = `${dateRange.from} to ${dateRange.to}`;
+      const rows = dailyBreakdown.map((day) => {
+        const orders = Number(day?.orderCount || 0);
+        const revenue = Number(day?.revenue || 0);
+        return {
+          Franchise: franchiseName,
+          "Date Range": rangeLabel,
+          Date: day?.date || "",
+          Orders: orders,
+          "Revenue (Rs)": Number(revenue.toFixed(2)),
+          "Avg Order Value (Rs)": Number(
+            (orders > 0 ? revenue / orders : 0).toFixed(2)
+          ),
+        };
+      });
+
+      const fileName = `franchise-date-wise-revenue-${dateRange.from}-to-${dateRange.to}.xlsx`;
+      const exported = exportRowsToExcel({
+        rows,
+        fileName,
+        sheetName: "DateWiseRevenue",
+      });
+
+      if (!exported) {
+        alert("No data available to export.");
+      }
+    } catch (error) {
+      alert(
+        error?.response?.data?.message ||
+          "Failed to export date-wise revenue. Please try again."
+      );
+    } finally {
+      setExportingRevenue(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6">
@@ -176,6 +248,17 @@ const Dashboard = () => {
                 />
               </div>
             </div>
+            {isFranchiseAdmin && (
+              <button
+                onClick={handleExportDateWiseRevenue}
+                disabled={exportingRevenue}
+                className="inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Export date-wise revenue for selected date range"
+              >
+                <FaDownload className="mr-2" />
+                {exportingRevenue ? "Exporting..." : "Export Date-wise Revenue"}
+              </button>
+            )}
           </div>
         </div>
 
