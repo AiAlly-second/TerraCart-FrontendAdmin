@@ -36,9 +36,13 @@ const AttendanceManagement = () => {
     new Date().toLocaleDateString('en-CA') // Local YYYY-MM-DD
   );
   const [stats, setStats] = useState(null);
-  const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'tasks'
+  const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'tasks', 'leaves'
   const pollingIntervalRef = useRef(null); // For HTTP polling interval
   const [processingAction, setProcessingAction] = useState(null); // Track which action is being processed
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [leaveStatusFilter, setLeaveStatusFilter] = useState("pending");
+  const [leaveActionId, setLeaveActionId] = useState("");
   
   // Use auth context
   // We need to import useAuth dynamically or assume it's available via context if we can't import easily
@@ -112,6 +116,13 @@ const AttendanceManagement = () => {
       fetchAttendance();
     }
   }, [activeTab, selectedEmployee, startDate, endDate, dependenciesLoaded, selectedCart]);
+
+  useEffect(() => {
+    if (!dependenciesLoaded || !apiRef.current) return;
+    if (activeTab === "leaves") {
+      fetchLeaveRequests();
+    }
+  }, [activeTab, leaveStatusFilter, selectedCart, dependenciesLoaded]);
 
   const fetchEmployees = async () => {
     if (!apiRef.current) return;
@@ -237,6 +248,55 @@ const AttendanceManagement = () => {
       alert("Failed to fetch statistics");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLeaveRequests = async () => {
+    if (!apiRef.current) return;
+    try {
+      setLeaveLoading(true);
+      const params = {};
+      if (leaveStatusFilter && leaveStatusFilter !== "all") {
+        params.status = leaveStatusFilter;
+      }
+      if (selectedCart) params.cartId = selectedCart;
+
+      const response = await apiRef.current.get("/leave-requests", { params });
+      const payload = response.data;
+      let data = [];
+      if (Array.isArray(payload)) {
+        data = payload;
+      } else if (Array.isArray(payload?.data)) {
+        data = payload.data;
+      }
+      setLeaveRequests(data);
+    } catch (error) {
+      console.error("Error fetching leave requests:", error);
+      alert(error.response?.data?.message || "Failed to fetch leave requests");
+      setLeaveRequests([]);
+    } finally {
+      setLeaveLoading(false);
+    }
+  };
+
+  const handleLeaveStatusUpdate = async (leaveId, nextStatus) => {
+    if (!apiRef.current || !leaveId) return;
+    const confirmed = await confirm(
+      `Mark this leave request as ${nextStatus}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLeaveActionId(`${leaveId}-${nextStatus}`);
+      await apiRef.current.patch(`/leave-requests/${leaveId}/status`, {
+        status: nextStatus,
+      });
+      await fetchLeaveRequests();
+    } catch (error) {
+      console.error("Error updating leave request:", error);
+      alert(error.response?.data?.message || "Failed to update leave request");
+    } finally {
+      setLeaveActionId("");
     }
   };
 
@@ -764,6 +824,16 @@ const AttendanceManagement = () => {
             >
               Task Management
             </button>
+            <button
+              onClick={() => setActiveTab("leaves")}
+              className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap ${
+                activeTab === "leaves"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Leave Management
+            </button>
           </nav>
         </div>
 
@@ -1102,6 +1172,147 @@ End Break
                             </td>
                           </tr>
                         ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "leaves" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3 items-end justify-between">
+                <div className="flex items-end gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={leaveStatusFilter}
+                      onChange={(e) => setLeaveStatusFilter(e.target.value)}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="all">All</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  onClick={fetchLeaveRequests}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {leaveLoading ? (
+                <div className="flex justify-center items-center h-40">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Employee
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Date Range
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Reason
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Requested By
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {!Array.isArray(leaveRequests) || leaveRequests.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="6"
+                            className="px-4 py-6 text-center text-gray-500"
+                          >
+                            No leave requests found
+                          </td>
+                        </tr>
+                      ) : (
+                        leaveRequests.map((leave) => {
+                          const status = String(leave.status || "pending").toLowerCase();
+                          const isPending = status === "pending";
+                          const badgeClass =
+                            status === "approved"
+                              ? "bg-green-100 text-green-700"
+                              : status === "rejected" || status === "cancelled"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700";
+                          return (
+                            <tr key={leave._id}>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="font-medium text-sm text-gray-900">
+                                  {leave.employeeId?.name || "N/A"}
+                                </div>
+                                <div className="text-xs text-gray-500 capitalize">
+                                  {leave.employeeId?.employeeRole || "-"}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 max-w-sm">
+                                <div className="break-words">{leave.reason || "-"}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                {leave.requestedBy?.name || "-"}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs rounded-full ${badgeClass}`}>
+                                  {status.toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {isPending ? (
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={leaveActionId === `${leave._id}-approved`}
+                                      onClick={() =>
+                                        handleLeaveStatusUpdate(leave._id, "approved")
+                                      }
+                                      className="px-2 py-1 text-xs border border-green-600 text-green-700 rounded hover:bg-green-50 disabled:opacity-50"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={leaveActionId === `${leave._id}-rejected`}
+                                      onClick={() =>
+                                        handleLeaveStatusUpdate(leave._id, "rejected")
+                                      }
+                                      className="px-2 py-1 text-xs border border-red-600 text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400">No actions</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

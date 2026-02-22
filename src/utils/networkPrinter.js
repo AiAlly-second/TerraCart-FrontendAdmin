@@ -9,118 +9,126 @@
 const generateESCPOS = (order, kot, kotIndex = 0) => {
   const ESC = '\x1B';
   const GS = '\x1D';
-  
-  let commands = '';
-  
-  // Initialize printer
-  commands += ESC + '@'; // Initialize
-  commands += ESC + 'a' + '\x01'; // Center align
-  
-  // Header
-  commands += ESC + '!' + '\x30'; // Double height + width
-  commands += '** TERRA CART **\n';
-  commands += ESC + '!' + '\x00'; // Normal
-  commands += ESC + '!' + '\x10'; // Bold
-  commands += 'KITCHEN ORDER TICKET\n';
-  commands += ESC + '!' + '\x00'; // Normal
-  commands += '================================\n';
-  
-  // KOT Number
-  commands += ESC + '!' + '\x30'; // Double height + width
-  commands += `KOT #${String(kotIndex + 1).padStart(3, '0')}\n`;
-  commands += ESC + '!' + '\x00'; // Normal
-  
-  // Service Type
-  commands += '\n';
-  const serviceType = order.serviceType === 'TAKEAWAY' ? '*** TAKEAWAY ORDER ***' : '~~~ DINE-IN ORDER ~~~';
-  commands += serviceType + '\n';
-  commands += '================================\n';
-  
-  // Order Info
-  commands += ESC + 'a' + '\x00'; // Left align
+  const explicitKotNumber = Number(kot?.kotNumber);
+  const kotNumber =
+    Number.isFinite(explicitKotNumber) && explicitKotNumber > 0
+      ? explicitKotNumber
+      : kotIndex + 1;
+  const serviceType = String(order?.serviceType || '')
+    .trim()
+    .toUpperCase();
+  const orderType = String(order?.orderType || '')
+    .trim()
+    .toUpperCase();
+  const isTakeawayLike =
+    serviceType === 'TAKEAWAY' ||
+    serviceType === 'PICKUP' ||
+    serviceType === 'DELIVERY' ||
+    orderType === 'PICKUP' ||
+    orderType === 'DELIVERY';
+  const serviceLabel = isTakeawayLike ? 'TAKEAWAY' : 'DINE-IN';
   const now = new Date();
-  commands += `Date: ${now.toLocaleDateString('en-IN')}\n`;
-  commands += `Time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
-  commands += `Order: ${(order._id || '').toString().slice(-8).toUpperCase()}\n`;
-  
-  // Table/Token Number
-  if (order.serviceType === 'TAKEAWAY' && order.orderType !== 'DELIVERY' && order.takeawayToken) {
-    commands += '\n';
-    commands += ESC + 'a' + '\x01'; // Center
-    commands += ESC + '!' + '\x20'; // Double height
-    commands += `TOKEN: ${order.takeawayToken.toUpperCase()}\n`;
-    commands += ESC + '!' + '\x00'; // Normal
-  } else if (order.tableNumber) {
-    commands += '\n';
-    commands += ESC + 'a' + '\x01'; // Center
-    commands += ESC + '!' + '\x20'; // Double height
-    commands += `TABLE: ${order.tableNumber}\n`;
-    commands += ESC + '!' + '\x00'; // Normal
-  }
-  
-  // Customer Info for Takeaway
-  if (order.serviceType === 'TAKEAWAY' && (order.customerName || order.customerMobile)) {
-    commands += ESC + 'a' + '\x00'; // Left align
-    commands += '--------------------------------\n';
-    if (order.customerName) {
-      commands += `Customer: ${order.customerName}\n`;
-    }
-    if (order.customerMobile) {
-      commands += `Mobile: ${order.customerMobile}\n`;
-    }
-  }
-  
-  // Items Section
-  commands += '================================\n';
-  commands += ESC + 'a' + '\x01'; // Center
-  commands += ESC + '!' + '\x10'; // Bold
-  commands += 'ITEMS TO PREPARE\n';
-  commands += ESC + '!' + '\x00'; // Normal
-  commands += ESC + 'a' + '\x00'; // Left align
-  commands += '================================\n';
-  
-  // Items List
-  (kot.items || []).forEach(item => {
-    if (item.returned) {
-      commands += `X CANCELLED: ${item.name}\n`;
-      return;
-    }
-    
-    commands += ESC + '!' + '\x10'; // Bold
-    commands += `[${item.quantity}x] ${item.name}\n`;
-    commands += ESC + '!' + '\x00'; // Normal
-    
-    if (item.convertedToTakeaway) {
-      commands += '  >> TAKEAWAY <<\n';
-    }
-    
-    if (item.specialInstructions) {
-      commands += `  Note: ${item.specialInstructions}\n`;
-    }
-    
-    commands += '--------------------------------\n';
+  const dateLabel = now.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
   });
-  
-  // Summary
-  const activeItems = (kot.items || []).filter(i => !i.returned);
-  const totalQty = activeItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  
-  commands += '================================\n';
+  const timeLabel = now.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const orderRef = String(order?._id || '').slice(-8).toUpperCase();
+  const orderNote = String(
+    order?.specialInstructions ||
+      order?.specialInstruction ||
+      order?.orderNote ||
+      order?.note ||
+      order?.notes ||
+      kot?.specialInstructions ||
+      kot?.note ||
+      '',
+  ).trim();
+
+  const cleanLine = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+  const separator = '----------------------------';
+  const items = Array.isArray(kot?.items) ? kot.items : [];
+  const activeItems = items.filter((item) => item && item.returned !== true);
+  const totalQty = activeItems.reduce(
+    (sum, item) => sum + (Number(item?.quantity) || 0),
+    0,
+  );
+
+  let commands = '';
+  commands += ESC + '@'; // Initialize
   commands += ESC + 'a' + '\x01'; // Center
   commands += ESC + '!' + '\x10'; // Bold
-  commands += `Total Items: ${activeItems.length} | Qty: ${totalQty}\n`;
-  commands += ESC + '!' + '\x00'; // Normal
-  commands += '================================\n';
-  
-  // Footer
-  commands += '\n';
-  commands += 'Prepare with care!\n';
-  commands += 'Terra Cart Kitchen\n';
-  commands += '\n\n\n';
-  
-  // Cut paper
-  commands += GS + 'V' + '\x00'; // Full cut
-  
+  commands += 'TERRA CART\n';
+  commands += ESC + '!' + '\x00';
+  commands += `KOT #${String(kotNumber).padStart(2, '0')} ${serviceLabel}\n`;
+  commands += `${dateLabel} ${timeLabel}\n`;
+  commands += separator + '\n';
+
+  if (isTakeawayLike && orderType !== 'DELIVERY' && order.takeawayToken) {
+    commands += `Token: ${cleanLine(order.takeawayToken)}\n`;
+  } else if (!isTakeawayLike && order.tableNumber) {
+    commands += `Table: ${cleanLine(order.tableNumber)}\n`;
+  }
+
+  if (orderRef) {
+    commands += `Ref: ${orderRef}\n`;
+  }
+
+  if (isTakeawayLike) {
+    if (order?.customerName) {
+      commands += `Customer: ${cleanLine(order.customerName)}\n`;
+    }
+    if (order?.customerMobile) {
+      commands += `Mobile: ${cleanLine(order.customerMobile)}\n`;
+    }
+  }
+
+  if (orderNote) {
+    commands += `Note: ${cleanLine(orderNote)}\n`;
+  }
+
+  commands += separator + '\n';
+  commands += ESC + 'a' + '\x00'; // Left
+
+  if (!items.length) {
+    commands += 'No items\n';
+  } else {
+    items.forEach((item) => {
+      if (!item) return;
+      if (item.returned === true) return;
+      const qty = Number(item.quantity) || 0;
+      const name = cleanLine(item.name || 'Item');
+      commands += `${qty} x ${name}\n`;
+
+      const itemNote = cleanLine(item.specialInstructions || item.note || '');
+      if (itemNote) {
+        commands += `  * ${itemNote}\n`;
+      }
+
+      const extras = Array.isArray(item.extras)
+        ? item.extras
+            .map((extra) => cleanLine(extra?.name || ''))
+            .filter(Boolean)
+        : [];
+      if (extras.length) {
+        commands += `  + ${extras.join(', ')}\n`;
+      }
+    });
+  }
+
+  commands += separator + '\n';
+  commands += ESC + 'a' + '\x01'; // Center
+  commands += ESC + '!' + '\x08'; // Bold
+  commands += `Items: ${activeItems.length}  Qty: ${totalQty}\n`;
+  commands += ESC + '!' + '\x00';
+  commands += '\n\n';
+  commands += GS + 'V' + '\x00'; // Cut
+
   return commands;
 };
 

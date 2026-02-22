@@ -10,6 +10,7 @@ const defaultForm = {
   priority: "medium",
   category: "other",
   dueDate: "",
+  frequency: [],
 };
 
 const toArray = (value) => {
@@ -35,9 +36,57 @@ const formatDateTime = (value) => {
   if (!value) return "-";
   try {
     return new Date(value).toLocaleString();
-  } catch (_) {
+  } catch {
     return "-";
   }
+};
+
+const DAY_OPTIONS = [
+  { value: "monday", label: "Mon" },
+  { value: "tuesday", label: "Tue" },
+  { value: "wednesday", label: "Wed" },
+  { value: "thursday", label: "Thu" },
+  { value: "friday", label: "Fri" },
+  { value: "saturday", label: "Sat" },
+  { value: "sunday", label: "Sun" },
+];
+
+const normalizeDay = (value) => {
+  const day = String(value || "").trim().toLowerCase();
+  const map = {
+    mon: "monday",
+    monday: "monday",
+    tue: "tuesday",
+    tues: "tuesday",
+    tuesday: "tuesday",
+    wed: "wednesday",
+    wednesday: "wednesday",
+    thu: "thursday",
+    thur: "thursday",
+    thurs: "thursday",
+    thursday: "thursday",
+    fri: "friday",
+    friday: "friday",
+    sat: "saturday",
+    saturday: "saturday",
+    sun: "sunday",
+    sunday: "sunday",
+  };
+  return map[day] || "";
+};
+
+const getLocalDayName = (dateValue) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return DAY_OPTIONS[(date.getDay() + 6) % 7]?.value || "";
+};
+
+const isSameLocalDate = (a, b) => {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 };
 
 const TaskManagement = ({ embedded = false }) => {
@@ -52,6 +101,8 @@ const TaskManagement = ({ embedded = false }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [form, setForm] = useState(defaultForm);
+  const [schedulesByEmployee, setSchedulesByEmployee] = useState({});
+  const [todayAttendanceByEmployee, setTodayAttendanceByEmployee] = useState({});
 
   const employeeNameById = useMemo(() => {
     const map = new Map();
@@ -64,9 +115,39 @@ const TaskManagement = ({ embedded = false }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksResponse, employeesResponse] = await Promise.all([
+      const schedulesPromise = api
+        .get("/employee-schedule")
+        .catch((error) => {
+          if (error?.response?.status === 404) {
+            return api.get("/employee-schedules");
+          }
+          throw error;
+        })
+        .catch((error) => {
+          if (error?.response?.status === 404) {
+            console.warn(
+              "Employee schedule routes unavailable; continuing without schedule constraints."
+            );
+            return { data: [] };
+          }
+          throw error;
+        });
+
+      const attendancePromise = api.get("/attendance/today").catch((error) => {
+        if (error?.response?.status === 404) {
+          console.warn(
+            "Attendance today route unavailable; continuing without attendance constraints."
+          );
+          return { data: [] };
+        }
+        throw error;
+      });
+
+      const [tasksResponse, employeesResponse, schedulesResponse, attendanceResponse] = await Promise.all([
         api.get("/tasks"),
         api.get("/employees"),
+        schedulesPromise,
+        attendancePromise,
       ]);
 
       const fetchedTasks = toArray(tasksResponse.data)
@@ -79,6 +160,26 @@ const TaskManagement = ({ embedded = false }) => {
 
       setTasks(fetchedTasks);
       setEmployees(toArray(employeesResponse.data));
+
+      const scheduleMap = {};
+      toArray(schedulesResponse.data).forEach((schedule) => {
+        const employeeId =
+          (schedule.employeeId?._id || schedule.employeeId || "").toString();
+        if (employeeId) {
+          scheduleMap[employeeId] = schedule;
+        }
+      });
+      setSchedulesByEmployee(scheduleMap);
+
+      const attendanceMap = {};
+      toArray(attendanceResponse.data).forEach((row) => {
+        const employeeId =
+          (row.employeeId?._id || row.employeeId || "").toString();
+        if (employeeId) {
+          attendanceMap[employeeId] = String(row.status || "").toLowerCase();
+        }
+      });
+      setTodayAttendanceByEmployee(attendanceMap);
     } catch (error) {
       console.error("Failed to load tasks", error);
       alert(error.response?.data?.message || "Failed to load task data");
@@ -90,6 +191,22 @@ const TaskManagement = ({ embedded = false }) => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const getOffDaysForEmployee = (employeeId) => {
+    if (!employeeId) return [];
+    const schedule = schedulesByEmployee[employeeId];
+    if (!Array.isArray(schedule?.weeklySchedule)) return [];
+    return schedule.weeklySchedule
+      .filter((day) => day?.isWorking === false)
+      .map((day) => normalizeDay(day.day))
+      .filter(Boolean);
+  };
+
+  const getTodayAttendanceStatusForEmployee = (employeeId) => {
+    return String(todayAttendanceByEmployee[employeeId] || "").toLowerCase();
+  };
+
+  const selectedEmployeeOffDays = getOffDaysForEmployee(form.assignedTo);
 
   const resetForm = () => {
     setForm(defaultForm);
@@ -108,16 +225,23 @@ const TaskManagement = ({ embedded = false }) => {
   };
 
   const openEditForm = (task) => {
+    const assignedTo = (task.assignedTo?._id || task.assignedTo || "").toString();
+    const offDays = getOffDaysForEmployee(assignedTo);
     setEditingTask(task);
     setForm({
       title: task.title || "",
       description: task.description || "",
-      assignedTo: (task.assignedTo?._id || task.assignedTo || "").toString(),
+      assignedTo,
       assignedBy: task.assignedBy || "admin",
       status: task.status || "pending",
       priority: task.priority || "medium",
       category: task.category || "other",
       dueDate: toDateTimeLocalValue(task.dueDate || task.createdAt),
+      frequency: Array.isArray(task.frequency)
+        ? task.frequency
+            .map(normalizeDay)
+            .filter((day) => day && !offDays.includes(day))
+        : [],
     });
     setShowForm(true);
   };
@@ -133,6 +257,56 @@ const TaskManagement = ({ embedded = false }) => {
       return;
     }
 
+    const normalizedFrequency = Array.isArray(form.frequency)
+      ? form.frequency.map(normalizeDay).filter(Boolean)
+      : [];
+    const offDays = getOffDaysForEmployee(form.assignedTo);
+    const dueDateValue = form.dueDate
+      ? new Date(form.dueDate)
+      : new Date();
+    const dueDay = getLocalDayName(dueDateValue);
+    const today = new Date();
+    const attendanceStatus = getTodayAttendanceStatusForEmployee(form.assignedTo);
+    const isEmployeeUnavailableToday =
+      attendanceStatus === "on_leave" || attendanceStatus === "sick";
+
+    const blockedFrequencyDays = normalizedFrequency.filter((day) =>
+      offDays.includes(day)
+    );
+    if (blockedFrequencyDays.length > 0) {
+      const labels = blockedFrequencyDays
+        .map((day) => DAY_OPTIONS.find((d) => d.value === day)?.label || day)
+        .join(", ");
+      alert(
+        `Cannot assign recurring task on employee off day(s): ${labels}`
+      );
+      return;
+    }
+
+    if (offDays.includes(dueDay)) {
+      alert(
+        `Cannot assign task on ${DAY_OPTIONS.find((d) => d.value === dueDay)?.label || dueDay}. This is employee off day.`
+      );
+      return;
+    }
+
+    if (isSameLocalDate(dueDateValue, today) && isEmployeeUnavailableToday) {
+      alert(
+        `Cannot assign task today. Employee attendance is marked ${attendanceStatus === "on_leave" ? "on leave" : attendanceStatus}.`
+      );
+      return;
+    }
+
+    if (
+      isEmployeeUnavailableToday &&
+      normalizedFrequency.includes(getLocalDayName(today))
+    ) {
+      alert(
+        `Cannot assign recurring task for today. Employee attendance is marked ${attendanceStatus === "on_leave" ? "on leave" : attendanceStatus}.`
+      );
+      return;
+    }
+
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
@@ -141,7 +315,8 @@ const TaskManagement = ({ embedded = false }) => {
       status: form.status || "pending",
       priority: form.priority || "medium",
       category: form.category || "other",
-      dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : new Date().toISOString(),
+      dueDate: dueDateValue.toISOString(),
+      frequency: normalizedFrequency,
     };
 
     try {
@@ -162,7 +337,7 @@ const TaskManagement = ({ embedded = false }) => {
   };
 
   const handleDeleteTask = async (task) => {
-    const ok = window.confirm(`Delete task \"${task.title}\"?`);
+    const ok = window.confirm(`Delete task "${task.title}"?`);
     if (!ok) return;
 
     try {
@@ -205,6 +380,9 @@ const TaskManagement = ({ embedded = false }) => {
       const taskStatus = task.status || "pending";
       const title = (task.title || "").toLowerCase();
       const description = (task.description || "").toLowerCase();
+      const frequencyText = Array.isArray(task.frequency)
+        ? task.frequency.join(" ").toLowerCase()
+        : "";
 
       if (statusFilter !== "all" && taskStatus !== statusFilter) {
         return false;
@@ -212,7 +390,12 @@ const TaskManagement = ({ embedded = false }) => {
       if (assigneeFilter !== "all" && assignedId !== assigneeFilter) {
         return false;
       }
-      if (query && !title.includes(query) && !description.includes(query)) {
+      if (
+        query &&
+        !title.includes(query) &&
+        !description.includes(query) &&
+        !frequencyText.includes(query)
+      ) {
         return false;
       }
       return true;
@@ -237,6 +420,13 @@ const TaskManagement = ({ embedded = false }) => {
         return "bg-gray-100 text-gray-700";
     }
   };
+
+  const selectedAttendanceStatus = getTodayAttendanceStatusForEmployee(
+    form.assignedTo
+  );
+  const employeeUnavailableToday =
+    selectedAttendanceStatus === "absent" ||
+    selectedAttendanceStatus === "on_leave";
 
   return (
     <div className={`space-y-6 ${embedded ? "" : "max-w-7xl mx-auto"}`}>
@@ -348,7 +538,19 @@ const TaskManagement = ({ embedded = false }) => {
               />
               <select
                 value={form.assignedTo}
-                onChange={(e) => setForm((prev) => ({ ...prev, assignedTo: e.target.value }))}
+                onChange={(e) => {
+                  const nextAssignedTo = e.target.value;
+                  const blockedDays = new Set(getOffDaysForEmployee(nextAssignedTo));
+                  setForm((prev) => ({
+                    ...prev,
+                    assignedTo: nextAssignedTo,
+                    frequency: Array.isArray(prev.frequency)
+                      ? prev.frequency
+                          .map(normalizeDay)
+                          .filter((day) => day && !blockedDays.has(day))
+                      : [],
+                  }));
+                }}
                 className="px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2f8f4e]"
                 required
               >
@@ -407,6 +609,61 @@ const TaskManagement = ({ embedded = false }) => {
               />
             </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#2b211c]">
+                  Frequency (optional recurring days)
+                </p>
+                {selectedEmployeeOffDays.length > 0 && (
+                  <p className="text-xs text-amber-700">
+                    Off-day selection is disabled
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DAY_OPTIONS.map((day) => {
+                  const isSelected = (form.frequency || []).includes(day.value);
+                  const isOffDay = selectedEmployeeOffDays.includes(day.value);
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      disabled={isOffDay}
+                      onClick={() => {
+                        setForm((prev) => {
+                          const current = Array.isArray(prev.frequency)
+                            ? prev.frequency
+                            : [];
+                          const next = current.includes(day.value)
+                            ? current.filter((entry) => entry !== day.value)
+                            : [...current, day.value];
+                          return { ...prev, frequency: next };
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${
+                        isOffDay
+                          ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                          : isSelected
+                          ? "bg-[#2f8f4e] text-white border-[#2f8f4e]"
+                          : "bg-white text-gray-700 border-gray-300 hover:border-[#2f8f4e]"
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {employeeUnavailableToday && (
+                <p className="text-xs text-red-700">
+                  Employee attendance today is marked{" "}
+                  {selectedAttendanceStatus === "on_leave"
+                    ? "on leave"
+                    : selectedAttendanceStatus}
+                  . Tasks for today are restricted.
+                </p>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -440,6 +697,7 @@ const TaskManagement = ({ embedded = false }) => {
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Priority</th>
                   <th className="py-2 pr-4">Type</th>
+                  <th className="py-2 pr-4">Frequency</th>
                   <th className="py-2 pr-4">Due</th>
                   <th className="py-2 pr-4">Completed</th>
                   <th className="py-2 pr-4">Actions</th>
@@ -452,6 +710,11 @@ const TaskManagement = ({ embedded = false }) => {
                   const assigneeName =
                     task.assignedTo?.name || employeeNameById.get(assignedId) || "-";
                   const isBusy = busyTaskId === taskId;
+                  const frequencyLabels = Array.isArray(task.frequency)
+                    ? task.frequency
+                        .map((day) => DAY_OPTIONS.find((d) => d.value === normalizeDay(day))?.label)
+                        .filter(Boolean)
+                    : [];
 
                   return (
                     <tr key={taskId} className="border-b last:border-b-0 align-top">
@@ -473,6 +736,11 @@ const TaskManagement = ({ embedded = false }) => {
                       </td>
                       <td className="py-2 pr-4 uppercase text-xs">{task.priority || "medium"}</td>
                       <td className="py-2 pr-4 uppercase text-xs">{task.assignedBy || "admin"}</td>
+                      <td className="py-2 pr-4 text-gray-600">
+                        {frequencyLabels.length > 0
+                          ? frequencyLabels.join(", ")
+                          : "-"}
+                      </td>
                       <td className="py-2 pr-4 text-gray-600">{formatDateTime(task.dueDate)}</td>
                       <td className="py-2 pr-4 text-gray-600">{formatDateTime(task.completedAt)}</td>
                       <td className="py-2 pr-4">

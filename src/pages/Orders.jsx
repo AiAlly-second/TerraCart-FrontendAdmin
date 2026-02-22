@@ -469,8 +469,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         .invoice-root {
           font-family: 'Courier New', monospace;
           color: #000000;
-          width: 80mm;
-          max-width: 302px;
+          width: 58mm;
+          max-width: 220px;
           margin: 0 auto;
           padding: 8px;
           border: none;
@@ -638,7 +638,7 @@ const printOrderInvoice = async (order) => {
           * { box-sizing: border-box; }
           @media print {
             @page {
-              size: 80mm auto;
+              size: 58mm auto;
               margin: 0;
             }
             body {
@@ -650,8 +650,8 @@ const printOrderInvoice = async (order) => {
             font-family: 'Courier New', monospace;
             margin: 0; padding: 8px;
             background: white; color: #000;
-            width: 80mm;
-            max-width: 302px;
+            width: 58mm;
+            max-width: 220px;
             font-size: 11px;
           }
           h1,h2,h3,h4 { margin: 0; }
@@ -659,8 +659,8 @@ const printOrderInvoice = async (order) => {
           th, td { padding: 3px 2px; border-bottom: 1px dashed #000; }
           th { text-align: left; font-size: 9px; }
           .invoice {
-            width: 80mm;
-            max-width: 302px;
+            width: 58mm;
+            max-width: 220px;
             margin: 0 auto;
             padding: 8px;
           }

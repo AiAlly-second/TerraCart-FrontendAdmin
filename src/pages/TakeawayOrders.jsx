@@ -16,6 +16,9 @@ import {
 import api from "../utils/api";
 import { printKOT } from "../utils/kotPrinter";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
+
+const AUTO_PRINT_PRINTER_ID = "kitchen-primary";
+
 const normalizeId = (value) =>
   typeof value === "string" ? value : value?.toString?.() || "";
 const sanitizeAddonName = (value) => {
@@ -225,8 +228,8 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
         .invoice-root {
           font-family: 'Courier New', monospace;
           color: #000000;
-          width: 80mm;
-          max-width: 302px;
+          width: 58mm;
+          max-width: 220px;
           margin: 0 auto;
           padding: 8px;
           border: none;
@@ -470,7 +473,7 @@ const printOrderInvoice = async (order) => {
           * { box-sizing: border-box; }
           @media print {
             @page {
-              size: 80mm auto;
+              size: 58mm auto;
               margin: 0;
             }
             body {
@@ -482,8 +485,8 @@ const printOrderInvoice = async (order) => {
             font-family: 'Courier New', monospace;
             margin: 0; padding: 8px;
             background: white; color: #000;
-            width: 80mm;
-            max-width: 302px;
+            width: 58mm;
+            max-width: 220px;
             font-size: 11px;
           }
           h1,h2,h3,h4 { margin: 0; }
@@ -491,8 +494,8 @@ const printOrderInvoice = async (order) => {
           th, td { padding: 3px 2px; border-bottom: 1px dashed #000; }
           th { text-align: left; font-size: 9px; }
           .invoice {
-            width: 80mm;
-            max-width: 302px;
+            width: 58mm;
+            max-width: 220px;
             margin: 0 auto;
             padding: 8px;
           }
@@ -640,6 +643,7 @@ const TakeawayOrders = () => {
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
     return localStorage.getItem("autoPrintTakeawayKOT") === "true";
   });
+  const printedKotRef = React.useRef(new Set());
 
   // Toggle auto-print
   const toggleAutoPrint = () => {
@@ -650,23 +654,101 @@ const TakeawayOrders = () => {
     });
   };
 
-  // Helper to handle auto-printing for incoming takeaway orders
-  const handleAutoPrint = useCallback((order) => {
-    if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return;
-
-    // Print latest KOT
-    const latestKotIndex = order.kotLines.length - 1;
-    if (latestKotIndex >= 0) {
-      const latestKot = order.kotLines[latestKotIndex];
-      // Check if this KOT has items
-      if (latestKot.items && latestKot.items.length > 0) {
-        console.log(
-          `[AutoPrint] Printing Takeaway KOT #${latestKotIndex + 1} for Order ${order._id}`,
-        );
-        printKOT(order, latestKot, latestKotIndex);
-      }
-    }
+  const isOrderReadyForKotPrint = useCallback((order) => {
+    if (!order) return false;
+    const status = (order?.status || "").toString().trim().toUpperCase();
+    const printableCreateStatuses = new Set([
+      "PENDING",
+      "CONFIRMED",
+      "PREPARING",
+      "BEING PREPARED",
+      "BEINGPREPARED",
+    ]);
+    return printableCreateStatuses.has(status);
   }, []);
+
+  // Auto-print on order creation flow only (not on acceptance), once per order+kotNumber.
+  const handleAutoPrint = useCallback(
+    async (order) => {
+      if (!order || !Array.isArray(order.kotLines) || order.kotLines.length === 0) {
+        return;
+      }
+      if (!isOrderReadyForKotPrint(order)) {
+        return;
+      }
+
+      const latestKotIndex = order.kotLines.length - 1;
+      const latestKot = order.kotLines[latestKotIndex];
+      if (!latestKot || !Array.isArray(latestKot.items) || latestKot.items.length === 0) {
+        return;
+      }
+
+      const explicitKotNumber = Number(latestKot.kotNumber);
+      const kotNumber =
+        Number.isFinite(explicitKotNumber) && explicitKotNumber > 0
+          ? explicitKotNumber
+          : latestKotIndex + 1;
+      const signature = `${order._id}:${kotNumber}`;
+
+      if (printedKotRef.current.has(signature)) {
+        return;
+      }
+
+      let printKey = "";
+      try {
+        const claimResponse = await api.patch(`/orders/${order._id}/print-claim`, {
+          docType: "KOT",
+          printerId: AUTO_PRINT_PRINTER_ID,
+          kotIndex: latestKotIndex,
+          kotNumber,
+          orderVersion: order?.updatedAt || order?.createdAt || "",
+        });
+        const claimPayload = claimResponse?.data || claimResponse || {};
+        if (claimPayload?.claimed !== true) {
+          if (import.meta.env.DEV) {
+            console.log(
+              `[AutoPrint] Skipping Takeaway KOT #${kotNumber} for Order ${order._id} (already claimed)`,
+            );
+          }
+          return;
+        }
+        printKey = String(claimPayload?.printKey || "").trim();
+      } catch (claimError) {
+        if (import.meta.env.DEV) {
+          console.error("[AutoPrint] Failed to claim KOT print job:", claimError);
+        }
+        return;
+      }
+
+      printedKotRef.current.add(signature);
+      console.log(
+        `[AutoPrint] Printing Takeaway KOT #${kotNumber} for Order ${order._id}`,
+      );
+      const printedOk = await printKOT(order, latestKot, latestKotIndex);
+      if (!printedOk) {
+        printedKotRef.current.delete(signature);
+      }
+
+      if (printKey) {
+        try {
+          await api.patch(`/orders/${order._id}/print-complete`, {
+            docType: "KOT",
+            printKey,
+            success: printedOk,
+            errorMessage: printedOk ? undefined : "Failed to print compact KOT",
+          });
+        } catch (completeError) {
+          if (import.meta.env.DEV) {
+            console.error(
+              "[AutoPrint] Failed to complete KOT print job:",
+              completeError,
+            );
+          }
+        }
+      }
+    },
+    [isOrderReadyForKotPrint],
+  );
 
   const socketRef = React.useRef(null);
   const upsertOrder = React.useCallback(
@@ -887,21 +969,6 @@ const TakeawayOrders = () => {
         );
       }
       upsertOrder(order);
-
-      // Auto-print updated orders (if new KOT added)
-      if (autoPrintEnabled) {
-        // Logic similar to Orders.jsx: check if new KOT added
-        // For takeaway, we usually don't have "tables", but updates are same.
-        setOrders((prevOrders) => {
-          const prevOrder = prevOrders.find((o) => o._id === order._id);
-          if (prevOrder && order.kotLines && prevOrder.kotLines) {
-            if (order.kotLines.length > prevOrder.kotLines.length) {
-              handleAutoPrint(order);
-            }
-          }
-          return prevOrders;
-        });
-      }
     };
 
     const handleOrderDeleted = ({ id }) => {
@@ -3279,6 +3346,4 @@ const TakeawayOrders = () => {
 };
 
 export default TakeawayOrders;
-
-
 
