@@ -53,8 +53,8 @@ const Carts = () => {
         status: !user.isApproved
           ? "Pending Approval"
           : user.isActive !== false
-          ? "Active"
-          : "Inactive",
+            ? "Active"
+            : "Inactive",
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         cartCode: user.cartCode, // Cart ID code (e.g., MAH001)
@@ -69,7 +69,7 @@ const Carts = () => {
 
       setCarts(cartsData);
     } catch (error) {
-      console.error("Error fetching carts:", error);
+      console.error("Error fetching cartts:", error);
     } finally {
       setLoading(false);
     }
@@ -125,7 +125,7 @@ const Carts = () => {
   const handleReject = async (cartId) => {
     // CRITICAL: window.confirm is now async, must await it
     const confirmed = await window.confirm(
-      "Are you sure you want to reject this cart admin? This action cannot be undone."
+      "Are you sure you want to reject this cart admin? This action cannot be undone.",
     );
     if (!confirmed) {
       return;
@@ -148,7 +148,7 @@ const Carts = () => {
 
     // CRITICAL: window.confirm is now async, must await it
     const confirmed = await window.confirm(
-      `Are you sure you want to ${newStatus} this cart?`
+      `Are you sure you want to ${newStatus} this cart?`,
     );
     if (!confirmed) {
       return;
@@ -291,8 +291,8 @@ const Carts = () => {
                               cart.status === "Active"
                                 ? "bg-green-100 text-green-800"
                                 : cart.status === "Inactive"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
                             }`}
                           >
                             {cart.status}
@@ -331,20 +331,26 @@ const Carts = () => {
                           <span className="font-medium w-20 md:w-24 flex-shrink-0">
                             Owner:
                           </span>
-                          <span className="min-w-0 break-words">{cart.managerName}</span>
+                          <span className="min-w-0 break-words">
+                            {cart.managerName}
+                          </span>
                         </div>
                         <div className="flex items-start md:items-center text-xs sm:text-sm text-gray-600">
                           <span className="font-medium w-20 md:w-24 flex-shrink-0">
                             Email:
                           </span>
-                          <span className="min-w-0 break-all">{cart.email}</span>
+                          <span className="min-w-0 break-all">
+                            {cart.email}
+                          </span>
                         </div>
                         {cart.phone && (
                           <div className="flex items-start md:items-center text-xs sm:text-sm text-gray-600">
                             <span className="font-medium w-20 md:w-24 flex-shrink-0">
                               Phone:
                             </span>
-                            <span className="min-w-0 break-words">{cart.phone}</span>
+                            <span className="min-w-0 break-words">
+                              {cart.phone}
+                            </span>
                           </div>
                         )}
                         <div className="flex items-start md:items-center text-xs sm:text-sm text-gray-600">
@@ -406,7 +412,7 @@ const Carts = () => {
                   ))}
                 </div>
               </div>
-            )
+            ),
           )}
         </div>
       ) : (
@@ -430,7 +436,9 @@ const Carts = () => {
                       {cart.name}
                     </h3>
                   </div>
-                  <p className="text-sm text-[#6b4423] break-words">{cart.location}</p>
+                  <p className="text-sm text-[#6b4423] break-words">
+                    {cart.location}
+                  </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <span
@@ -438,8 +446,8 @@ const Carts = () => {
                       cart.status === "Active"
                         ? "bg-green-100 text-green-800"
                         : cart.status === "Inactive"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-yellow-100 text-yellow-800"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
                     }`}
                   >
                     {cart.status}
@@ -474,7 +482,9 @@ const Carts = () => {
                   <span className="font-medium w-20 md:w-24 flex-shrink-0">
                     Owner:
                   </span>
-                  <span className="min-w-0 break-words">{cart.managerName}</span>
+                  <span className="min-w-0 break-words">
+                    {cart.managerName}
+                  </span>
                 </div>
                 <div className="flex items-start md:items-center text-xs sm:text-sm text-gray-600">
                   <span className="font-medium w-20 md:w-24 flex-shrink-0">
