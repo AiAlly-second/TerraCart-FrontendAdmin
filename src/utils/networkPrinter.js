@@ -39,16 +39,21 @@ const generateESCPOS = (order, kot, kotIndex = 0) => {
     hour12: true,
   });
   const orderRef = String(order?._id || '').slice(-8).toUpperCase();
-  const orderNote = String(
-    order?.specialInstructions ||
-      order?.specialInstruction ||
-      order?.orderNote ||
-      order?.note ||
-      order?.notes ||
-      kot?.specialInstructions ||
-      kot?.note ||
-      '',
-  ).trim();
+  const normalizeMultilineNote = (value) =>
+    String(value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const noteCandidates = [
+    order?.specialInstructions,
+    order?.specialInstruction,
+    order?.orderNote,
+    order?.note,
+    order?.notes,
+    kot?.specialInstructions,
+    kot?.note,
+  ];
+  const orderNote =
+    noteCandidates
+      .map((value) => normalizeMultilineNote(value))
+      .find((value) => value.trim().length > 0) || '';
 
   const cleanLine = (value) => String(value || '').replace(/\s+/g, ' ').trim();
   const separator = '----------------------------';
@@ -89,7 +94,10 @@ const generateESCPOS = (order, kot, kotIndex = 0) => {
   }
 
   if (orderNote) {
-    commands += `Note: ${cleanLine(orderNote)}\n`;
+    commands += 'Note:\n';
+    orderNote.split('\n').forEach((line) => {
+      commands += `${line}\n`;
+    });
   }
 
   commands += separator + '\n';

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { createSocketConnection } from "../utils/socket";
+import { useAuth } from "../context/AuthContext";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import {
@@ -649,6 +650,18 @@ const downloadOrderInvoice = async (order) => {
 
 const TakeawayOrders = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const filterCafeId = searchParams.get("cafeId");
+
+  // Resolve effective cartId for order creation and socket room join (matches Orders.jsx pattern)
+  const getEffectiveCartId = useCallback(() => {
+    if (filterCafeId) return filterCafeId.toString();
+    if (user?.role === "admin" && user?._id) return user._id.toString();
+    if (user?.role === "franchise_admin" && user?.cafeId) return user.cafeId.toString();
+    return null;
+  }, [filterCafeId, user?._id, user?.role, user?.cafeId]);
+
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [menuLoading, setMenuLoading] = useState(false);
@@ -1054,40 +1067,16 @@ const TakeawayOrders = () => {
     socket.on("order:created", handleOrderCreated);
     socket.on("order:status:updated", handleOrderStatusUpdated);
 
-    // Join cafe room for real-time updates (if user is logged in)
-    let token = null;
-    try {
-      token =
-        localStorage.getItem("adminToken") ||
-        localStorage.getItem("franchiseAdminToken") ||
-        localStorage.getItem("superAdminToken");
-    } catch (storageError) {
+    // Join cafe and cart rooms for real-time updates (matches Orders.jsx pattern)
+    const targetCartId = getEffectiveCartId();
+    if (targetCartId) {
+      socket.emit("join:cafe", targetCartId);
+      socket.emit("join:cart", targetCartId);
       if (import.meta.env.DEV) {
-        console.warn(
-          "[TakeawayOrders] Error reading from localStorage:",
-          storageError,
+        console.log(
+          "[TakeawayOrders] Socket: Joined cafe and cart rooms:",
+          targetCartId,
         );
-      }
-    }
-
-    if (token) {
-      try {
-        // Decode token to get user info (basic decode, not verification)
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        const userId = payload.id;
-        if (userId) {
-          socket.emit("join:cafe", userId);
-          if (import.meta.env.DEV) {
-            console.log("[TakeawayOrders] Socket: Joined cafe room:", userId);
-          }
-        }
-      } catch (e) {
-        if (import.meta.env.DEV) {
-          console.warn(
-            "[TakeawayOrders] Could not decode token for socket room:",
-            e,
-          );
-        }
       }
     }
 
@@ -1103,7 +1092,7 @@ const TakeawayOrders = () => {
         socketRef.current.disconnect();
       }
     };
-  }, [upsertOrder, autoPrintEnabled, handleAutoPrint]);
+  }, [upsertOrder, autoPrintEnabled, handleAutoPrint, getEffectiveCartId]);
 
   const getItemKey = (item) => item.id || item._id || item.name;
 
@@ -1396,10 +1385,12 @@ const TakeawayOrders = () => {
         price: a.price,
         quantity: a.quantity,
       }));
+      const effectiveCartId = getEffectiveCartId();
       const payload = {
         serviceType: "TAKEAWAY",
         items: itemsPayload,
         ...(selectedAddonsPayload.length > 0 && { selectedAddons: selectedAddonsPayload }),
+        ...(effectiveCartId && { cartId: effectiveCartId }),
       };
 
       if (import.meta.env.DEV) {
