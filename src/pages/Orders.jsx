@@ -50,6 +50,14 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const getValidDate = (value) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -128,8 +136,26 @@ const getOrderCustomerMobile = (order) =>
   order?.customerPhone ||
   order?.customer?.phone ||
   "";
+const getOfficeOrderName = (order) => {
+  const explicitOfficeName = String(order?.officeName || "").trim();
+  if (explicitOfficeName) return explicitOfficeName;
+
+  const customerName = String(getOrderCustomerName(order) || "").trim();
+  if (customerName) return customerName;
+
+  return "Office QR";
+};
+const isOfficeQrOrder = (order) =>
+  String(order?.sourceQrType || "").toUpperCase() === "OFFICE";
+const getEffectiveDeliveryCharge = (order) => {
+  const primaryCharge = Number(order?.deliveryInfo?.deliveryCharge || 0);
+  if (primaryCharge > 0) return primaryCharge;
+  const officeCharge = Number(order?.officeDeliveryCharge || 0);
+  return officeCharge > 0 ? officeCharge : 0;
+};
 const resolveTakeawayOrderType = (order) => {
   if (!order) return null;
+  if (isOfficeQrOrder(order)) return "DELIVERY";
 
   const explicitOrderType = String(order.orderType || "").toUpperCase();
   if (explicitOrderType === "PICKUP" || explicitOrderType === "DELIVERY") {
@@ -144,6 +170,12 @@ const resolveTakeawayOrderType = (order) => {
   // Legacy records can be persisted as TAKEAWAY without explicit orderType.
   if (serviceType === "TAKEAWAY") {
     if (hasMeaningfulDeliveryInfo(order)) return "DELIVERY";
+    if (
+      isPresentValue(order?.customerLocation?.address) &&
+      !isPresentValue(order?.pickupLocation?.address)
+    ) {
+      return "DELIVERY";
+    }
     if (isPresentValue(order.pickupLocation?.address)) return "PICKUP";
   }
 
@@ -399,6 +431,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
     order.paymentMode ||
     (order.payment && order.payment.method) ||
     "CASH";
+  const safeInvoiceNumber = escapeHtml(invoiceNumber);
+  const safeCartAddress = escapeHtml(cartAddress);
+  const safeFranchiseFSSAI = escapeHtml(franchiseFSSAI);
+  const safeInvoiceDate = escapeHtml(
+    new Date(
+      order.paidAt || order.updatedAt || order.createdAt || Date.now(),
+    ).toLocaleDateString(),
+  );
+  const safeTableNumber = escapeHtml(order.tableNumber || "--");
+  const safePaymentMethod = escapeHtml(String(paymentMethod).toUpperCase());
 
   // Build rows for dine-in items
   const dineInRows =
@@ -410,7 +452,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             const amount = item.amount || 0;
             return `
             <tr>
-              <td class="py-2 border-b">${item.name || ""}</td>
+              <td class="py-2 border-b">${escapeHtml(item.name || "")}</td>
               <td class="py-2 border-b">${quantity}</td>
               <td class="py-2 border-b">₹${formatMoney(price)}</td>
               <td class="py-2 border-b text-right">₹${formatMoney(amount)}</td>
@@ -431,7 +473,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             return `
             <tr>
               <td class="py-2 border-b">${
-                item.name || ""
+                escapeHtml(item.name || "")
               } <span style="color: #059669; font-weight: bold;">📦 TAKEAWAY</span></td>
               <td class="py-2 border-b">${quantity}</td>
               <td class="py-2 border-b">₹${formatMoney(price)}</td>
@@ -526,18 +568,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       </style>
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${safeCartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${safeFranchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now(),
-        ).toLocaleDateString()}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${safeInvoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${safeInvoiceDate}</div>
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
         <div style="font-size: 9px;">
-          Table ${order.tableNumber || "—"}
+          Table ${safeTableNumber}
         </div>
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
@@ -565,7 +605,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           </div>
           <div class="invoice-line" style="margin-top: 6px;">
             <span>Payment Mode</span>
-            <span>${String(paymentMethod).toUpperCase()}</span>
+            <span>${safePaymentMethod}</span>
           </div>
         </div>
       </div>
@@ -1097,6 +1137,8 @@ const Orders = () => {
     const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
     const customerName = getOrderCustomerName(order);
     const customerMobile = getOrderCustomerMobile(order);
+    const isOfficeOrder = isOfficeQrOrder(order);
+    const officeOrderName = isOfficeOrder ? getOfficeOrderName(order) : "";
     const isTakeawayOrder =
       isTakeawayServiceType(order.serviceType) ||
       Boolean(resolvedTakeawayOrderType);
@@ -1104,13 +1146,21 @@ const Orders = () => {
       normalizedServiceType === "DINE_IN"
         ? "Dine-In"
         : normalizedServiceType === "TAKEAWAY"
-          ? "Takeaway"
+          ? resolvedTakeawayOrderType === "DELIVERY"
+            ? "Delivery"
+            : resolvedTakeawayOrderType === "PICKUP"
+              ? "Pickup"
+              : "Takeaway"
           : normalizedServiceType === "PICKUP"
             ? "Pickup"
             : normalizedServiceType === "DELIVERY"
               ? "Delivery"
               : isTakeawayOrder
-                ? "Takeaway"
+                ? resolvedTakeawayOrderType === "DELIVERY"
+                  ? "Delivery"
+                  : resolvedTakeawayOrderType === "PICKUP"
+                    ? "Pickup"
+                    : "Takeaway"
                 : "Dine-In";
     const takeawayOrderTypeLabel =
       resolvedTakeawayOrderType === "DELIVERY"
@@ -1125,6 +1175,9 @@ const Orders = () => {
       order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
     const deliveryAddress =
       order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const fallbackTakeawayAddress =
+      deliveryAddress || order?.deliveryAddress || order?.customerAddress || null;
+    const deliveryCharge = getEffectiveDeliveryCharge(order);
     const hasTakeawayToken =
       resolvedTakeawayOrderType !== "DELIVERY" &&
       order.takeawayToken !== undefined &&
@@ -1135,7 +1188,8 @@ const Orders = () => {
         hasTakeawayToken ||
         resolvedTakeawayOrderType ||
         (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
-        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+        (resolvedTakeawayOrderType === "DELIVERY" && fallbackTakeawayAddress) ||
+        (!resolvedTakeawayOrderType && fallbackTakeawayAddress));
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
@@ -1167,10 +1221,16 @@ const Orders = () => {
             </button>
             {hasTakeawayMeta && !isExpanded && (
               <div className="mt-1 space-y-0.5">
-                {resolvedTakeawayOrderType && (
-                  <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
-                    {takeawayOrderTypeLabel}
+                {isOfficeOrder ? (
+                  <div className="text-[10px] sm:text-xs font-semibold text-emerald-700 truncate">
+                    Office: {officeOrderName}
                   </div>
+                ) : (
+                  resolvedTakeawayOrderType && (
+                    <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </div>
+                  )
                 )}
                 {customerName && (
                   <div className="text-[10px] sm:text-xs text-gray-700 truncate">
@@ -1189,7 +1249,12 @@ const Orders = () => {
                 )}
                 {resolvedTakeawayOrderType === "DELIVERY" && (
                   <div className="text-[10px] sm:text-xs text-gray-600 truncate">
-                    Address: {deliveryAddress || "Address not set"}
+                    Address: {fallbackTakeawayAddress || "Address not set"}
+                  </div>
+                )}
+                {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                  <div className="text-[10px] sm:text-xs text-gray-600 truncate">
+                    Address: {fallbackTakeawayAddress}
                   </div>
                 )}
                 {hasTakeawayToken && (
@@ -1217,13 +1282,22 @@ const Orders = () => {
                     {serviceTypeLabel}
                   </span>
                 </div>
-                {shouldShowOrderTypeMeta && (
+                {isOfficeOrder ? (
                   <div className="truncate">
-                    Order Type:{" "}
+                    Office:{" "}
                     <span className="font-semibold text-emerald-700">
-                      {takeawayOrderTypeLabel}
+                      {officeOrderName}
                     </span>
                   </div>
+                ) : (
+                  shouldShowOrderTypeMeta && (
+                    <div className="truncate">
+                      Order Type:{" "}
+                      <span className="font-semibold text-emerald-700">
+                        {takeawayOrderTypeLabel}
+                      </span>
+                    </div>
+                  )
                 )}
                 {resolvedTakeawayOrderType === "PICKUP" && (
                   <div className="truncate">
@@ -1233,17 +1307,17 @@ const Orders = () => {
                 {resolvedTakeawayOrderType === "DELIVERY" && (
                   <>
                     <div className="truncate">
-                      Delivery Address: {deliveryAddress || "Address not set"}
+                      Delivery Address: {fallbackTakeawayAddress || "Address not set"}
                     </div>
                     {order.deliveryInfo?.distance != null && (
                       <div className="truncate">
                         Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
                       </div>
                     )}
-                    {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                    {deliveryCharge > 0 && (
                       <div className="truncate text-green-700">
-                        Delivery Charge: ₹
-                        {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                        Delivery Charge: {"\u20B9"}
+                        {Number(deliveryCharge).toFixed(2)}
                       </div>
                     )}
                     {isPresentValue(order.deliveryInfo?.estimatedTime) &&
@@ -1254,6 +1328,11 @@ const Orders = () => {
                       </div>
                     )}
                   </>
+                )}
+                {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                  <div className="truncate">
+                    Address: {fallbackTakeawayAddress}
+                  </div>
                 )}
                 {hasTakeawayToken && (
                   <div className="truncate">
@@ -1304,7 +1383,9 @@ const Orders = () => {
                 />
               )}
               <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
-                {isTakeawayOrder
+                {isOfficeOrder
+                  ? officeOrderName
+                  : isTakeawayOrder
                   ? resolvedTakeawayOrderType
                     ? takeawayOrderTypeLabel
                     : order.tableNumber || "Takeaway"
@@ -1575,6 +1656,8 @@ const Orders = () => {
     const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
     const customerName = getOrderCustomerName(order);
     const customerMobile = getOrderCustomerMobile(order);
+    const isOfficeOrder = isOfficeQrOrder(order);
+    const officeOrderName = isOfficeOrder ? getOfficeOrderName(order) : "";
     const isTakeawayOrder =
       isTakeawayServiceType(order.serviceType) ||
       Boolean(resolvedTakeawayOrderType);
@@ -1582,13 +1665,21 @@ const Orders = () => {
       normalizedServiceType === "DINE_IN"
         ? "Dine-In"
         : normalizedServiceType === "TAKEAWAY"
-          ? "Takeaway"
+          ? resolvedTakeawayOrderType === "DELIVERY"
+            ? "Delivery"
+            : resolvedTakeawayOrderType === "PICKUP"
+              ? "Pickup"
+              : "Takeaway"
           : normalizedServiceType === "PICKUP"
             ? "Pickup"
             : normalizedServiceType === "DELIVERY"
               ? "Delivery"
               : isTakeawayOrder
-                ? "Takeaway"
+                ? resolvedTakeawayOrderType === "DELIVERY"
+                  ? "Delivery"
+                  : resolvedTakeawayOrderType === "PICKUP"
+                    ? "Pickup"
+                    : "Takeaway"
                 : "Dine-In";
     const takeawayOrderTypeLabel =
       resolvedTakeawayOrderType === "DELIVERY"
@@ -1603,6 +1694,9 @@ const Orders = () => {
       order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
     const deliveryAddress =
       order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const fallbackTakeawayAddress =
+      deliveryAddress || order?.deliveryAddress || order?.customerAddress || null;
+    const deliveryCharge = getEffectiveDeliveryCharge(order);
     const hasTakeawayToken =
       resolvedTakeawayOrderType !== "DELIVERY" &&
       order.takeawayToken !== undefined &&
@@ -1614,7 +1708,8 @@ const Orders = () => {
         hasTakeawayToken ||
         resolvedTakeawayOrderType ||
         (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
-        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+        (resolvedTakeawayOrderType === "DELIVERY" && fallbackTakeawayAddress) ||
+        (!resolvedTakeawayOrderType && fallbackTakeawayAddress));
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
@@ -1761,7 +1856,9 @@ const Orders = () => {
               Table / Takeaway
             </div>
             <div className="text-xs font-semibold text-slate-700 mt-0.5 truncate">
-              {isTakeawayOrder
+              {isOfficeOrder
+                ? officeOrderName
+                : isTakeawayOrder
                 ? resolvedTakeawayOrderType
                   ? takeawayOrderTypeLabel
                   : order.tableNumber || "Takeaway"
@@ -1780,10 +1877,16 @@ const Orders = () => {
 
         {hasTakeawayMeta && (
           <div className="space-y-1 text-xs text-slate-600">
-            {resolvedTakeawayOrderType && (
-              <div className="font-semibold text-emerald-700">
-                Type: {takeawayOrderTypeLabel}
+            {isOfficeOrder ? (
+              <div className="font-semibold text-emerald-700 truncate">
+                Office: {officeOrderName}
               </div>
+            ) : (
+              resolvedTakeawayOrderType && (
+                <div className="font-semibold text-emerald-700">
+                  Type: {takeawayOrderTypeLabel}
+                </div>
+              )
             )}
             {customerName && <div>Customer: {customerName}</div>}
             {customerMobile && <div>Mobile: {customerMobile}</div>}
@@ -1791,7 +1894,10 @@ const Orders = () => {
               <div>Pickup: {pickupAddress || "Address not set"}</div>
             )}
             {resolvedTakeawayOrderType === "DELIVERY" && (
-              <div>Address: {deliveryAddress || "Address not set"}</div>
+              <div>Address: {fallbackTakeawayAddress || "Address not set"}</div>
+            )}
+            {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+              <div>Address: {fallbackTakeawayAddress}</div>
             )}
             {hasTakeawayToken && (
               <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
@@ -1874,29 +1980,40 @@ const Orders = () => {
                 Service Type:{" "}
                 <span className="font-semibold text-gray-700">{serviceTypeLabel}</span>
               </div>
-              {shouldShowOrderTypeMeta && (
+              {isOfficeOrder ? (
                 <div>
-                  Order Type:{" "}
+                  Office:{" "}
                   <span className="font-semibold text-emerald-700">
-                    {takeawayOrderTypeLabel}
+                    {officeOrderName}
                   </span>
                 </div>
+              ) : (
+                shouldShowOrderTypeMeta && (
+                  <div>
+                    Order Type:{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </span>
+                  </div>
+                )
               )}
               {resolvedTakeawayOrderType === "PICKUP" && (
                 <div>Pickup Address: {pickupAddress || "Address not set"}</div>
               )}
               {resolvedTakeawayOrderType === "DELIVERY" && (
                 <>
-                  <div>Delivery Address: {deliveryAddress || "Address not set"}</div>
+                  <div>
+                    Delivery Address: {fallbackTakeawayAddress || "Address not set"}
+                  </div>
                   {order.deliveryInfo?.distance != null && (
                     <div>
                       Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
                     </div>
                   )}
-                  {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                  {deliveryCharge > 0 && (
                     <div className="text-green-700">
                       Delivery Charge: {"\u20B9"}
-                      {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                      {Number(deliveryCharge).toFixed(2)}
                     </div>
                   )}
                   {isPresentValue(order.deliveryInfo?.estimatedTime) &&
@@ -1905,6 +2022,9 @@ const Orders = () => {
                       <div>Est. Time: {order.deliveryInfo.estimatedTime} min</div>
                     )}
                 </>
+              )}
+              {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                <div>Address: {fallbackTakeawayAddress}</div>
               )}
               {hasTakeawayToken && (
                 <div>

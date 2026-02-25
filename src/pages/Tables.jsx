@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import { FaDownload } from "react-icons/fa";
 import api from "../utils/api";
@@ -41,7 +41,7 @@ if (import.meta.env.PROD) {
   if (!import.meta.env.VITE_CUSTOMER_BASE_URL || customerBaseUrl.includes("localhost")) {
     if (import.meta.env.DEV) {
       console.error(
-        "⚠️ [Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
+        "[Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
         "Takeaway QR codes will not work in production.",
         "Please set VITE_CUSTOMER_BASE_URL to your deployed frontend URL (e.g., https://your-frontend.vercel.app)"
       );
@@ -119,6 +119,7 @@ const TableCard = ({
   // Use MERGED status for display if table is merged, otherwise use actual status
   const displayStatus = isMerged ? "MERGED" : table.status;
   const statusMeta = STATUS_MAP[displayStatus] || STATUS_MAP.AVAILABLE;
+  const isOfficeQr = table.qrContextType === "OFFICE";
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
   const qrFileName = `table-${table.number}-qr`;
 
@@ -139,29 +140,51 @@ const TableCard = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-xl font-semibold text-slate-800">
-            Table {table.number}
+            {isOfficeQr
+              ? table.officeName || "Office QR"
+              : `Table ${table.number}`}
           </h3>
-          {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
-          <p className="text-sm text-slate-500 mt-1">
-            Capacity: {table.capacity}
-            {table.totalCapacity && table.totalCapacity > table.capacity && (
-              <span className="text-purple-600 ml-1">
-                (Total: {table.totalCapacity} with merged tables)
-              </span>
-            )}
+          <p className="text-xs text-slate-500 mt-0.5">
+            QR Type: {isOfficeQr ? "Office / Fixed Delivery" : "Table Dine-In"}
           </p>
-          {table.mergedTables && table.mergedTables.length > 0 && (
-            <p className="text-xs text-purple-600 mt-1 font-semibold">
-              🔗 Merged with: Tables{" "}
-              {table.mergedTables
-                .map((t) => (typeof t === "object" ? t.number : t))
-                .join(", ")}
+          {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
+          {isOfficeQr && table.officeAddress && (
+            <p className="text-xs text-slate-600 mt-1">{table.officeAddress}</p>
+          )}
+          {isOfficeQr && table.officePhone && (
+            <p className="text-xs text-slate-600 mt-1">
+              Contact: {table.officePhone}
             </p>
           )}
-          {table.mergedWith && (
-            <p className="text-xs text-purple-600 mt-1 font-semibold">
-              🔗 Merged into another table
+          {isOfficeQr && Number(table.officeDeliveryCharge || 0) > 0 && (
+            <p className="text-xs text-amber-600 mt-1 font-semibold">
+              Delivery Charge: Rs. {Number(table.officeDeliveryCharge).toFixed(2)}
             </p>
+          )}
+          {!isOfficeQr && (
+            <>
+              <p className="text-sm text-slate-500 mt-1">
+                Capacity: {table.capacity}
+                {table.totalCapacity && table.totalCapacity > table.capacity && (
+                  <span className="text-purple-600 ml-1">
+                    (Total: {table.totalCapacity} with merged tables)
+                  </span>
+                )}
+              </p>
+              {table.mergedTables && table.mergedTables.length > 0 && (
+                <p className="text-xs text-purple-600 mt-1 font-semibold">
+                  Merged with: Tables{" "}
+                  {table.mergedTables
+                    .map((t) => (typeof t === "object" ? t.number : t))
+                    .join(", ")}
+                </p>
+              )}
+              {table.mergedWith && (
+                <p className="text-xs text-purple-600 mt-1 font-semibold">
+                  Merged into another table
+                </p>
+              )}
+            </>
           )}
           {table.currentOrder && (
             <p className="text-xs text-orange-600 mt-1 break-all">
@@ -217,8 +240,8 @@ const TableCard = ({
         {(table.mergedTables?.length > 0 || table.mergedWith) && (
           <p className="text-xs text-purple-600 mt-1">
             {table.mergedTables?.length > 0
-              ? "⚠️ This table has merged tables - status cannot be changed"
-              : "⚠️ This table is merged - status cannot be changed"}
+              ? "Warning: This table has merged tables - status cannot be changed"
+              : "Warning: This table is merged - status cannot be changed"}
           </p>
         )}
       </div>
@@ -293,7 +316,16 @@ const Tables = () => {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState({ number: "", capacity: "", name: "" });
+  const [form, setForm] = useState({
+    number: "",
+    capacity: "",
+    name: "",
+    qrContextType: "TABLE",
+    officeName: "",
+    officeAddress: "",
+    officePhone: "",
+    officeDeliveryCharge: "",
+  });
   const [busyId, setBusyId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -458,18 +490,54 @@ const Tables = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.number || !form.capacity) {
+    const isOfficeQr = form.qrContextType === "OFFICE";
+    if (!isOfficeQr && (!form.number || !form.capacity)) {
       alert("Table number and capacity are required");
+      return;
+    }
+    if (isOfficeQr && !form.officeName.trim()) {
+      alert("Office name is required for Office QR");
       return;
     }
     setSubmitting(true);
     try {
-      await api.post("/tables", {
-        number: Number(form.number),
-        capacity: Number(form.capacity),
+      const payload = {
         name: form.name || undefined,
+        qrContextType: form.qrContextType || "TABLE",
+        officeName:
+          isOfficeQr && form.officeName.trim() ? form.officeName.trim() : undefined,
+        officeAddress:
+          isOfficeQr && form.officeAddress.trim()
+            ? form.officeAddress.trim()
+            : undefined,
+        officePhone:
+          isOfficeQr && form.officePhone.trim() ? form.officePhone.trim() : undefined,
+        officeDeliveryCharge:
+          isOfficeQr &&
+          form.officeDeliveryCharge !== "" &&
+          Number(form.officeDeliveryCharge) >= 0
+            ? Number(form.officeDeliveryCharge)
+            : undefined,
+      };
+
+      if (!isOfficeQr) {
+        payload.number = Number(form.number);
+        payload.capacity = Number(form.capacity);
+      }
+
+      await api.post("/tables", {
+        ...payload,
       });
-      setForm({ number: "", capacity: "", name: "" });
+      setForm({
+        number: "",
+        capacity: "",
+        name: "",
+        qrContextType: "TABLE",
+        officeName: "",
+        officeAddress: "",
+        officePhone: "",
+        officeDeliveryCharge: "",
+      });
       fetchTables();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to add table");
@@ -810,7 +878,7 @@ const Tables = () => {
                 customerBaseUrl.includes("localhost")) && (
                 <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-xs font-semibold text-red-700 mb-1">
-                    ⚠️ Configuration Error
+                    Configuration Error
                   </p>
                   <p className="text-xs text-red-600">
                     VITE_CUSTOMER_BASE_URL is not set or points to localhost.
@@ -873,33 +941,52 @@ const Tables = () => {
         </h2>
         <form
           onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-4 gap-4"
+          className="grid grid-cols-1 md:grid-cols-6 gap-4"
         >
+          {form.qrContextType !== "OFFICE" && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Number
+                </label>
+                <input
+                  type="number"
+                  value={form.number}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, number: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 12"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Capacity
+                </label>
+                <input
+                  type="number"
+                  value={form.capacity}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, capacity: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 4"
+                />
+              </div>
+            </>
+          )}
           <div>
-            <label className="block text-sm text-slate-500 mb-1">Number</label>
-            <input
-              type="number"
-              value={form.number}
+            <label className="block text-sm text-slate-500 mb-1">QR Type</label>
+            <select
+              value={form.qrContextType}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, number: e.target.value }))
+                setForm((prev) => ({ ...prev, qrContextType: e.target.value }))
               }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder="e.g. 12"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-500 mb-1">
-              Capacity
-            </label>
-            <input
-              type="number"
-              value={form.capacity}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, capacity: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder="e.g. 4"
-            />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"
+            >
+              <option value="TABLE">Table (Dine-in)</option>
+              <option value="OFFICE">Office / Fixed Customer</option>
+            </select>
           </div>
           <div>
             <label className="block text-sm text-slate-500 mb-1">
@@ -914,6 +1001,71 @@ const Tables = () => {
               placeholder="Window, Patio..."
             />
           </div>
+          {form.qrContextType === "OFFICE" && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Name
+                </label>
+                <input
+                  value={form.officeName}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, officeName: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. ABC Tech Park"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Phone
+                </label>
+                <input
+                  value={form.officePhone}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, officePhone: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 9876543210"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Delivery Charge (Rs)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.officeDeliveryCharge}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      officeDeliveryCharge: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 40"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Address
+                </label>
+                <input
+                  value={form.officeAddress}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      officeAddress: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Full office delivery address"
+                />
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <button
               type="submit"
@@ -982,7 +1134,7 @@ const Tables = () => {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base sm:text-lg font-semibold text-slate-800">
-                  Waitlist · Table {waitlistModal.table?.number}
+                  Waitlist - Table {waitlistModal.table?.number}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Capacity {waitlistModal.table?.capacity}
@@ -993,7 +1145,7 @@ const Tables = () => {
                 className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
                 aria-label="Close"
               >
-                ×
+                x
               </button>
             </div>
             <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
@@ -1064,7 +1216,7 @@ const Tables = () => {
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">
-                              Position #{entry.position || index + 1} · Token{" "}
+                              Position #{entry.position || index + 1} - Token{" "}
                               {entry.token}
                             </p>
                             {entry.name && (

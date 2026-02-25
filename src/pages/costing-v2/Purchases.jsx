@@ -14,6 +14,8 @@ import { confirm } from "../../utils/confirm";
 
 const Purchases = () => {
   const { user } = useAuth();
+  const isCartAdmin = String(user?.role || "").toLowerCase() === "admin";
+  const canReceivePurchase = !isCartAdmin;
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [ingredients, setIngredients] = useState([]);
@@ -80,6 +82,10 @@ const Purchases = () => {
   };
 
   const handleReceive = async (id) => {
+    if (!canReceivePurchase) {
+      return;
+    }
+
     const purchase = purchases.find(p => p._id === id);
     const purchaseInfo = purchase 
       ? `Purchase Order #${purchase.purchaseOrderNo || purchase._id.slice(-6)}`
@@ -300,7 +306,7 @@ const Purchases = () => {
               </div>
 
               {/* Card Footer */}
-              {purchase.status === "created" && (
+              {purchase.status === "created" && canReceivePurchase && (
                 <div className="px-4 sm:px-5 py-3 bg-gray-50 border-t flex items-center justify-end">
                   <button
                     type="button"
