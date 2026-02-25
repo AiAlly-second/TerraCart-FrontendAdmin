@@ -37,6 +37,16 @@ const getApiUrl = () => {
   return envUrl || "http://localhost:5001";
 };
 
+const getSocketAuthToken = () => {
+  if (typeof window === "undefined") return null;
+  return (
+    localStorage.getItem("superAdminToken") ||
+    localStorage.getItem("franchiseAdminToken") ||
+    localStorage.getItem("adminToken") ||
+    localStorage.getItem("token")
+  );
+};
+
 /**
  * Create and configure a Socket.IO connection
  * This handles cross-origin connections properly
@@ -79,6 +89,16 @@ export const createSocketConnection = (options = {}) => {
     // For cross-origin connections, ensure proper handshake
     ...options,
   };
+
+  if (!socketOptions.auth?.token) {
+    const authToken = getSocketAuthToken();
+    if (authToken) {
+      socketOptions.auth = {
+        ...(socketOptions.auth || {}),
+        token: authToken,
+      };
+    }
+  }
 
   // If cross-origin, add withCredentials for cookies/auth
   if (isCrossOrigin) {

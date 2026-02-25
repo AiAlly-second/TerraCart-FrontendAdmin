@@ -114,6 +114,14 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const resolveDisplayAddress = (...candidates) => {
   for (const value of candidates) {
     if (typeof value === "string" && value.trim()) {
@@ -154,6 +162,18 @@ const buildInvoiceMarkup = (
 
   // Payment mode display (fallback to CASH if not provided)
   const resolvedPaymentMethod = paymentMethod || "CASH";
+  const safeInvoiceNumber = escapeHtml(invoiceNumber);
+  const safeCartAddress = escapeHtml(cartAddress);
+  const safeFranchiseFSSAI = escapeHtml(franchiseFSSAI);
+  const safeInvoiceDate = escapeHtml(
+    new Date(
+      order.paidAt || order.updatedAt || order.createdAt || Date.now()
+    ).toLocaleDateString(),
+  );
+  const safeTableNumber = escapeHtml(order.tableNumber || "--");
+  const safePaymentMethod = escapeHtml(
+    String(resolvedPaymentMethod).toUpperCase(),
+  );
 
   const rows =
     invoiceItems.length > 0
@@ -164,7 +184,7 @@ const buildInvoiceMarkup = (
             const amount = item.amount || 0;
             return `
               <tr>
-                <td class="py-2 border-b">${item.name || ""}</td>
+                <td class="py-2 border-b">${escapeHtml(item.name || "")}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
                 <td class="py-2 border-b text-right">₹${formatMoney(
@@ -243,18 +263,16 @@ const buildInvoiceMarkup = (
       </style>
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${safeCartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${safeFranchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now()
-        ).toLocaleDateString()}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${safeInvoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${safeInvoiceDate}</div>
       </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
         <div style="font-size: 9px;">
-          Table ${order.tableNumber || "—"}
+          Table ${safeTableNumber}
         </div>
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
@@ -282,7 +300,7 @@ const buildInvoiceMarkup = (
           </div>
           <div class="invoice-line" style="margin-top: 6px;">
             <span>Payment Mode</span>
-            <span>${String(resolvedPaymentMethod).toUpperCase()}</span>
+            <span>${safePaymentMethod}</span>
           </div>
         </div>
       </div>
@@ -900,3 +918,4 @@ const Invoices = () => {
 };
 
 export default Invoices;
+

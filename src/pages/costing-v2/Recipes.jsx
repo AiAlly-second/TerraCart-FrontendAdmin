@@ -11,6 +11,7 @@ import {
   pushToCartAdmins,
 } from "../../services/costingV2Api";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../utils/api";
 import {
   FaPlus,
   FaEdit,
@@ -23,6 +24,13 @@ import {
 } from "react-icons/fa";
 import { formatUnit } from "../../utils/unitConverter";
 
+const sanitizeAddonName = (value) => {
+  const normalized = String(value || "")
+    .replace(/^\(\s*\+\s*\)\s*/u, "")
+    .trim();
+  return normalized || "Add-on";
+};
+
 const Recipes = () => {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "super_admin";
@@ -31,6 +39,7 @@ const Recipes = () => {
   const recipeNameFromMenu = searchParams.get("name") || "";
   const [recipes, setRecipes] = useState([]);
   const [ingredients, setIngredients] = useState([]);
+  const [addons, setAddons] = useState([]);
   const [defaultMenuItems, setDefaultMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -41,6 +50,7 @@ const Recipes = () => {
     yieldPercent: 100,
     portions: 1,
     instructions: "",
+    addonId: "",
     ingredients: [{ ingredientId: "", qty: "", uom: "kg" }],
     isActive: true,
   });
@@ -76,11 +86,13 @@ const Recipes = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [recipesRes, ingredientsRes, defaultMenuRes] = await Promise.all([
-        getRecipes(),
-        getIngredients(),
-        getDefaultMenuItems(),
-      ]);
+      const [recipesRes, ingredientsRes, defaultMenuRes, addonsRes] =
+        await Promise.all([
+          getRecipes(),
+          getIngredients(),
+          getDefaultMenuItems(),
+          api.get("/addons").catch(() => ({ data: { data: [] } })),
+        ]);
 
       // Enhanced logging for debugging
       if (import.meta.env.DEV) {
@@ -120,6 +132,18 @@ const Recipes = () => {
         setIngredients(ingredientsRes.data.data || []);
       if (defaultMenuRes.data.success)
         setDefaultMenuItems(defaultMenuRes.data.data || []);
+      const addonsList = Array.isArray(addonsRes?.data?.data)
+        ? addonsRes.data.data
+        : [];
+      setAddons(
+        addonsList
+          .filter((addon) => addon && (addon._id || addon.id))
+          .map((addon) => ({
+            _id: (addon._id || addon.id).toString(),
+            name: sanitizeAddonName(addon.name),
+            price: Number(addon.price) || 0,
+          })),
+      );
     } catch (error) {
       console.error("[FRONTEND] Error fetching data:", error);
       console.error("[FRONTEND] Error response:", error.response?.data);
@@ -136,8 +160,8 @@ const Recipes = () => {
     if (savingRecipe) return; // prevent double submit / duplicate creation
     try {
       setSavingRecipe(true);
-      // Enforce linking to a default menu item (mandatory)
-      if (!selectedMenuItemId) {
+      // Enforce linking to a menu/default menu item unless creating an add-on BOM.
+      if (!selectedMenuItemId && !formData.addonId) {
         alert("Please select a Default Menu item for this BOM.");
         setSavingRecipe(false);
         return;
@@ -147,6 +171,7 @@ const Recipes = () => {
         ...formData,
         yieldPercent: parseFloat(formData.yieldPercent) || 0,
         portions: parseInt(formData.portions) || 1,
+        addonId: formData.addonId || null,
         ingredients: formData.ingredients.map((ing) => ({
           ...ing,
           qty:
@@ -203,6 +228,7 @@ const Recipes = () => {
       yieldPercent: 100,
       portions: 1,
       instructions: "",
+      addonId: "",
       ingredients: [{ ingredientId: "", qty: "", uom: "kg" }],
       isActive: true,
     });
@@ -221,6 +247,13 @@ const Recipes = () => {
       yieldPercent: recipe.yieldPercent,
       portions: recipe.portions,
       instructions: recipe.instructions || "",
+      addonId:
+        ((recipe.addonId &&
+          (typeof recipe.addonId === "object"
+            ? recipe.addonId._id || recipe.addonId.id
+            : recipe.addonId)) ||
+          "")
+          .toString(),
       ingredients:
         recipe.ingredients && recipe.ingredients.length > 0
           ? recipe.ingredients.map((ing) => {
@@ -571,6 +604,19 @@ const Recipes = () => {
                   </>
                 )}
                 <div>
+                  {recipe.addonId && (
+                    <div className="mb-2 flex items-center justify-between text-xs sm:text-sm bg-orange-50 border border-orange-100 rounded-lg p-2">
+                      <span className="text-gray-600">Linked Add-on</span>
+                      <span className="font-semibold text-[#d86d2a]">
+                        {sanitizeAddonName(
+                          typeof recipe.addonId === "object"
+                            ? recipe.addonId?.name
+                            : addons.find((a) => a._id === String(recipe.addonId))
+                              ?.name || "Add-on",
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs sm:text-sm text-gray-600 mb-2">
                     Ingredients ({recipe.ingredients?.length || 0})
                   </p>
@@ -711,7 +757,7 @@ const Recipes = () => {
                     : "Link to Default Menu Item *"}
                 </label>
                 <select
-                  required
+                  required={!formData.addonId}
                   value={selectedMenuItemId}
                   onChange={(e) => handleSelectMenuItem(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
@@ -740,6 +786,30 @@ const Recipes = () => {
                   {isCartAdmin
                     ? "Selecting a menu item will set this BOM's name to match the menu item."
                     : "Selecting a default menu item will set this BOM's name to match the default menu item."}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Link Add-on (Optional)
+                </label>
+                <select
+                  value={formData.addonId || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, addonId: e.target.value || "" })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d86d2a] focus:border-transparent"
+                >
+                  <option value="">No Add-on Link</option>
+                  {addons.map((addon) => (
+                    <option key={addon._id} value={addon._id}>
+                      {addon.name}
+                      {addon.price > 0 ? ` (₹${addon.price.toFixed(2)})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  If selected, this BOM will be consumed when that add-on is billed.
                 </p>
               </div>
 

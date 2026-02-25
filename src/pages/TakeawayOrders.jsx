@@ -44,6 +44,14 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const getValidDate = (value) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -196,6 +204,22 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
     order.paymentMode ||
     (order.payment && order.payment.method) ||
     "CASH";
+  const safeInvoiceNumber = escapeHtml(invoiceNumber);
+  const safeCartAddress = escapeHtml(cartAddress);
+  const safeFranchiseFSSAI = escapeHtml(franchiseFSSAI);
+  const safeInvoiceDate = escapeHtml(
+    new Date(
+      order.paidAt || order.updatedAt || order.createdAt || Date.now(),
+    ).toLocaleDateString(),
+  );
+  const safeTakeawayToken = escapeHtml(order.takeawayToken || "");
+  const safeCustomerName = escapeHtml(order.customerName || "");
+  const safeCustomerMobile = escapeHtml(order.customerMobile || "");
+  const safePickupAddress = escapeHtml(order.pickupLocation?.address || "Address not set");
+  const safeDeliveryAddress = escapeHtml(order.customerLocation?.address || "Address not set");
+  const safeSpecialInstructions = escapeHtml(order.specialInstructions || "");
+  const safeTableNumber = escapeHtml(order.tableNumber || "--");
+  const safePaymentMethod = escapeHtml(String(paymentMethod).toUpperCase());
 
   const rows =
     aggregatedItems.length > 0
@@ -206,7 +230,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             const amount = item.amount || 0;
             return `
               <tr>
-                <td class="py-2 border-b">${item.name || ""}</td>
+                <td class="py-2 border-b">${escapeHtml(item.name || "")}</td>
                 <td class="py-2 border-b">${quantity}</td>
                 <td class="py-2 border-b">₹${formatMoney(price)}</td>
                 <td class="py-2 border-b text-right">₹${formatMoney(
@@ -285,18 +309,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       </style>
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${safeCartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${safeFranchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now(),
-        ).toLocaleDateString()}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${safeInvoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${safeInvoiceDate}</div>
         ${
           order.serviceType === "TAKEAWAY" &&
           order.orderType !== "DELIVERY" &&
           order.takeawayToken
-            ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${order.takeawayToken}</div>`
+            ? `<div style="font-size: 9px; margin-bottom: 8px; font-weight: bold;">Token: ${safeTakeawayToken}</div>`
             : ""
         }
         </div>
@@ -314,16 +336,14 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                       : "Takeaway Order"
                 }${
                   order.orderType !== "DELIVERY" && order.takeawayToken
-                    ? ` - Token: ${order.takeawayToken}`
+                    ? ` - Token: ${safeTakeawayToken}`
                     : ""
                 }
               </div>
               ${
                 order.customerName
-                  ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${
-                      order.customerName
-                    }${
-                      order.customerMobile ? ` (${order.customerMobile})` : ""
+                  ? `<div style="font-size: 9px; margin-top: 2px;">Customer: ${safeCustomerName}${
+                      order.customerMobile ? ` (${safeCustomerMobile})` : ""
                     }</div>`
                   : ""
               }
@@ -331,7 +351,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                 order.orderType === "PICKUP" && order.pickupLocation
                   ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Pickup Location:</div>
-                      <div>${order.pickupLocation.address || "Address not set"}</div>
+                      <div>${safePickupAddress}</div>
                     </div>`
                   : ""
               }
@@ -339,7 +359,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                 order.orderType === "DELIVERY" && order.customerLocation
                   ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Delivery Address:</div>
-                      <div>${order.customerLocation.address || "Address not set"}</div>
+                      <div>${safeDeliveryAddress}</div>
                       ${
                         order.deliveryInfo
                           ? `<div style="margin-top: 4px;">
@@ -359,14 +379,14 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
                 order.specialInstructions
                   ? `<div style="font-size: 9px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
                       <div style="font-weight: 600;">Special Instructions:</div>
-                      <div style="font-style: italic;">${order.specialInstructions}</div>
+                      <div style="font-style: italic;">${safeSpecialInstructions}</div>
                     </div>`
                   : ""
               }
             `
             : `
               <div style="font-size: 9px;">
-                ${order.tableNumber || ""}
+                ${safeTableNumber}
               </div>
             `
         }
@@ -404,7 +424,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           </div>
           <div class="invoice-line" style="margin-top: 6px;">
             <span>Payment Mode</span>
-            <span>${String(paymentMethod).toUpperCase()}</span>
+            <span>${safePaymentMethod}</span>
           </div>
         </div>
       </div>
@@ -3382,4 +3402,7 @@ const TakeawayOrders = () => {
 };
 
 export default TakeawayOrders;
+
+
+
 
