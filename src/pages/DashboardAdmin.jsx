@@ -401,6 +401,35 @@ const parseTakeawayTokenFromText = (text) => {
   return match?.[1] ? String(match[1]).trim() : null;
 };
 
+const htmlEntityDecoder =
+  typeof document !== "undefined" ? document.createElement("textarea") : null;
+
+const decodeHtmlEntities = (value) => {
+  const input = String(value ?? "");
+  if (!input || !input.includes("&")) return input;
+
+  if (htmlEntityDecoder) {
+    let decoded = input;
+    // Decode repeatedly in case of nested encoding.
+    for (let i = 0; i < 3; i += 1) {
+      htmlEntityDecoder.innerHTML = decoded;
+      const next = htmlEntityDecoder.value;
+      if (next === decoded) break;
+      decoded = next;
+    }
+    return decoded;
+  }
+
+  return input
+    .replace(/&#x2F;/gi, "/")
+    .replace(/&#47;/g, "/")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+};
+
 const resolveOrderAlertIds = (order) => {
   const ids = [
     normalizeAlertId(order?._id),
@@ -645,7 +674,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       const alertId = requestCandidates[0];
       const orderRef =
         r.orderId && typeof r.orderId === "object" ? r.orderId : null;
-      const requestNotes = r.customerNotes || r.message || "";
+      const requestNotes = decodeHtmlEntities(r.customerNotes || r.message || "");
       const serviceType = String(
         orderRef?.serviceType || r.serviceType || "",
       ).toUpperCase();
@@ -680,7 +709,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
         id: alertId,
         dismissKeys: requestCandidates,
         type: 'customer_request',
-        requestType: r.requestType,
+        requestType: decodeHtmlEntities(r.requestType || ""),
         tableNumber: tableNum,
         serviceType,
         orderType,
@@ -1047,6 +1076,16 @@ const UnifiedOrderList = ({ dineInOrders, takeawayOrders, navigate }) => {
             const totalAmount = order.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
             const itemsCount = order.kotLines?.reduce((acc, kot) => acc + (kot.items?.length || 0), 0) || 0;
             const isDineIn = order.serviceType === 'DINE_IN' || order.orderType === 'dine-in';
+            const isOfficeOrder =
+              String(order?.sourceQrType || "").toUpperCase() === "OFFICE" ||
+              String(order?.officePaymentMode || "").toUpperCase() === "ONLINE" ||
+              String(order?.officePaymentMode || "").toUpperCase() === "COD" ||
+              String(order?.officePaymentMode || "").toUpperCase() === "BOTH" ||
+              Number(order?.officeDeliveryCharge || 0) > 0;
+            const officeDisplayName =
+              String(order?.officeName || "").trim() ||
+              String(order?.customerName || "").trim() ||
+              "";
             
             return (
               <div key={idx} className="p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -1072,6 +1111,9 @@ const UnifiedOrderList = ({ dineInOrders, takeawayOrders, navigate }) => {
                           if (isRealDineIn) {
                              return order.tableNumber ? `Table ${order.tableNumber}` : `Order #${(order.orderId || order._id).slice(-4)}`;
                           } else {
+                             if (isOfficeOrder) {
+                               return officeDisplayName || `Office #${(order.orderId || order._id).slice(-4)}`;
+                             }
                              // It's takeaway or "Takeaway" table
                              // If customer name exists, show it. Otherwise show Takeaway #ID
                              return order.customerName || `Takeaway #${(order.orderId || order._id).slice(-4)}`;
