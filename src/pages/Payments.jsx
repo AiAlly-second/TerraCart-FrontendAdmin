@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import QRCode from "react-qr-code";
 import api from "../utils/api";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
+import { useAuth } from "../context/AuthContext";
 
 const nodeApi = (
   import.meta.env.VITE_NODE_API_URL || "http://localhost:5001"
@@ -24,6 +25,7 @@ const STATUS_BADGE = {
 };
 
 const Payments = () => {
+  const { user } = useAuth();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,7 +61,25 @@ const Payments = () => {
     setQrLoading(true);
     setQrError(null);
     try {
-      const res = await api.get("/payment-qr");
+      const cartId = user?._id || user?.id || "";
+      const activePath = cartId
+        ? `/payment-qr/active?cartId=${encodeURIComponent(cartId)}`
+        : "/payment-qr/active";
+
+      let res = null;
+      try {
+        res = await api.get(activePath, {
+          skipErrorLogging: true,
+          skipErrorAlert: true,
+        });
+      } catch (_publicErr) {
+        // Backward-compatible fallback for older backends that may not expose /active.
+        res = await api.get("/payment-qr", {
+          skipErrorLogging: true,
+          skipErrorAlert: true,
+        });
+      }
+
       const data = res?.data || null;
       setActiveQR(data);
       if (data) {
@@ -82,8 +102,11 @@ const Payments = () => {
 
   useEffect(() => {
     loadPayments();
-    loadActiveQR();
   }, []);
+
+  useEffect(() => {
+    loadActiveQR();
+  }, [user?._id, user?.id]);
 
   const filteredPayments = useMemo(() => {
     let filtered = payments;
@@ -133,6 +156,11 @@ const Payments = () => {
         ? new Date(payment.cancelledAt).toLocaleString()
         : "",
       "Cancellation Reason": payment.cancellationReason || "",
+      Gateway: payment.metadata?.gateway || "",
+      "Gateway Receipt": payment.metadata?.razorpayReceipt || "",
+      "Gateway Order ID": payment.metadata?.razorpayOrderId || "",
+      "Gateway Payment ID":
+        payment.metadata?.razorpayPaymentId || payment.providerReference || "",
       "Provider Ref": payment.providerReference || "",
     }));
 
@@ -446,6 +474,50 @@ const Payments = () => {
                     </div>
                   )}
                 </div>
+
+                {(selectedPayment.providerReference ||
+                  selectedPayment.metadata?.gateway ||
+                  selectedPayment.metadata?.razorpayReceipt ||
+                  selectedPayment.metadata?.razorpayOrderId ||
+                  selectedPayment.metadata?.razorpayPaymentId) && (
+                  <div className="space-y-1 text-sm border border-slate-200 rounded-lg p-3 bg-slate-50">
+                    <p className="text-xs text-slate-500">Gateway details</p>
+                    {selectedPayment.metadata?.gateway && (
+                      <p className="text-slate-700">
+                        Gateway:{" "}
+                        <span className="font-semibold">
+                          {selectedPayment.metadata.gateway}
+                        </span>
+                      </p>
+                    )}
+                    {selectedPayment.metadata?.razorpayReceipt && (
+                      <p className="text-slate-700">
+                        Receipt:{" "}
+                        <span className="font-semibold">
+                          {selectedPayment.metadata.razorpayReceipt}
+                        </span>
+                      </p>
+                    )}
+                    {selectedPayment.metadata?.razorpayOrderId && (
+                      <p className="text-slate-700">
+                        Razorpay Order ID:{" "}
+                        <span className="font-semibold">
+                          {selectedPayment.metadata.razorpayOrderId}
+                        </span>
+                      </p>
+                    )}
+                    {(selectedPayment.metadata?.razorpayPaymentId ||
+                      selectedPayment.providerReference) && (
+                      <p className="text-slate-700">
+                        Razorpay Payment ID:{" "}
+                        <span className="font-semibold">
+                          {selectedPayment.metadata?.razorpayPaymentId ||
+                            selectedPayment.providerReference}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {selectedPayment.upiPayload && (
                   <div className="space-y-3">

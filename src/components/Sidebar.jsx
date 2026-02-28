@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+﻿import React, { useState, useEffect } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 import {
@@ -23,10 +23,74 @@ import {
   FaComments,
   FaUserFriends,
   FaSignOutAlt,
+  FaQrcode,
 } from "react-icons/fa";
+
+export const getSidebarMenuItems = ({ userRole, isCostingEnabled }) => {
+  if (userRole === "super_admin") {
+    const items = [
+      { path: "/dashboard", icon: "dashboard", label: "Dashboard" },
+      { path: "/franchises", icon: "franchises", label: "Franchises" },
+      { path: "/default-menu", icon: "menu", label: "Default Menu" },
+      { path: "/users", icon: "users", label: "Administrative Users" },
+      { path: "/employees", icon: "employee", label: "Employee Management" },
+      { path: "/revenue-history", icon: "revenue_history", label: "Revenue History" },
+      { path: "/reports", icon: "reports", label: "Reports" },
+    ];
+
+    if (isCostingEnabled) {
+      items.push({
+        path: "/costing-v2/dashboard",
+        icon: "finances",
+        label: "Finances",
+      });
+    }
+
+    items.push({ path: "/settings", icon: "settings", label: "Settings" });
+    return items;
+  }
+
+  if (userRole === "franchise_admin") {
+    const items = [
+      { path: "/dashboard", icon: "dashboard", label: "Dashboard" },
+      { path: "/carts", icon: "carts", label: "Cart Management" },
+      { path: "/revenue", icon: "revenue", label: "Revenue" },
+      { path: "/employees", icon: "users", label: "Employees" },
+      { path: "/attendance", icon: "attendance", label: "Attendance" },
+      { path: "/default-menu", icon: "menu", label: "Default Menu" },
+    ];
+    if (isCostingEnabled) {
+      items.push({ path: "/costing-v2", icon: "finances", label: "Finances" });
+    }
+    items.push({ path: "/settings", icon: "settings", label: "Settings" });
+    return items;
+  }
+
+  if (userRole === "admin") {
+    const items = [
+      { path: "/dashboard", icon: "dashboard", label: "Dashboard" },
+      { path: "/orders", icon: "orders", label: "Orders" },
+      { path: "/invoices", icon: "invoices", label: "Invoices" },
+      { path: "/menu", icon: "menu", label: "Menu", showStats: true },
+      { path: "/payments", icon: "payments", label: "Payments" },
+      { path: "/tables", icon: "qr_code", label: "QR Code" },
+      { path: "/employees", icon: "users", label: "Employees" },
+      { path: "/attendance", icon: "attendance", label: "Attendance" },
+      { path: "/customers", icon: "customers", label: "Customers" },
+    ];
+    if (isCostingEnabled) {
+      items.push({ path: "/costing-v2", icon: "finances", label: "Finances" });
+    }
+    items.push({ path: "/settings", icon: "settings", label: "Settings" });
+    return items;
+  }
+
+  return [];
+};
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, user } = useAuth();
   const [menuStats, setMenuStats] = useState({ categories: 0, items: 0 });
   const [menuLoading, setMenuLoading] = useState(true);
@@ -88,85 +152,31 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   // Icon mapping
   const iconMap = {
-    "📊": <FaChartBar className="w-4 h-4" />,
-    "🏢": <FaBuilding className="w-4 h-4" />,
-    "🍽️": <FaUtensils className="w-4 h-4" />,
-    "👥": <FaUsers className="w-4 h-4" />,
-    "👤": <FaUserTie className="w-4 h-4" />,
-    "📈": <FaChartLine className="w-4 h-4" />,
-    "💰": <FaMoneyBillWave className="w-4 h-4" />,
-    "🧮": <FaCalculator className="w-4 h-4" />,
-    "⚙️": <FaCog className="w-4 h-4" />,
-    "🛒": <FaShoppingCart className="w-4 h-4" />,
-    "📦": <FaBox className="w-4 h-4" />,
-    "💳": <FaCreditCard className="w-4 h-4" />,
-    "🧾": <FaReceipt className="w-4 h-4" />,
-    "📋": <FaFileAlt className="w-4 h-4" />,
-    "⏰": <FaClock className="w-4 h-4" />,
-    "🥡": <FaBox className="w-4 h-4" />,
-    "💬": <FaComments className="w-4 h-4" />,
+    OFFICE: <FaBuilding className="w-4 h-4" />,
+    qr_code: <FaQrcode className="w-4 h-4" />,
+    dashboard: <FaChartBar className="w-4 h-4" />,
+    franchises: <FaBuilding className="w-4 h-4" />,
+    menu: <FaUtensils className="w-4 h-4" />,
+    users: <FaUsers className="w-4 h-4" />,
+    employee: <FaUserTie className="w-4 h-4" />,
+    reports: <FaChartLine className="w-4 h-4" />,
+    revenue: <FaMoneyBillWave className="w-4 h-4" />,
+    revenue_history: <FaChartBar className="w-4 h-4" />,
+    finances: <FaCalculator className="w-4 h-4" />,
+    settings: <FaCog className="w-4 h-4" />,
+    carts: <FaShoppingCart className="w-4 h-4" />,
+    orders: <FaBox className="w-4 h-4" />,
+    payments: <FaCreditCard className="w-4 h-4" />,
+    invoices: <FaReceipt className="w-4 h-4" />,
+    tables: <FaTable className="w-4 h-4" />,
+    attendance: <FaClock className="w-4 h-4" />,
+    table_dashboard: <FaTachometerAlt className="w-4 h-4" />,
+    customers: <FaUserFriends className="w-4 h-4" />,
+    inventory: <FaBox className="w-4 h-4" />,
+    feedback: <FaComments className="w-4 h-4" />,
   };
 
-  // Menu items based on role
-  const getMenuItems = () => {
-    if (userRole === "super_admin") {
-      const items = [
-        { path: "/dashboard", icon: "📊", label: "Dashboard" },
-        { path: "/franchises", icon: "🏢", label: "Franchises" },
-        { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
-        { path: "/users", icon: "👥", label: "Administrative Users" },
-        { path: "/employees", icon: "👤", label: "Employee Management" },
-        { path: "/revenue-history", icon: "📊", label: "Revenue History" },
-        { path: "/reports", icon: "📈", label: "Reports" },
-      ];
-
-      if (isCostingEnabled) {
-        items.push({
-          path: "/costing-v2/dashboard",
-          icon: "🧮",
-          label: "Finances",
-        });
-      }
-
-      items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
-      return items;
-    } else if (userRole === "franchise_admin") {
-      const items = [
-        { path: "/dashboard", icon: "📊", label: "Dashboard" },
-        { path: "/carts", icon: "🛒", label: "Cart Management" },
-        { path: "/revenue", icon: "💰", label: "Revenue" },
-        { path: "/employees", icon: "👥", label: "Employees" },
-        { path: "/attendance", icon: "⏰", label: "Attendance" },
-        { path: "/default-menu", icon: "🍽️", label: "Default Menu" },
-      ];
-      if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "🧮", label: "Finances" });
-      }
-      items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
-      return items;
-    } else if (userRole === "admin") {
-      const items = [
-        { path: "/dashboard", icon: "📊", label: "Dashboard" },
-        { path: "/orders", icon: "📦", label: "Orders" },
-        { path: "/invoices", icon: "🧾", label: "Invoices" },
-        { path: "/menu", icon: "📋", label: "Menu", showStats: true },
-        { path: "/payments", icon: "💳", label: "Payments" },
-        { path: "/tables", icon: "🍽️", label: "Tables" },
-        { path: "/employees", icon: "👥", label: "Employees" },
-        { path: "/attendance", icon: "⏰", label: "Attendance" },
-        { path: "/table-dashboard", icon: "📊", label: "Table Dashboard" },
-        { path: "/customers", icon: "👥", label: "Customers" },
-      ];
-      if (isCostingEnabled) {
-        items.push({ path: "/costing-v2", icon: "🧮", label: "Finances" });
-      }
-      items.push({ path: "/settings", icon: "⚙️", label: "Settings" });
-      return items;
-    }
-    return [];
-  };
-
-  const menuItems = getMenuItems();
+  const menuItems = getSidebarMenuItems({ userRole, isCostingEnabled });
 
   return (
     <>
@@ -224,17 +234,83 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Nav Links */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {menuItems.map((item) => {
+            if (Array.isArray(item.children) && item.children.length > 0) {
+              const isGroupActive = item.children.some(
+                (child) =>
+                  location.pathname === child.path ||
+                  location.pathname.startsWith(`${child.path}/`),
+              );
+
+              return (
+                <div key={item.key || item.label} className="space-y-1">
+                  <div
+                    className={`flex items-center px-4 py-3 rounded-lg transition-all duration-200 ${
+                      isGroupActive
+                        ? "bg-[#ff6b35]/20 text-white"
+                        : "text-gray-300"
+                    }`}
+                  >
+                    <span className="flex-shrink-0">
+                      {iconMap[item.icon] || item.icon}
+                    </span>
+                    <span className="ml-3 font-medium text-sm truncate">
+                      {item.label}
+                    </span>
+                  </div>
+
+                  <div className="ml-6 pl-3 border-l border-white/10 space-y-1">
+                    {item.children.map((child) => (
+                      <NavLink
+                        key={child.path}
+                        to={child.path}
+                        className={({ isActive }) =>
+                          `flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
+                            isActive
+                              ? "bg-[#ff6b35] text-white shadow-lg"
+                              : "text-gray-300 hover:bg-white/5 hover:text-white"
+                          }`
+                        }
+                        onClick={() => {
+                          if (window.innerWidth < 1024) {
+                            onClose();
+                          }
+                        }}
+                      >
+                        <span className="flex-shrink-0">
+                          {iconMap[child.icon] || child.icon}
+                        </span>
+                        <span className="ml-3 font-medium text-sm truncate">
+                          {child.label}
+                        </span>
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
                 end={item.path === "/dashboard"}
                 className={({ isActive }) =>
-                  `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
-                    isActive
-                      ? "bg-[#ff6b35] text-white shadow-lg"
-                      : "text-gray-300 hover:bg-white/5 hover:text-white"
-                  }`
+                  {
+                    const isQrCodeSection =
+                      item.path === "/tables" &&
+                      (location.pathname === "/offices" ||
+                        location.pathname.startsWith("/offices/") ||
+                        location.pathname === "/takeaway-qr" ||
+                        location.pathname.startsWith("/takeaway-qr/") ||
+                        location.pathname === "/table-dashboard" ||
+                        location.pathname.startsWith("/table-dashboard/"));
+                    const isMenuItemActive = isActive || isQrCodeSection;
+                    return `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
+                      isMenuItemActive
+                        ? "bg-[#ff6b35] text-white shadow-lg"
+                        : "text-gray-300 hover:bg-white/5 hover:text-white"
+                    }`;
+                  }
                 }
                 onClick={() => {
                   if (window.innerWidth < 1024) {
@@ -276,3 +352,4 @@ const Sidebar = ({ isOpen, onClose }) => {
 };
 
 export default Sidebar;
+

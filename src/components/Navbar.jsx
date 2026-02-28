@@ -59,7 +59,7 @@ const Navbar = ({ onMenuToggle }) => {
         {/* Mobile Menu Button */}
         <button
           onClick={onMenuToggle}
-          className="lg:hidden text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+          className="md:hidden text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded-lg"
           aria-label="Toggle menu"
         >
           <svg
