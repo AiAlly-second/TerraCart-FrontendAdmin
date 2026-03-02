@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-// Removed socket import - using HTTP polling instead
+import { getSocket } from "../utils/socket";
 import { confirm } from "../utils/confirm";
 import TaskManagement from "./TaskManagement";
 
@@ -80,6 +80,44 @@ const AttendanceManagement = () => {
     }
   }, []);
 
+  // Socket: join cafe + cart rooms and refetch on attendance:updated (app/web sync)
+  useEffect(() => {
+    const socket = getSocket();
+    const getEffectiveCartId = () => {
+      if (selectedCart) return selectedCart;
+      if (userRole === "admin") {
+        try {
+          const raw = localStorage.getItem("adminUser");
+          if (raw) {
+            const u = JSON.parse(raw);
+            return u?._id ?? u?.id ?? null;
+          }
+        } catch (e) {}
+      }
+      return null;
+    };
+    const joinRooms = () => {
+      const cartId = getEffectiveCartId();
+      if (cartId) {
+        socket.emit("join:cafe", cartId);
+        socket.emit("join:cart", cartId);
+        if (import.meta.env.DEV) {
+          console.log("[AttendanceManagement] Joined socket rooms cafe:" + cartId + " cart:" + cartId);
+        }
+      }
+    };
+    const onAttendanceUpdated = () => {
+      fetchTodayAttendance();
+    };
+    joinRooms();
+    socket.on("connect", joinRooms);
+    socket.on("attendance:updated", onAttendanceUpdated);
+    return () => {
+      socket.off("connect", joinRooms);
+      socket.off("attendance:updated", onAttendanceUpdated);
+    };
+  }, [selectedCart, userRole]);
+
   useEffect(() => {
     if (!dependenciesLoaded || !apiRef.current) return; // Wait for dependencies to load
 
@@ -91,7 +129,7 @@ const AttendanceManagement = () => {
     }
     fetchTodayAttendance();
 
-    // Keep today attendance synced with mobile check-in/check-out updates.
+    // Keep today attendance synced with mobile check-in/check-out updates (polling fallback).
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
@@ -863,6 +901,9 @@ const AttendanceManagement = () => {
                         Check-Out
                       </th>
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                        Working Time
+                      </th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                         Total Breaks
                       </th>
                       <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
@@ -957,6 +998,21 @@ const AttendanceManagement = () => {
                                 <span className="text-gray-400 text-xs sm:text-sm">
                                   Not checked out
                                 </span>
+                              )}
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-4">
+                              {hasCheckedIn && !hasCheckedOut && (todayRecord.liveWorkingHMS != null) ? (
+                                <span className="text-green-700 font-medium text-xs sm:text-sm">
+                                  {String(todayRecord.liveWorkingHMS.hours ?? 0).padStart(2, "0")}:
+                                  {String(todayRecord.liveWorkingHMS.minutes ?? 0).padStart(2, "0")}:
+                                  {String(todayRecord.liveWorkingHMS.seconds ?? 0).padStart(2, "0")}
+                                </span>
+                              ) : hasCheckedOut && todayRecord.totalWorkingMinutes != null ? (
+                                <span className="text-gray-700 text-xs sm:text-sm">
+                                  {formatHours(todayRecord.totalWorkingMinutes)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs sm:text-sm">-</span>
                               )}
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-4">

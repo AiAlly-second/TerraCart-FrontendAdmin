@@ -1253,6 +1253,7 @@ const TakeawayOrders = () => {
     changeStatus(reasonModal.orderId, reasonModal.status, reasonInput.trim());
   };
 
+  /*
   const acceptOrderTakeaway = async (orderId) => {
     try {
       const response = await api.patch(`/orders/${orderId}/accept`);
@@ -1266,6 +1267,7 @@ const TakeawayOrders = () => {
       alert(errorMessage);
     }
   };
+  */
 
   const handleNewTakeawayOrder = () => {
     setDraftSelections({});
@@ -1836,6 +1838,7 @@ const TakeawayOrders = () => {
   };
 
   const tryAccept = (order) => {
+    /*
     if (
       canAcceptTakeaway(order.status) &&
       (order.serviceType === "TAKEAWAY" ||
@@ -1844,6 +1847,10 @@ const TakeawayOrders = () => {
     ) {
       acceptOrderTakeaway(order._id);
     } else if (canAccept(order.status)) {
+      changeStatus(order._id, nextStatusOnAccept);
+    }
+    */
+    if (canAccept(order.status)) {
       changeStatus(order._id, nextStatusOnAccept);
     }
   };
@@ -2310,6 +2317,7 @@ const TakeawayOrders = () => {
                           </span>
                           <span className="truncate">{order.status}</span>
                         </span>
+                        {/*
                         {order.acceptedBy?.employeeName && (
                           <div className="text-[9px] sm:text-[10px] text-green-700 mt-0.5 font-medium">
                             Accepted by {order.acceptedBy.employeeName}
@@ -2321,6 +2329,7 @@ const TakeawayOrders = () => {
                               )}
                           </div>
                         )}
+                        */}
                         <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                           {(() => {
                             const isTakeaway = [
@@ -2332,7 +2341,10 @@ const TakeawayOrders = () => {
                               ? getNextStatusTakeaway(order.status)
                               : getNextStatus(order.status, order.serviceType);
                             const buttons = [];
+                            const canShowTakeawayAccept = false;
+                            const canShowDirectAccept = false;
 
+                            /*
                             if (canAcceptTakeaway(order.status) && isTakeaway) {
                               buttons.push(
                                 <button
@@ -2357,12 +2369,13 @@ const TakeawayOrders = () => {
                                 </button>,
                               );
                             }
+                            */
 
                             // Show next sequential step button (but skip if canAccept/canAcceptTakeaway is true)
                             if (
                               nextStatus &&
-                              !canAccept(order.status) &&
-                              !(canAcceptTakeaway(order.status) && isTakeaway)
+                              !canShowDirectAccept &&
+                              !canShowTakeawayAccept
                             ) {
                               buttons.push(
                                 <button
@@ -3373,4 +3386,3 @@ const TakeawayOrders = () => {
 };
 
 export default TakeawayOrders;
-

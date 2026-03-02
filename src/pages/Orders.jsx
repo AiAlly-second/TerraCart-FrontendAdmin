@@ -1063,6 +1063,7 @@ const Orders = () => {
     }
   };
 
+  /*
   const acceptOrderTakeaway = async (orderId) => {
     try {
       const response = await api.patch(`/orders/${orderId}/accept`);
@@ -1080,6 +1081,7 @@ const Orders = () => {
       alert(errorMessage);
     }
   };
+  */
 
   const isOrderAccepted = (order) =>
     Boolean(
@@ -1337,16 +1339,21 @@ const Orders = () => {
                   const isTakeaway =
                     isTakeawayServiceType(order.serviceType) ||
                     Boolean(resolveTakeawayOrderType(order));
-                  const alreadyAccepted = isOrderAccepted(order);
+                  // const alreadyAccepted = isOrderAccepted(order);
                   const nextStatus = isTakeaway
                     ? getNextStatusTakeaway(order.status)
                     : getNextStatus(order.status, order.serviceType);
                   const buttons = [];
+                  /*
                   const canShowTakeawayAccept =
                     !alreadyAccepted && isTakeaway && canAcceptTakeaway(order.status);
                   const canShowDirectAccept =
                     !alreadyAccepted && !isTakeaway && canAccept(order.status);
+                  */
+                  const canShowTakeawayAccept = false;
+                  const canShowDirectAccept = false;
 
+                  /*
                   if (canShowTakeawayAccept) {
                     buttons.push(
                       <button
@@ -1372,6 +1379,7 @@ const Orders = () => {
                       </button>,
                     );
                   }
+                  */
 
                   // Show next sequential step button (but skip if accept action is available)
                   if (
@@ -1623,16 +1631,21 @@ const Orders = () => {
       const isTakeaway =
         isTakeawayServiceType(order.serviceType) ||
         Boolean(resolveTakeawayOrderType(order));
-      const alreadyAccepted = isOrderAccepted(order);
+      // const alreadyAccepted = isOrderAccepted(order);
       const nextStatus = isTakeaway
         ? getNextStatusTakeaway(order.status)
         : getNextStatus(order.status, order.serviceType);
       const buttons = [];
+      /*
       const canShowTakeawayAccept =
         !alreadyAccepted && isTakeaway && canAcceptTakeaway(order.status);
       const canShowDirectAccept =
         !alreadyAccepted && !isTakeaway && canAccept(order.status);
+      */
+      const canShowTakeawayAccept = false;
+      const canShowDirectAccept = false;
 
+      /*
       if (canShowTakeawayAccept) {
         buttons.push(
           <button
@@ -1658,6 +1671,7 @@ const Orders = () => {
           </button>,
         );
       }
+      */
 
       if (
         nextStatus &&
@@ -4709,4 +4723,3 @@ const Orders = () => {
 };
 
 export default Orders;
-

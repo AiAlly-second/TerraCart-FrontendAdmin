@@ -51,6 +51,14 @@ const Settings = () => {
     newCartAlert: true,
     systemUpdates: true,
   });
+  const [notificationBroadcast, setNotificationBroadcast] = useState({
+    type: "test",
+    title: "",
+    body: "",
+    includeCartAdmin: false,
+  });
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [broadcastSummary, setBroadcastSummary] = useState(null);
 
   // Check if user is cart admin
   const [userRole, setUserRole] = useState(null);
@@ -586,6 +594,88 @@ const Settings = () => {
     setTimeout(() => setSuccess(""), 3000);
   };
 
+  const getBroadcastDefaults = (type) => {
+    const normalizedType = String(type || "custom").toLowerCase();
+    if (normalizedType === "test") {
+      return {
+        title: "Test Notification",
+        body: "This is a test notification from your cart admin.",
+      };
+    }
+    if (normalizedType === "maintenance") {
+      return {
+        title: "Maintenance Update",
+        body: "Scheduled maintenance is in progress. Please check app updates.",
+      };
+    }
+    return {
+      title: "Cart Announcement",
+      body: "",
+    };
+  };
+
+  const handleSendCartBroadcast = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setBroadcastSummary(null);
+
+    if (!(userRole === "admin" || userRole === "cart_admin")) {
+      setError("Only cart admin can send cart broadcast notifications.");
+      return;
+    }
+
+    const defaults = getBroadcastDefaults(notificationBroadcast.type);
+    const title = String(
+      notificationBroadcast.title || defaults.title,
+    ).trim();
+    const body = String(notificationBroadcast.body || defaults.body).trim();
+
+    if (!title || !body) {
+      setError("Notification title and body are required.");
+      return;
+    }
+
+    try {
+      setSendingBroadcast(true);
+      const response = await api.post("/notifications/cart-broadcast", {
+        type: notificationBroadcast.type,
+        title,
+        body,
+        includeCartAdmin: notificationBroadcast.includeCartAdmin,
+        data: {
+          source: "admin_settings",
+          uiType: notificationBroadcast.type,
+        },
+      });
+
+      const summary = response?.data?.summary || null;
+      setBroadcastSummary(summary);
+      if (response?.data?.success) {
+        setSuccess(
+          response?.data?.message || "Notification broadcast processed.",
+        );
+        setTimeout(() => setSuccess(""), 4000);
+      } else {
+        setError(response?.data?.message || "Broadcast notification failed.");
+      }
+
+      if (notificationBroadcast.type !== "custom") {
+        setNotificationBroadcast((prev) => ({
+          ...prev,
+          title: "",
+          body: "",
+        }));
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Failed to send broadcast notification",
+      );
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
+
   const handleLogoutFromAllDevices = async () => {
     const confirmed = window.confirm(
       "Are you sure you want to logout from all devices? This will invalidate all your active sessions and you will need to login again on all devices.",
@@ -905,7 +995,7 @@ const Settings = () => {
 
               {/* Notifications Tab */}
               {activeTab === "notifications" && (
-                <div className="max-w-lg space-y-6">
+                <div className="max-w-2xl space-y-6">
                   <h2 className="text-lg font-semibold text-gray-800 mb-4">
                     Notification Preferences
                   </h2>
@@ -970,6 +1060,141 @@ const Settings = () => {
                       Save Preferences
                     </button>
                   </div>
+
+                  {(userRole === "admin" || userRole === "cart_admin") && (
+                    <form
+                      onSubmit={handleSendCartBroadcast}
+                      className="pt-6 border-t border-gray-200 space-y-4"
+                    >
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-800">
+                          Send Push Notification
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Send test, maintenance, or custom notification to your
+                          cart staff devices.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Notification Type
+                        </label>
+                        <select
+                          value={notificationBroadcast.type}
+                          onChange={(e) =>
+                            setNotificationBroadcast({
+                              ...notificationBroadcast,
+                              type: e.target.value,
+                            })
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        >
+                          <option value="test">Test</option>
+                          <option value="maintenance">Maintenance</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          value={notificationBroadcast.title}
+                          onChange={(e) =>
+                            setNotificationBroadcast({
+                              ...notificationBroadcast,
+                              title: e.target.value,
+                            })
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                          placeholder={
+                            getBroadcastDefaults(notificationBroadcast.type)
+                              .title
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Message
+                        </label>
+                        <textarea
+                          value={notificationBroadcast.body}
+                          onChange={(e) =>
+                            setNotificationBroadcast({
+                              ...notificationBroadcast,
+                              body: e.target.value,
+                            })
+                          }
+                          rows={3}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                          placeholder={
+                            getBroadcastDefaults(notificationBroadcast.type).body
+                          }
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={notificationBroadcast.includeCartAdmin}
+                          onChange={(e) =>
+                            setNotificationBroadcast({
+                              ...notificationBroadcast,
+                              includeCartAdmin: e.target.checked,
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        Include my cart admin device (if token is saved)
+                      </label>
+
+                      <div className="pt-1">
+                        <button
+                          type="submit"
+                          disabled={sendingBroadcast}
+                          className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                        >
+                          {sendingBroadcast ? (
+                            <FaSpinner className="animate-spin" />
+                          ) : (
+                            <FaBell />
+                          )}
+                          Send Notification
+                        </button>
+                      </div>
+
+                      {broadcastSummary && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
+                          <p>
+                            Recipients: {broadcastSummary.totalRecipients} | With
+                            token: {broadcastSummary.recipientsWithToken} | Sent:
+                            {" "}
+                            {broadcastSummary.successCount}
+                          </p>
+                          {broadcastSummary.failureCount > 0 && (
+                            <p className="text-red-600 mt-1">
+                              Failed: {broadcastSummary.failureCount}
+                            </p>
+                          )}
+                          {broadcastSummary.failureCount > 0 &&
+                            (broadcastSummary.failureDetails?.[0]?.reason ||
+                              broadcastSummary.failureDetails?.[0]?.code ||
+                              broadcastSummary.failureDetails?.[0]?.error) && (
+                              <p className="text-red-600 mt-1">
+                                Reason:{" "}
+                                {broadcastSummary.failureDetails?.[0]?.reason ||
+                                  broadcastSummary.failureDetails?.[0]?.code ||
+                                  broadcastSummary.failureDetails?.[0]?.error}
+                              </p>
+                            )}
+                        </div>
+                      )}
+                    </form>
+                  )}
                 </div>
               )}
 
