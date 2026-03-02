@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "react-qr-code";
+import { NavLink } from "react-router-dom";
 import { FaDownload } from "react-icons/fa";
 import api from "../utils/api";
 import { createSocketConnection } from "../utils/socket";
@@ -31,25 +32,76 @@ const STATUS_MAP = {
 const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 const STATUS_SELECTABLE = ["AVAILABLE", "OCCUPIED"];
 
-// Get customer base URL - CRITICAL for takeaway QR codes
-const customerBaseUrl = (
-  import.meta.env.VITE_CUSTOMER_BASE_URL || "http://localhost:5173"
-).replace(/\/$/, "");
+const trimTrailingSlash = (value = "") => String(value || "").replace(/\/+$/, "");
 
-// Warn in production if VITE_CUSTOMER_BASE_URL is not set or points to localhost
+// Get customer base URL used in QR links.
+// Priority:
+// 1) VITE_CUSTOMER_BASE_URL (explicit)
+// 2) current origin (safe fallback when frontend and admin share a domain)
+// 3) localhost (dev fallback)
+const configuredCustomerBaseUrl = trimTrailingSlash(
+  import.meta.env.VITE_CUSTOMER_BASE_URL || "",
+);
+const customerBaseUrl = configuredCustomerBaseUrl
+  ? configuredCustomerBaseUrl
+  : typeof window !== "undefined" && window.location?.origin
+    ? trimTrailingSlash(window.location.origin)
+    : "http://localhost:5173";
+const hasConfiguredCustomerBaseUrl = configuredCustomerBaseUrl.length > 0;
+const isLocalhostCustomerBase =
+  customerBaseUrl.includes("localhost") ||
+  customerBaseUrl.includes("127.0.0.1");
+
+// Warn in production when QR base URL is likely incorrect.
 if (import.meta.env.PROD) {
-  if (!import.meta.env.VITE_CUSTOMER_BASE_URL || customerBaseUrl.includes("localhost")) {
-    if (import.meta.env.DEV) {
-      console.error(
-        "⚠️ [Tables] VITE_CUSTOMER_BASE_URL is not set or points to localhost!",
-        "Takeaway QR codes will not work in production.",
-        "Please set VITE_CUSTOMER_BASE_URL to your deployed frontend URL (e.g., https://your-frontend.vercel.app)"
-      );
-    }
+  if (isLocalhostCustomerBase) {
+    console.warn(
+      "[Tables] Customer QR base URL resolves to localhost in production.",
+      "Set VITE_CUSTOMER_BASE_URL to the deployed customer frontend URL.",
+    );
+  } else if (!hasConfiguredCustomerBaseUrl) {
+    console.warn(
+      "[Tables] VITE_CUSTOMER_BASE_URL is not set. Using current origin fallback:",
+      customerBaseUrl,
+    );
   }
 }
 
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+const PANEL_TABLE = "TABLE";
+const PANEL_OFFICE = "OFFICE";
+const PANEL_TAKEAWAY = "TAKEAWAY";
+
+const createDefaultFormState = (panelType = PANEL_TABLE) => ({
+  number: "",
+  capacity: "",
+  name: "",
+  qrContextType: panelType === PANEL_OFFICE ? PANEL_OFFICE : PANEL_TABLE,
+  officeName: "",
+  officeAddress: "",
+  officePhone: "",
+  officeDeliveryCharge: "",
+  officePaymentMode: "ONLINE",
+});
+
+const createEditFormState = (table) => ({
+  number: table?.number != null ? String(table.number) : "",
+  capacity: table?.capacity != null ? String(table.capacity) : "",
+  name: table?.name || "",
+  officeName: table?.officeName || "",
+  officeAddress: table?.officeAddress || "",
+  officePhone: table?.officePhone || "",
+  officeDeliveryCharge:
+    table?.officeDeliveryCharge != null
+      ? String(table.officeDeliveryCharge)
+      : "",
+  officePaymentMode:
+    String(table?.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+      ? "COD"
+      : String(table?.officePaymentMode || "ONLINE").toUpperCase() === "BOTH"
+        ? "BOTH"
+        : "ONLINE",
+});
 
 const downloadQrAsPng = async (svgElement, fileName) => {
   if (!svgElement) {
@@ -107,6 +159,7 @@ const downloadQrAsPng = async (svgElement, fileName) => {
 const TableCard = ({
   table,
   onUpdateStatus,
+  onEdit,
   onDelete,
   onRegenerateQr,
   onCopyLink,
@@ -119,6 +172,7 @@ const TableCard = ({
   // Use MERGED status for display if table is merged, otherwise use actual status
   const displayStatus = isMerged ? "MERGED" : table.status;
   const statusMeta = STATUS_MAP[displayStatus] || STATUS_MAP.AVAILABLE;
+  const isOfficeQr = table.qrContextType === "OFFICE";
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
   const qrFileName = `table-${table.number}-qr`;
 
@@ -139,29 +193,62 @@ const TableCard = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-xl font-semibold text-slate-800">
-            Table {table.number}
+            {isOfficeQr
+              ? table.officeName || "Office QR"
+              : `Table ${table.number}`}
           </h3>
-          {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
-          <p className="text-sm text-slate-500 mt-1">
-            Capacity: {table.capacity}
-            {table.totalCapacity && table.totalCapacity > table.capacity && (
-              <span className="text-purple-600 ml-1">
-                (Total: {table.totalCapacity} with merged tables)
-              </span>
-            )}
+          <p className="text-xs text-slate-500 mt-0.5">
+            QR Type: {isOfficeQr ? "Office / Fixed Delivery" : "Table Dine-In"}
           </p>
-          {table.mergedTables && table.mergedTables.length > 0 && (
-            <p className="text-xs text-purple-600 mt-1 font-semibold">
-              🔗 Merged with: Tables{" "}
-              {table.mergedTables
-                .map((t) => (typeof t === "object" ? t.number : t))
-                .join(", ")}
+          {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
+          {isOfficeQr && table.officeAddress && (
+            <p className="text-xs text-slate-600 mt-1">{table.officeAddress}</p>
+          )}
+          {isOfficeQr && table.officePhone && (
+            <p className="text-xs text-slate-600 mt-1">
+              Contact: {table.officePhone}
             </p>
           )}
-          {table.mergedWith && (
-            <p className="text-xs text-purple-600 mt-1 font-semibold">
-              🔗 Merged into another table
+          {isOfficeQr && Number(table.officeDeliveryCharge || 0) > 0 && (
+            <p className="text-xs text-amber-600 mt-1 font-semibold">
+              Delivery Charge: Rs. {Number(table.officeDeliveryCharge).toFixed(2)}
             </p>
+          )}
+          {isOfficeQr && (
+            <p className="text-xs text-indigo-600 mt-1 font-semibold">
+              Payment:{" "}
+              {String(table.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+                ? "COD Only"
+                : String(table.officePaymentMode || "ONLINE").toUpperCase() ===
+                    "BOTH"
+                  ? "Online + COD"
+                  : "Online Only"}
+            </p>
+          )}
+          {!isOfficeQr && (
+            <>
+              <p className="text-sm text-slate-500 mt-1">
+                Capacity: {table.capacity}
+                {table.totalCapacity && table.totalCapacity > table.capacity && (
+                  <span className="text-purple-600 ml-1">
+                    (Total: {table.totalCapacity} with merged tables)
+                  </span>
+                )}
+              </p>
+              {table.mergedTables && table.mergedTables.length > 0 && (
+                <p className="text-xs text-purple-600 mt-1 font-semibold">
+                  Merged with: Tables{" "}
+                  {table.mergedTables
+                    .map((t) => (typeof t === "object" ? t.number : t))
+                    .join(", ")}
+                </p>
+              )}
+              {table.mergedWith && (
+                <p className="text-xs text-purple-600 mt-1 font-semibold">
+                  Merged into another table
+                </p>
+              )}
+            </>
           )}
           {table.currentOrder && (
             <p className="text-xs text-orange-600 mt-1 break-all">
@@ -184,42 +271,57 @@ const TableCard = ({
             </p>
           )}
         </div>
-        <span
-          className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full border ${statusMeta.classes}`}
-        >
-          {statusMeta.label}
-        </span>
+        {!isOfficeQr && (
+          <span
+            className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full border ${statusMeta.classes}`}
+          >
+            {statusMeta.label}
+          </span>
+        )}
       </div>
 
       <div className="bg-slate-50 rounded-lg px-4 py-3">
-        <label className="text-xs uppercase tracking-wide text-slate-500 block mb-2">
-          Status
-        </label>
-        <select
-          value={displayStatus}
-          onChange={(e) => onUpdateStatus(table._id, e.target.value)}
-          disabled={busy || table.mergedTables?.length > 0 || table.mergedWith}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-        >
-          {STATUS_OPTIONS.map((status) => {
-            const isSelectable = STATUS_SELECTABLE.includes(status);
-            if (!isSelectable && status !== displayStatus) {
-              return null;
-            }
-            return (
-              <option key={status} value={status} disabled={!isSelectable}>
-                {STATUS_MAP[status]?.label || status}
-                {!isSelectable ? " (auto)" : ""}
-              </option>
-            );
-          })}
-        </select>
-        {(table.mergedTables?.length > 0 || table.mergedWith) && (
-          <p className="text-xs text-purple-600 mt-1">
-            {table.mergedTables?.length > 0
-              ? "⚠️ This table has merged tables - status cannot be changed"
-              : "⚠️ This table is merged - status cannot be changed"}
-          </p>
+        {!isOfficeQr ? (
+          <>
+            <label className="text-xs uppercase tracking-wide text-slate-500 block mb-2">
+              Status
+            </label>
+            <select
+              value={displayStatus}
+              onChange={(e) => onUpdateStatus(table._id, e.target.value)}
+              disabled={busy || table.mergedTables?.length > 0 || table.mergedWith}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              {STATUS_OPTIONS.map((status) => {
+                const isSelectable = STATUS_SELECTABLE.includes(status);
+                if (!isSelectable && status !== displayStatus) {
+                  return null;
+                }
+                return (
+                  <option key={status} value={status} disabled={!isSelectable}>
+                    {STATUS_MAP[status]?.label || status}
+                    {!isSelectable ? " (auto)" : ""}
+                  </option>
+                );
+              })}
+            </select>
+            {(table.mergedTables?.length > 0 || table.mergedWith) && (
+              <p className="text-xs text-purple-600 mt-1">
+                {table.mergedTables?.length > 0
+                  ? "Warning: This table has merged tables - status cannot be changed"
+                  : "Warning: This table is merged - status cannot be changed"}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <label className="text-xs uppercase tracking-wide text-slate-500 block mb-1">
+              Status
+            </label>
+            <p className="text-xs text-slate-500">
+              Not applicable for Office QR.
+            </p>
+          </>
         )}
       </div>
 
@@ -262,41 +364,68 @@ const TableCard = ({
         <span className="text-xs text-slate-400">
           Last updated {new Date(table.updatedAt).toLocaleString()}
         </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit(table);
+            }}
+            className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={busy}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete(e, table);
+            }}
+            className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={busy}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+      {!isOfficeQr && (
         <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete(e, table);
-          }}
-          className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => onViewWaitlist(table)}
+          className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 text-left"
           disabled={busy}
         >
-          Delete
+          Manage waitlist
+          {typeof table.waitlistLength === "number"
+            ? ` (${table.waitlistLength})`
+            : ""}
         </button>
-      </div>
-      <button
-        onClick={() => onViewWaitlist(table)}
-        className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 text-left"
-        disabled={busy}
-      >
-        Manage waitlist
-        {typeof table.waitlistLength === "number"
-          ? ` (${table.waitlistLength})`
-          : ""}
-      </button>
+      )}
     </div>
   );
 };
 
-const Tables = () => {
+const Tables = ({ panelType = PANEL_TABLE }) => {
+  const isOfficePanel = panelType === PANEL_OFFICE;
+  const isTablePanel = panelType === PANEL_TABLE;
+  const isTakeawayPanel = panelType === PANEL_TAKEAWAY;
+  const isFixedPanelType = isOfficePanel || isTablePanel || isTakeawayPanel;
+
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState({ number: "", capacity: "", name: "" });
+  const [form, setForm] = useState(() => createDefaultFormState(panelType));
   const [busyId, setBusyId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [editModal, setEditModal] = useState({
+    open: false,
+    table: null,
+    form: createDefaultFormState(panelType),
+    saving: false,
+  });
   const [waitlistModal, setWaitlistModal] = useState({
     open: false,
     table: null,
@@ -309,6 +438,16 @@ const Tables = () => {
   const socketRef = useRef(null);
   const takeawayQrRef = useRef(null);
   const [cartId, setCartId] = useState(null);
+
+  useEffect(() => {
+    setForm(createDefaultFormState(panelType));
+    setEditModal({
+      open: false,
+      table: null,
+      form: createDefaultFormState(panelType),
+      saving: false,
+    });
+  }, [panelType]);
 
   const sortedTables = useMemo(() => {
     if (!Array.isArray(tables)) return [];
@@ -458,18 +597,62 @@ const Tables = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.number || !form.capacity) {
+    const selectedQrContextType = isOfficePanel
+      ? PANEL_OFFICE
+      : isTablePanel
+        ? PANEL_TABLE
+        : form.qrContextType || PANEL_TABLE;
+    const isOfficeQr = selectedQrContextType === PANEL_OFFICE;
+    if (!isOfficeQr && (!form.number || !form.capacity)) {
       alert("Table number and capacity are required");
+      return;
+    }
+    if (isOfficeQr && !form.officeName.trim()) {
+      alert("Office name is required for Office QR");
+      return;
+    }
+    if (isOfficeQr && !form.officeAddress.trim()) {
+      alert("Office address is required for Office QR");
       return;
     }
     setSubmitting(true);
     try {
+      const payload = {
+        name: isOfficeQr ? undefined : form.name || undefined,
+        qrContextType: selectedQrContextType,
+        officeName:
+          isOfficeQr && form.officeName.trim() ? form.officeName.trim() : undefined,
+        officeAddress:
+          isOfficeQr && form.officeAddress.trim()
+            ? form.officeAddress.trim()
+            : undefined,
+        officePhone:
+          isOfficeQr && form.officePhone.trim() ? form.officePhone.trim() : undefined,
+        officeDeliveryCharge:
+          isOfficeQr &&
+          form.officeDeliveryCharge !== "" &&
+          Number(form.officeDeliveryCharge) >= 0
+            ? Number(form.officeDeliveryCharge)
+            : undefined,
+        officePaymentMode: isOfficeQr
+          ? String(form.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+            ? "COD"
+            : String(form.officePaymentMode || "ONLINE").toUpperCase() ===
+                "BOTH"
+              ? "BOTH"
+              : "ONLINE"
+          : undefined,
+      };
+
+      if (!isOfficeQr) {
+        payload.number = Number(form.number);
+        payload.capacity = Number(form.capacity);
+      }
+
       await api.post("/tables", {
-        number: Number(form.number),
-        capacity: Number(form.capacity),
-        name: form.name || undefined,
+        ...payload,
       });
-      setForm({ number: "", capacity: "", name: "" });
+      setForm(createDefaultFormState(panelType));
       fetchTables();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to add table");
@@ -501,13 +684,111 @@ const Tables = () => {
     }
   };
 
+  const openEditModal = (table) => {
+    if (!table?._id) return;
+    setEditModal({
+      open: true,
+      table,
+      form: createEditFormState(table),
+      saving: false,
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal((prev) => ({
+      ...prev,
+      open: false,
+      table: null,
+      form: createDefaultFormState(panelType),
+      saving: false,
+    }));
+  };
+
+  const handleEditFieldChange = (field, value) => {
+    setEditModal((prev) => ({
+      ...prev,
+      form: {
+        ...prev.form,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    const currentTable = editModal.table;
+    if (!currentTable?._id) return;
+
+    const isOfficeQr = currentTable.qrContextType === PANEL_OFFICE;
+    if (!isOfficeQr && (!editModal.form.number || !editModal.form.capacity)) {
+      alert("Table number and capacity are required");
+      return;
+    }
+    if (isOfficeQr && !String(editModal.form.officeName || "").trim()) {
+      alert("Office name is required for Office QR");
+      return;
+    }
+    if (isOfficeQr && !String(editModal.form.officeAddress || "").trim()) {
+      alert("Office address is required for Office QR");
+      return;
+    }
+
+    setEditModal((prev) => ({ ...prev, saving: true }));
+    try {
+      const payload = {
+        name: editModal.form.name || undefined,
+      };
+
+      if (isOfficeQr) {
+        payload.qrContextType = PANEL_OFFICE;
+        payload.officeName = String(editModal.form.officeName || "").trim();
+        payload.officeAddress = String(editModal.form.officeAddress || "").trim();
+        payload.officePhone = String(editModal.form.officePhone || "").trim() || undefined;
+        payload.officeDeliveryCharge =
+          editModal.form.officeDeliveryCharge !== "" &&
+          Number(editModal.form.officeDeliveryCharge) >= 0
+            ? Number(editModal.form.officeDeliveryCharge)
+            : 0;
+        payload.officePaymentMode =
+          String(editModal.form.officePaymentMode || "ONLINE").toUpperCase() ===
+          "COD"
+            ? "COD"
+            : String(editModal.form.officePaymentMode || "ONLINE").toUpperCase() ===
+                "BOTH"
+              ? "BOTH"
+              : "ONLINE";
+      } else {
+        payload.qrContextType = PANEL_TABLE;
+        payload.number = Number(editModal.form.number);
+        payload.capacity = Number(editModal.form.capacity);
+      }
+
+      const { data } = await api.patch(`/tables/${currentTable._id}`, payload);
+      if (data?._id) {
+        setTables((prev) =>
+          prev.map((table) => (table._id === currentTable._id ? data : table))
+        );
+      } else {
+        await fetchTables();
+      }
+      closeEditModal();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update details");
+      setEditModal((prev) => ({ ...prev, saving: false }));
+    }
+  };
+
   const handleDelete = async (e, table) => {
     e.preventDefault();
     e.stopPropagation();
+    const tableLabel =
+      table?.qrContextType === PANEL_OFFICE
+        ? table.officeName || `Office QR ${table.number}`
+        : `Table ${table.number}`;
 
     const { confirm } = await import("../utils/confirm");
     const confirmed = await confirm(
-      `Are you sure you want to delete table "${table.number}"?`,
+      `Are you sure you want to delete "${tableLabel}"?`,
       {
         title: "Delete Table",
         confirmText: "Delete",
@@ -565,10 +846,15 @@ const Tables = () => {
   };
 
   const visibleTables = useMemo(() => {
-    let filtered = sortedTables;
+    let filtered = sortedTables.filter((table) => {
+      const isOfficeQr = table.qrContextType === PANEL_OFFICE;
+      if (isOfficePanel) return isOfficeQr;
+      if (isTablePanel) return !isOfficeQr;
+      return true;
+    });
 
-    // Filter by status if not "ALL"
-    if (statusFilter !== "ALL") {
+    // Filter by status for table panel only.
+    if (!isOfficePanel && statusFilter !== "ALL") {
       filtered = filtered.filter((table) => {
         // For merged tables, check both the actual status and if they have mergedWith
         const isMerged = table.status === "MERGED" || table.mergedWith;
@@ -586,7 +872,7 @@ const Tables = () => {
     // They will be displayed with MERGED status
 
     return filtered;
-  }, [sortedTables, statusFilter]);
+  }, [sortedTables, statusFilter, isOfficePanel, isTablePanel]);
 
   const updateTableWaitlistCount = (tableId, count) => {
     setTables((prev) =>
@@ -776,10 +1062,23 @@ const Tables = () => {
     }
   };
 
+  const selectedFormQrType = isOfficePanel
+    ? PANEL_OFFICE
+    : isTablePanel
+      ? PANEL_TABLE
+      : form.qrContextType;
+  const editingOfficeQr = editModal.table?.qrContextType === PANEL_OFFICE;
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-slate-800">Table Management</h1>
+        <h1 className="text-3xl font-bold text-slate-800">
+          {isTakeawayPanel
+            ? "Takeaway QR Management"
+            : isOfficePanel
+              ? "Office QR Management"
+              : "Table Management"}
+        </h1>
         <button
           onClick={fetchTables}
           className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100"
@@ -787,9 +1086,66 @@ const Tables = () => {
           Refresh
         </button>
       </div>
+      <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <NavLink
+              to="/tables"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Tables
+            </NavLink>
+            <NavLink
+              to="/offices"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Offices
+            </NavLink>
+            <NavLink
+              to="/takeaway-qr"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Takeaway
+            </NavLink>
+            <NavLink
+              to="/table-dashboard"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Table Dashboard
+            </NavLink>
+          </div>
+          <p className="text-xs text-slate-500">
+            Manage all QR and table panels from here.
+          </p>
+        </div>
+      </div>
 
       {/* Takeaway QR - single QR per cart for takeaway-only orders */}
-      {cartId && (
+      {cartId && isTakeawayPanel && (
         <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
             <h2 className="text-xl font-semibold text-slate-700 mb-1">
@@ -804,23 +1160,31 @@ const Tables = () => {
             <p className="mt-2 text-xs text-slate-400">
               Cart ID: <span className="font-mono">{cartId}</span>
             </p>
-            {/* Warning if VITE_CUSTOMER_BASE_URL is not set or points to localhost in production */}
+            {import.meta.env.PROD && isLocalhostCustomerBase && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-xs font-semibold text-red-700 mb-1">
+                  Configuration Error
+                </p>
+                <p className="text-xs text-red-600">
+                  Customer QR links currently point to localhost, which will not
+                  work for users. Set{" "}
+                  <span className="font-mono">VITE_CUSTOMER_BASE_URL</span> to
+                  your deployed customer frontend URL.
+                </p>
+              </div>
+            )}
             {import.meta.env.PROD &&
-              (!import.meta.env.VITE_CUSTOMER_BASE_URL ||
-                customerBaseUrl.includes("localhost")) && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-xs font-semibold text-red-700 mb-1">
-                    ⚠️ Configuration Error
+              !hasConfiguredCustomerBaseUrl &&
+              !isLocalhostCustomerBase && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">
+                    Configuration Notice
                   </p>
-                  <p className="text-xs text-red-600">
-                    VITE_CUSTOMER_BASE_URL is not set or points to localhost.
-                    Takeaway QR codes will not work. Please set{" "}
+                  <p className="text-xs text-amber-700">
                     <span className="font-mono">VITE_CUSTOMER_BASE_URL</span>{" "}
-                    to your deployed frontend URL (e.g.,{" "}
-                    <span className="font-mono">
-                      https://your-frontend.vercel.app
-                    </span>
-                    ) in your deployment environment variables.
+                    is not set, so QR links are using current origin fallback
+                    ({customerBaseUrl}). Set the env var explicitly if customer
+                    app is hosted on a different domain.
                   </p>
                 </div>
               )}
@@ -867,53 +1231,166 @@ const Tables = () => {
         </div>
       )}
 
+      {!isTakeawayPanel && (
+        <>
       <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
         <h2 className="text-xl font-semibold text-slate-700 mb-4">
-          Add a Table
+          {isOfficePanel ? "Add Office QR" : "Add a Table"}
         </h2>
         <form
           onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-4 gap-4"
+          className="grid grid-cols-1 md:grid-cols-6 gap-4"
         >
-          <div>
-            <label className="block text-sm text-slate-500 mb-1">Number</label>
-            <input
-              type="number"
-              value={form.number}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, number: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder="e.g. 12"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-500 mb-1">
-              Capacity
-            </label>
-            <input
-              type="number"
-              value={form.capacity}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, capacity: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder="e.g. 4"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-500 mb-1">
-              Label (optional)
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, name: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder="Window, Patio..."
-            />
-          </div>
+          {selectedFormQrType !== PANEL_OFFICE && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Number
+                </label>
+                <input
+                  type="number"
+                  value={form.number}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, number: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 12"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Capacity
+                </label>
+                <input
+                  type="number"
+                  value={form.capacity}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, capacity: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 4"
+                />
+              </div>
+            </>
+          )}
+          {!isFixedPanelType && (
+            <div>
+              <label className="block text-sm text-slate-500 mb-1">
+                QR Type
+              </label>
+              <select
+                value={form.qrContextType}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, qrContextType: e.target.value }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"
+              >
+                <option value="TABLE">Table (Dine-in)</option>
+                <option value="OFFICE">Office / Fixed Customer</option>
+              </select>
+            </div>
+          )}
+          {selectedFormQrType !== PANEL_OFFICE && (
+            <div>
+              <label className="block text-sm text-slate-500 mb-1">
+                Label (optional)
+              </label>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, name: e.target.value }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                placeholder="Window, Patio..."
+              />
+            </div>
+          )}
+          {selectedFormQrType === PANEL_OFFICE && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Name
+                </label>
+                <input
+                  required={selectedFormQrType === PANEL_OFFICE}
+                  value={form.officeName}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, officeName: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. ABC Tech Park"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Phone
+                </label>
+                <input
+                  value={form.officePhone}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, officePhone: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 9876543210"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Delivery Charge (Rs)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.officeDeliveryCharge}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      officeDeliveryCharge: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="e.g. 40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Payment Mode
+                </label>
+                <select
+                  value={form.officePaymentMode}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      officePaymentMode: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                >
+                  <option value="ONLINE">Online Only</option>
+                  <option value="COD">COD Only</option>
+                  <option value="BOTH">Online + COD</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-slate-500 mb-1">
+                  Office Address
+                </label>
+                <input
+                  required={selectedFormQrType === PANEL_OFFICE}
+                  value={form.officeAddress}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      officeAddress: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Full office delivery address"
+                />
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <button
               type="submit"
@@ -926,23 +1403,25 @@ const Tables = () => {
         </form>
       </div>
 
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-slate-600">
-          Filter by status:
-        </label>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-        >
-          <option value="ALL">All tables</option>
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {STATUS_MAP[status].label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!isOfficePanel && (
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-600">
+            Filter by status:
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="ALL">All tables</option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {STATUS_MAP[status].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg">
@@ -954,11 +1433,13 @@ const Tables = () => {
         <div className="p-8 text-center text-slate-500">Loading tables...</div>
       ) : visibleTables.length === 0 ? (
         <div className="p-8 text-center text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl">
-          {statusFilter === "ALL"
-            ? "No tables configured yet."
-            : `No tables are currently ${STATUS_MAP[
-                statusFilter
-              ]?.label?.toLowerCase()}.`}
+          {isOfficePanel
+            ? "No office QR configured yet."
+            : statusFilter === "ALL"
+              ? "No tables configured yet."
+              : `No tables are currently ${STATUS_MAP[
+                  statusFilter
+                ]?.label?.toLowerCase()}.`}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -967,6 +1448,7 @@ const Tables = () => {
               key={table._id}
               table={table}
               onUpdateStatus={handleUpdateStatus}
+              onEdit={openEditModal}
               onDelete={handleDelete}
               onRegenerateQr={handleRegenerateQr}
               onCopyLink={handleCopyLink}
@@ -976,13 +1458,192 @@ const Tables = () => {
           ))}
         </div>
       )}
+        </>
+      )}
+      {editModal.open && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-xl bg-white rounded-xl shadow-xl overflow-hidden my-auto">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-semibold text-slate-800">
+                  {editingOfficeQr ? "Edit Office QR" : "Edit Table"}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {editingOfficeQr
+                    ? "Update office details, address and payment mode."
+                    : "Update table details."}
+                </p>
+              </div>
+              <button
+                onClick={closeEditModal}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2"
+                aria-label="Close"
+                disabled={editModal.saving}
+              >
+                x
+              </button>
+            </div>
+            <form
+              onSubmit={handleSaveEdit}
+              className="px-4 sm:px-6 py-4 sm:py-5 space-y-4"
+            >
+              {!editingOfficeQr && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-500 mb-1">
+                      Number
+                    </label>
+                    <input
+                      type="number"
+                      value={editModal.form.number}
+                      onChange={(e) =>
+                        handleEditFieldChange("number", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-500 mb-1">
+                      Capacity
+                    </label>
+                    <input
+                      type="number"
+                      value={editModal.form.capacity}
+                      onChange={(e) =>
+                        handleEditFieldChange("capacity", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-slate-500 mb-1">
+                  Label (optional)
+                </label>
+                <input
+                  value={editModal.form.name}
+                  onChange={(e) => handleEditFieldChange("name", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Window, Patio..."
+                />
+              </div>
+
+              {editingOfficeQr && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-500 mb-1">
+                        Office Name
+                      </label>
+                      <input
+                        value={editModal.form.officeName}
+                        onChange={(e) =>
+                          handleEditFieldChange("officeName", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-500 mb-1">
+                        Office Phone
+                      </label>
+                      <input
+                        value={editModal.form.officePhone}
+                        onChange={(e) =>
+                          handleEditFieldChange("officePhone", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                        placeholder="e.g. 9876543210"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-500 mb-1">
+                        Delivery Charge (Rs)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editModal.form.officeDeliveryCharge}
+                        onChange={(e) =>
+                          handleEditFieldChange(
+                            "officeDeliveryCharge",
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-500 mb-1">
+                        Payment Mode
+                      </label>
+                      <select
+                        value={editModal.form.officePaymentMode}
+                        onChange={(e) =>
+                          handleEditFieldChange("officePaymentMode", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                      >
+                        <option value="ONLINE">Online Only</option>
+                        <option value="COD">COD Only</option>
+                        <option value="BOTH">Online + COD</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-slate-500 mb-1">
+                      Office Address
+                    </label>
+                    <input
+                      value={editModal.form.officeAddress}
+                      onChange={(e) =>
+                        handleEditFieldChange("officeAddress", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  disabled={editModal.saving}
+                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editModal.saving}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {editModal.saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {waitlistModal.open && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base sm:text-lg font-semibold text-slate-800">
-                  Waitlist · Table {waitlistModal.table?.number}
+                  Waitlist - Table {waitlistModal.table?.number}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Capacity {waitlistModal.table?.capacity}
@@ -993,7 +1654,7 @@ const Tables = () => {
                 className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 ml-2 flex-shrink-0"
                 aria-label="Close"
               >
-                ×
+                x
               </button>
             </div>
             <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
@@ -1064,7 +1725,7 @@ const Tables = () => {
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">
-                              Position #{entry.position || index + 1} · Token{" "}
+                              Position #{entry.position || index + 1} - Token{" "}
                               {entry.token}
                             </p>
                             {entry.name && (
@@ -1135,3 +1796,4 @@ const Tables = () => {
 };
 
 export default Tables;
+

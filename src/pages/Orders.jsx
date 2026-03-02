@@ -50,6 +50,14 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const getValidDate = (value) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -128,8 +136,85 @@ const getOrderCustomerMobile = (order) =>
   order?.customerPhone ||
   order?.customer?.phone ||
   "";
+const toComparableId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    const nestedId = value._id || value.id;
+    return nestedId ? String(nestedId) : "";
+  }
+  return String(value);
+};
+const resolveOfficeNameFromTables = (order, officeTables = []) => {
+  const fallbackTables = Array.isArray(officeTables) ? officeTables : [];
+  if (!fallbackTables.length) return "";
+
+  const officeNumber = String(order?.tableNumber || "").trim();
+  if (!officeNumber || officeNumber.toUpperCase() === "TAKEAWAY") return "";
+
+  const normalizedOfficeNumber = officeNumber.toUpperCase();
+  const orderCafeId = toComparableId(
+    order?.cartId || order?.cafeId || order?.table?.cafeId,
+  );
+
+  const matchedOffice = fallbackTables.find((table) => {
+    if (String(table?.qrContextType || "").toUpperCase() !== "OFFICE") {
+      return false;
+    }
+
+    const tableNumber = String(table?.number || table?.tableNumber || "")
+      .trim()
+      .toUpperCase();
+    if (!tableNumber || tableNumber !== normalizedOfficeNumber) return false;
+
+    if (!orderCafeId) return true;
+
+    const tableCafeId = toComparableId(table?.cartId || table?.cafeId);
+    return !tableCafeId || tableCafeId === orderCafeId;
+  });
+
+  return String(matchedOffice?.officeName || matchedOffice?.name || "").trim();
+};
+const getOfficeOrderName = (order, officeTables = []) => {
+  const explicitOfficeName = String(
+    order?.officeName || order?.table?.officeName || "",
+  ).trim();
+  if (explicitOfficeName) return explicitOfficeName;
+
+  const officeNameFromTables = resolveOfficeNameFromTables(order, officeTables);
+  if (officeNameFromTables) return officeNameFromTables;
+
+  const customerName = String(order?.customerName || "").trim();
+  if (customerName) return customerName;
+
+  const officeNumber = String(order?.tableNumber || "").trim();
+  if (officeNumber && officeNumber.toUpperCase() !== "TAKEAWAY") {
+    return `Office ${officeNumber}`;
+  }
+
+  return "Office";
+};
+const isOfficeQrOrder = (order) => {
+  const sourceType = String(order?.sourceQrType || "").toUpperCase();
+  if (sourceType === "OFFICE") return true;
+
+  const officeMode = String(order?.officePaymentMode || "").toUpperCase();
+  if (officeMode === "ONLINE" || officeMode === "COD" || officeMode === "BOTH")
+    return true;
+
+  if (Number(order?.officeDeliveryCharge || 0) > 0) return true;
+
+  return String(order?.table?.qrContextType || "").toUpperCase() === "OFFICE";
+};
+const getEffectiveDeliveryCharge = (order) => {
+  const primaryCharge = Number(order?.deliveryInfo?.deliveryCharge || 0);
+  if (primaryCharge > 0) return primaryCharge;
+  const officeCharge = Number(order?.officeDeliveryCharge || 0);
+  return officeCharge > 0 ? officeCharge : 0;
+};
 const resolveTakeawayOrderType = (order) => {
   if (!order) return null;
+  if (isOfficeQrOrder(order)) return "DELIVERY";
 
   const explicitOrderType = String(order.orderType || "").toUpperCase();
   if (explicitOrderType === "PICKUP" || explicitOrderType === "DELIVERY") {
@@ -143,8 +228,16 @@ const resolveTakeawayOrderType = (order) => {
 
   // Legacy records can be persisted as TAKEAWAY without explicit orderType.
   if (serviceType === "TAKEAWAY") {
-    if (hasMeaningfulDeliveryInfo(order)) return "DELIVERY";
-    if (isPresentValue(order.pickupLocation?.address)) return "PICKUP";
+    // Keep plain TAKEAWAY label as "Takeaway" unless we have strong DELIVERY signal.
+    // Do not infer DELIVERY only from customer address, because staff takeaway
+    // orders can include address text and still be pickup/counter flow.
+    if (
+      hasMeaningfulDeliveryInfo(order) &&
+      !isPresentValue(order?.pickupLocation?.address)
+    ) {
+      return "DELIVERY";
+    }
+    return null;
   }
 
   return null;
@@ -170,6 +263,20 @@ const getOrderCafeId = (order) => {
   }
 
   return orderCafeId;
+};
+
+const isOfficeQrTable = (table) =>
+  String(table?.qrContextType || "").toUpperCase() === "OFFICE";
+
+const resolveTableCartId = (table) => {
+  const raw = table?.cartId || table?.cafeId;
+  if (!raw) return null;
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "object") {
+    const id = raw._id || raw.id;
+    return id ? String(id) : null;
+  }
+  return String(raw);
 };
 
 const filterOrdersByCafeId = (orders, cafeId) => {
@@ -399,6 +506,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
     order.paymentMode ||
     (order.payment && order.payment.method) ||
     "CASH";
+  const safeInvoiceNumber = escapeHtml(invoiceNumber);
+  const safeCartAddress = escapeHtml(cartAddress);
+  const safeFranchiseFSSAI = escapeHtml(franchiseFSSAI);
+  const safeInvoiceDate = escapeHtml(
+    new Date(
+      order.paidAt || order.updatedAt || order.createdAt || Date.now(),
+    ).toLocaleDateString(),
+  );
+  const safeTableNumber = escapeHtml(order.tableNumber || "--");
+  const safePaymentMethod = escapeHtml(String(paymentMethod).toUpperCase());
 
   // Build rows for dine-in items
   const dineInRows =
@@ -410,7 +527,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             const amount = item.amount || 0;
             return `
             <tr>
-              <td class="py-2 border-b">${item.name || ""}</td>
+              <td class="py-2 border-b">${escapeHtml(item.name || "")}</td>
               <td class="py-2 border-b">${quantity}</td>
               <td class="py-2 border-b">₹${formatMoney(price)}</td>
               <td class="py-2 border-b text-right">₹${formatMoney(amount)}</td>
@@ -431,7 +548,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
             return `
             <tr>
               <td class="py-2 border-b">${
-                item.name || ""
+                escapeHtml(item.name || "")
               } <span style="color: #059669; font-weight: bold;">📦 TAKEAWAY</span></td>
               <td class="py-2 border-b">${quantity}</td>
               <td class="py-2 border-b">₹${formatMoney(price)}</td>
@@ -526,18 +643,16 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
       </style>
       <div class="invoice-header">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">Terra Cart</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">${cartAddress}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${franchiseFSSAI}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">${safeCartAddress}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">FSSAI No: ${safeFranchiseFSSAI}</div>
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">Invoice</div>
-        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${invoiceNumber}</div>
-        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${new Date(
-          order.paidAt || order.updatedAt || order.createdAt || Date.now(),
-        ).toLocaleDateString()}</div>
+        <div style="font-size: 9px; margin-bottom: 2px;">Invoice No: ${safeInvoiceNumber}</div>
+        <div style="font-size: 9px; margin-bottom: 8px;">Date: ${safeInvoiceDate}</div>
         </div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; font-size: 10px; margin-bottom: 4px;">Billed To</div>
         <div style="font-size: 9px;">
-          Table ${order.tableNumber || "—"}
+          Table ${safeTableNumber}
         </div>
       </div>
       <table class="invoice-table" style="margin-top: 16px;">
@@ -565,7 +680,7 @@ const buildInvoiceMarkup = (order, franchiseData = null, cartData = null) => {
           </div>
           <div class="invoice-line" style="margin-top: 6px;">
             <span>Payment Mode</span>
-            <span>${String(paymentMethod).toUpperCase()}</span>
+            <span>${safePaymentMethod}</span>
           </div>
         </div>
       </div>
@@ -846,7 +961,9 @@ const Orders = () => {
   const [draftSearch, setDraftSearch] = useState("");
   const [draftCategory, setDraftCategory] = useState("all");
   const [selectedTableId, setSelectedTableId] = useState("");
+  const [selectedOfficeId, setSelectedOfficeId] = useState("");
   const [draftServiceType, setDraftServiceType] = useState("DINE_IN");
+  const [draftTakeawayMode, setDraftTakeawayMode] = useState("COUNTER");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -1099,20 +1216,33 @@ const Orders = () => {
     const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
     const customerName = getOrderCustomerName(order);
     const customerMobile = getOrderCustomerMobile(order);
+    const isOfficeOrder = isOfficeQrOrder(order);
+    const officeOrderName = isOfficeOrder
+      ? getOfficeOrderName(order, tables)
+      : "";
     const isTakeawayOrder =
       isTakeawayServiceType(order.serviceType) ||
       Boolean(resolvedTakeawayOrderType);
-    const serviceTypeLabel =
-      normalizedServiceType === "DINE_IN"
+    const serviceTypeLabel = isOfficeOrder
+      ? "Office Delivery"
+      : normalizedServiceType === "DINE_IN"
         ? "Dine-In"
         : normalizedServiceType === "TAKEAWAY"
-          ? "Takeaway"
+          ? resolvedTakeawayOrderType === "DELIVERY"
+            ? "Delivery"
+            : resolvedTakeawayOrderType === "PICKUP"
+              ? "Pickup"
+              : "Takeaway"
           : normalizedServiceType === "PICKUP"
             ? "Pickup"
             : normalizedServiceType === "DELIVERY"
               ? "Delivery"
               : isTakeawayOrder
-                ? "Takeaway"
+                ? resolvedTakeawayOrderType === "DELIVERY"
+                  ? "Delivery"
+                  : resolvedTakeawayOrderType === "PICKUP"
+                    ? "Pickup"
+                    : "Takeaway"
                 : "Dine-In";
     const takeawayOrderTypeLabel =
       resolvedTakeawayOrderType === "DELIVERY"
@@ -1127,6 +1257,9 @@ const Orders = () => {
       order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
     const deliveryAddress =
       order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const fallbackTakeawayAddress =
+      deliveryAddress || order?.deliveryAddress || order?.customerAddress || null;
+    const deliveryCharge = getEffectiveDeliveryCharge(order);
     const hasTakeawayToken =
       resolvedTakeawayOrderType !== "DELIVERY" &&
       order.takeawayToken !== undefined &&
@@ -1137,7 +1270,8 @@ const Orders = () => {
         hasTakeawayToken ||
         resolvedTakeawayOrderType ||
         (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
-        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+        (resolvedTakeawayOrderType === "DELIVERY" && fallbackTakeawayAddress) ||
+        (!resolvedTakeawayOrderType && fallbackTakeawayAddress));
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
@@ -1169,10 +1303,21 @@ const Orders = () => {
             </button>
             {hasTakeawayMeta && !isExpanded && (
               <div className="mt-1 space-y-0.5">
-                {resolvedTakeawayOrderType && (
-                  <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
-                    {takeawayOrderTypeLabel}
-                  </div>
+                {isOfficeOrder ? (
+                  <>
+                    <div className="text-[10px] sm:text-xs font-semibold text-emerald-700 truncate">
+                      Office: {officeOrderName}
+                    </div>
+                    <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
+                      Type: {takeawayOrderTypeLabel}
+                    </div>
+                  </>
+                ) : (
+                  resolvedTakeawayOrderType && (
+                    <div className="text-[10px] sm:text-xs font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </div>
+                  )
                 )}
                 {customerName && (
                   <div className="text-[10px] sm:text-xs text-gray-700 truncate">
@@ -1191,7 +1336,12 @@ const Orders = () => {
                 )}
                 {resolvedTakeawayOrderType === "DELIVERY" && (
                   <div className="text-[10px] sm:text-xs text-gray-600 truncate">
-                    Address: {deliveryAddress || "Address not set"}
+                    Address: {fallbackTakeawayAddress || "Address not set"}
+                  </div>
+                )}
+                {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                  <div className="text-[10px] sm:text-xs text-gray-600 truncate">
+                    Address: {fallbackTakeawayAddress}
                   </div>
                 )}
                 {hasTakeawayToken && (
@@ -1219,13 +1369,30 @@ const Orders = () => {
                     {serviceTypeLabel}
                   </span>
                 </div>
-                {shouldShowOrderTypeMeta && (
-                  <div className="truncate">
-                    Order Type:{" "}
-                    <span className="font-semibold text-emerald-700">
-                      {takeawayOrderTypeLabel}
-                    </span>
-                  </div>
+                {isOfficeOrder ? (
+                  <>
+                    <div className="truncate">
+                      Office:{" "}
+                      <span className="font-semibold text-emerald-700">
+                        {officeOrderName}
+                      </span>
+                    </div>
+                    <div className="truncate">
+                      Order Type:{" "}
+                      <span className="font-semibold text-emerald-700">
+                        {takeawayOrderTypeLabel}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  shouldShowOrderTypeMeta && (
+                    <div className="truncate">
+                      Order Type:{" "}
+                      <span className="font-semibold text-emerald-700">
+                        {takeawayOrderTypeLabel}
+                      </span>
+                    </div>
+                  )
                 )}
                 {resolvedTakeawayOrderType === "PICKUP" && (
                   <div className="truncate">
@@ -1235,17 +1402,17 @@ const Orders = () => {
                 {resolvedTakeawayOrderType === "DELIVERY" && (
                   <>
                     <div className="truncate">
-                      Delivery Address: {deliveryAddress || "Address not set"}
+                      Delivery Address: {fallbackTakeawayAddress || "Address not set"}
                     </div>
                     {order.deliveryInfo?.distance != null && (
                       <div className="truncate">
                         Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
                       </div>
                     )}
-                    {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                    {deliveryCharge > 0 && (
                       <div className="truncate text-green-700">
-                        Delivery Charge: ₹
-                        {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                        Delivery Charge: {"\u20B9"}
+                        {Number(deliveryCharge).toFixed(2)}
                       </div>
                     )}
                     {isPresentValue(order.deliveryInfo?.estimatedTime) &&
@@ -1256,6 +1423,11 @@ const Orders = () => {
                       </div>
                     )}
                   </>
+                )}
+                {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                  <div className="truncate">
+                    Address: {fallbackTakeawayAddress}
+                  </div>
                 )}
                 {hasTakeawayToken && (
                   <div className="truncate">
@@ -1306,7 +1478,9 @@ const Orders = () => {
                 />
               )}
               <span className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-gray-700 truncate">
-                {isTakeawayOrder
+                {isOfficeOrder
+                  ? officeOrderName
+                  : isTakeawayOrder
                   ? resolvedTakeawayOrderType
                     ? takeawayOrderTypeLabel
                     : order.tableNumber || "Takeaway"
@@ -1583,20 +1757,33 @@ const Orders = () => {
     const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
     const customerName = getOrderCustomerName(order);
     const customerMobile = getOrderCustomerMobile(order);
+    const isOfficeOrder = isOfficeQrOrder(order);
+    const officeOrderName = isOfficeOrder
+      ? getOfficeOrderName(order, tables)
+      : "";
     const isTakeawayOrder =
       isTakeawayServiceType(order.serviceType) ||
       Boolean(resolvedTakeawayOrderType);
-    const serviceTypeLabel =
-      normalizedServiceType === "DINE_IN"
+    const serviceTypeLabel = isOfficeOrder
+      ? "Office Delivery"
+      : normalizedServiceType === "DINE_IN"
         ? "Dine-In"
         : normalizedServiceType === "TAKEAWAY"
-          ? "Takeaway"
+          ? resolvedTakeawayOrderType === "DELIVERY"
+            ? "Delivery"
+            : resolvedTakeawayOrderType === "PICKUP"
+              ? "Pickup"
+              : "Takeaway"
           : normalizedServiceType === "PICKUP"
             ? "Pickup"
             : normalizedServiceType === "DELIVERY"
               ? "Delivery"
               : isTakeawayOrder
-                ? "Takeaway"
+                ? resolvedTakeawayOrderType === "DELIVERY"
+                  ? "Delivery"
+                  : resolvedTakeawayOrderType === "PICKUP"
+                    ? "Pickup"
+                    : "Takeaway"
                 : "Dine-In";
     const takeawayOrderTypeLabel =
       resolvedTakeawayOrderType === "DELIVERY"
@@ -1611,6 +1798,9 @@ const Orders = () => {
       order.pickupLocation?.address || order.pickupLocation?.fullAddress || null;
     const deliveryAddress =
       order.customerLocation?.address || order.customerLocation?.fullAddress || null;
+    const fallbackTakeawayAddress =
+      deliveryAddress || order?.deliveryAddress || order?.customerAddress || null;
+    const deliveryCharge = getEffectiveDeliveryCharge(order);
     const hasTakeawayToken =
       resolvedTakeawayOrderType !== "DELIVERY" &&
       order.takeawayToken !== undefined &&
@@ -1622,7 +1812,8 @@ const Orders = () => {
         hasTakeawayToken ||
         resolvedTakeawayOrderType ||
         (resolvedTakeawayOrderType === "PICKUP" && pickupAddress) ||
-        (resolvedTakeawayOrderType === "DELIVERY" && deliveryAddress));
+        (resolvedTakeawayOrderType === "DELIVERY" && fallbackTakeawayAddress) ||
+        (!resolvedTakeawayOrderType && fallbackTakeawayAddress));
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
@@ -1775,7 +1966,9 @@ const Orders = () => {
               Table / Takeaway
             </div>
             <div className="text-xs font-semibold text-slate-700 mt-0.5 truncate">
-              {isTakeawayOrder
+              {isOfficeOrder
+                ? officeOrderName
+                : isTakeawayOrder
                 ? resolvedTakeawayOrderType
                   ? takeawayOrderTypeLabel
                   : order.tableNumber || "Takeaway"
@@ -1794,10 +1987,21 @@ const Orders = () => {
 
         {hasTakeawayMeta && (
           <div className="space-y-1 text-xs text-slate-600">
-            {resolvedTakeawayOrderType && (
-              <div className="font-semibold text-emerald-700">
-                Type: {takeawayOrderTypeLabel}
-              </div>
+            {isOfficeOrder ? (
+              <>
+                <div className="font-semibold text-emerald-700 truncate">
+                  Office: {officeOrderName}
+                </div>
+                <div className="font-semibold text-emerald-700">
+                  Type: {takeawayOrderTypeLabel}
+                </div>
+              </>
+            ) : (
+              resolvedTakeawayOrderType && (
+                <div className="font-semibold text-emerald-700">
+                  Type: {takeawayOrderTypeLabel}
+                </div>
+              )
             )}
             {customerName && <div>Customer: {customerName}</div>}
             {customerMobile && <div>Mobile: {customerMobile}</div>}
@@ -1805,7 +2009,10 @@ const Orders = () => {
               <div>Pickup: {pickupAddress || "Address not set"}</div>
             )}
             {resolvedTakeawayOrderType === "DELIVERY" && (
-              <div>Address: {deliveryAddress || "Address not set"}</div>
+              <div>Address: {fallbackTakeawayAddress || "Address not set"}</div>
+            )}
+            {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+              <div>Address: {fallbackTakeawayAddress}</div>
             )}
             {hasTakeawayToken && (
               <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
@@ -1888,29 +2095,48 @@ const Orders = () => {
                 Service Type:{" "}
                 <span className="font-semibold text-gray-700">{serviceTypeLabel}</span>
               </div>
-              {shouldShowOrderTypeMeta && (
-                <div>
-                  Order Type:{" "}
-                  <span className="font-semibold text-emerald-700">
-                    {takeawayOrderTypeLabel}
-                  </span>
-                </div>
+              {isOfficeOrder ? (
+                <>
+                  <div>
+                    Office:{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {officeOrderName}
+                    </span>
+                  </div>
+                  <div>
+                    Order Type:{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                shouldShowOrderTypeMeta && (
+                  <div>
+                    Order Type:{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {takeawayOrderTypeLabel}
+                    </span>
+                  </div>
+                )
               )}
               {resolvedTakeawayOrderType === "PICKUP" && (
                 <div>Pickup Address: {pickupAddress || "Address not set"}</div>
               )}
               {resolvedTakeawayOrderType === "DELIVERY" && (
                 <>
-                  <div>Delivery Address: {deliveryAddress || "Address not set"}</div>
+                  <div>
+                    Delivery Address: {fallbackTakeawayAddress || "Address not set"}
+                  </div>
                   {order.deliveryInfo?.distance != null && (
                     <div>
                       Distance: {Number(order.deliveryInfo.distance).toFixed(2)} km
                     </div>
                   )}
-                  {Number(order.deliveryInfo?.deliveryCharge || 0) > 0 && (
+                  {deliveryCharge > 0 && (
                     <div className="text-green-700">
                       Delivery Charge: {"\u20B9"}
-                      {Number(order.deliveryInfo.deliveryCharge).toFixed(2)}
+                      {Number(deliveryCharge).toFixed(2)}
                     </div>
                   )}
                   {isPresentValue(order.deliveryInfo?.estimatedTime) &&
@@ -1919,6 +2145,9 @@ const Orders = () => {
                       <div>Est. Time: {order.deliveryInfo.estimatedTime} min</div>
                     )}
                 </>
+              )}
+              {!resolvedTakeawayOrderType && fallbackTakeawayAddress && (
+                <div>Address: {fallbackTakeawayAddress}</div>
               )}
               {hasTakeawayToken && (
                 <div>
@@ -2400,8 +2629,12 @@ const Orders = () => {
       return;
     }
 
-    // For DINE_IN orders, table selection is required
-    // For TAKEAWAY orders, no table selection needed (counter orders)
+    const isOfficeTakeawayOrder =
+      draftServiceType === "TAKEAWAY" && draftTakeawayMode === "OFFICE";
+
+    // For DINE_IN orders, table selection is required.
+    // For TAKEAWAY counter orders, no table selection is needed.
+    // For TAKEAWAY office orders, office selection is required.
     if (draftServiceType === "DINE_IN") {
       if (!selectedTableId) {
         setCreateError("Please select a table for this order.");
@@ -2426,6 +2659,33 @@ const Orders = () => {
         );
         return;
       }
+    } else if (isOfficeTakeawayOrder) {
+      if (!selectedOfficeId) {
+        setCreateError("Please select an office QR for this order.");
+        return;
+      }
+
+      const officeSource = tables.find((t) => t._id === selectedOfficeId);
+      if (!officeSource || !isOfficeQrTable(officeSource)) {
+        setCreateError(
+          "Selected office QR could not be found. Refresh tables and try again.",
+        );
+        return;
+      }
+
+      if (!String(officeSource.officeName || "").trim()) {
+        setCreateError(
+          "Selected office is missing office name. Update office QR details first.",
+        );
+        return;
+      }
+
+      if (!String(officeSource.officeAddress || "").trim()) {
+        setCreateError(
+          "Selected office is missing office address. Update office QR details first.",
+        );
+        return;
+      }
     }
 
     setCreateSubmitting(true);
@@ -2434,9 +2694,9 @@ const Orders = () => {
       let sessionToken = null;
       let table = null;
       let tableNumber = null;
+      let officeTable = null;
 
-      // For DINE_IN orders, we need a table and session token
-      // For TAKEAWAY orders, no table needed (counter orders)
+      // For DINE_IN orders, we need a table and session token.
       if (draftServiceType === "DINE_IN") {
         table = tables.find((t) => t._id === selectedTableId);
         if (!table) {
@@ -2476,8 +2736,13 @@ const Orders = () => {
             "Unable to obtain a session token for this table. Ask staff to release the table.",
           );
         }
+      } else if (isOfficeTakeawayOrder) {
+        officeTable = tables.find((t) => t._id === selectedOfficeId) || null;
+        if (!officeTable || !isOfficeQrTable(officeTable)) {
+          throw new Error("Selected office QR could not be found.");
+        }
+        tableNumber = officeTable.number || officeTable.tableNumber || "TAKEAWAY";
       }
-      // For TAKEAWAY orders, no table or sessionToken needed (counter orders)
 
       const itemsPayload = draftItemsArray.map((entry) => ({
         name: entry.name,
@@ -2486,19 +2751,61 @@ const Orders = () => {
       }));
 
       const selectedAddonsPayload = toOrderAddonPayload(draftAddonsArray);
+      const officePaymentMode = isOfficeTakeawayOrder
+        ? String(officeTable?.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+          ? "COD"
+          : String(officeTable?.officePaymentMode || "ONLINE").toUpperCase() ===
+              "BOTH"
+            ? "BOTH"
+          : "ONLINE"
+        : undefined;
+      const officeDeliveryCharge = Number(officeTable?.officeDeliveryCharge || 0);
+      const officeName = String(officeTable?.officeName || "").trim();
+      const officePhone = String(officeTable?.officePhone || "").trim();
+      const officeAddress = String(officeTable?.officeAddress || "").trim();
+      const officeCartId = resolveTableCartId(officeTable);
+      const dineInOrCounterCartId =
+        currentMenuCartId ||
+        filterCafeId ||
+        (user.role === "admin" ? user._id : undefined);
+      const finalCartId = isOfficeTakeawayOrder
+        ? officeCartId || dineInOrCounterCartId
+        : dineInOrCounterCartId;
 
       const payload = {
         serviceType: draftServiceType,
-        tableId: draftServiceType === "TAKEAWAY" ? null : table?._id || null, // TAKEAWAY orders don't need tableId
+        tableId: isOfficeTakeawayOrder
+          ? officeTable?._id || null
+          : draftServiceType === "TAKEAWAY"
+            ? null
+            : table?._id || null,
         tableNumber:
-          draftServiceType === "TAKEAWAY" ? "TAKEAWAY" : tableNumber || null, // TAKEAWAY orders use "TAKEAWAY" as table number
+          draftServiceType === "TAKEAWAY"
+            ? isOfficeTakeawayOrder
+              ? String(tableNumber || "TAKEAWAY")
+              : "TAKEAWAY"
+            : tableNumber || null,
         sessionToken:
-          draftServiceType === "TAKEAWAY" ? undefined : sessionToken, // TAKEAWAY orders don't need sessionToken
-        cartId:
-          currentMenuCartId ||
-          filterCafeId ||
-          (user.role === "admin" ? user._id : undefined), // Explicitly send cartId for admin-created orders
+          draftServiceType === "TAKEAWAY" ? undefined : sessionToken,
+        cartId: finalCartId,
         items: itemsPayload,
+        ...(isOfficeTakeawayOrder && {
+          sourceQrType: "OFFICE",
+          ...(officeName && { officeName }),
+          officePaymentMode,
+          ...(officeDeliveryCharge > 0 && {
+            officeDeliveryCharge: Number(officeDeliveryCharge.toFixed(2)),
+          }),
+          ...(officeName && { customerName: officeName }),
+          ...(officePhone && { customerMobile: officePhone }),
+          ...(officeAddress && {
+            customerLocation: {
+              latitude: null,
+              longitude: null,
+              address: officeAddress,
+            },
+          }),
+        }),
         ...(selectedAddonsPayload.length > 0 && {
           selectedAddons: selectedAddonsPayload,
         }),
@@ -3092,32 +3399,33 @@ const Orders = () => {
     });
   }, []);
 
-  const { tablesForService } = useMemo(() => {
-    if (draftServiceType === "DINE_IN") {
-      // For DINE_IN: Only show AVAILABLE tables (or tables with sessionToken)
-      // Occupied tables should not be available for dine-in orders
-      const availableTables = tables.filter((table) => {
-        const status = table.status || "UNKNOWN";
-        const isAvailable =
-          status === "AVAILABLE" || Boolean(table.sessionToken);
-        return isAvailable;
-      });
-      return { tablesForService: availableTables, usingFallbackTables: false };
-    }
-    // For TAKEAWAY: Show all tables regardless of status (counter takeaway, not table takeaway)
-    const takeawayCandidates = tables.filter((table) => {
-      const label = `${table.name || ""} ${table.number || ""}`.toLowerCase();
-      return label.includes("takeaway") || label.includes("counter");
-    });
-    if (takeawayCandidates.length > 0) {
+  const { tablesForService, officeTablesForService } = useMemo(() => {
+    const officeTables = tables.filter((table) => isOfficeQrTable(table));
+    const dineInTables = tables.filter((table) => !isOfficeQrTable(table));
+
+    if (draftServiceType !== "DINE_IN") {
       return {
-        tablesForService: takeawayCandidates,
-        usingFallbackTables: false,
+        tablesForService: [],
+        officeTablesForService: officeTables,
       };
     }
-    // Fallback: Show all tables for takeaway (they're counter orders, not table-specific)
-    return { tablesForService: tables, usingFallbackTables: true };
+
+    // For DINE_IN: only show non-office tables that are available (or claimed by a valid session).
+    const availableTables = dineInTables.filter((table) => {
+      const status = table.status || "UNKNOWN";
+      return status === "AVAILABLE" || Boolean(table.sessionToken);
+    });
+
+    return {
+      tablesForService: availableTables,
+      officeTablesForService: officeTables,
+    };
   }, [tables, draftServiceType]);
+
+  const selectedOffice = useMemo(
+    () => officeTablesForService.find((office) => office._id === selectedOfficeId) || null,
+    [officeTablesForService, selectedOfficeId],
+  );
 
   const resetDraft = useCallback(() => {
     setDraftSelections({});
@@ -3125,7 +3433,9 @@ const Orders = () => {
     setDraftSearch("");
     setDraftCategory("all");
     setSelectedTableId("");
+    setSelectedOfficeId("");
     setDraftServiceType("DINE_IN");
+    setDraftTakeawayMode("COUNTER");
     setCreateError("");
   }, []);
 
@@ -3495,6 +3805,10 @@ const Orders = () => {
                               onClick={() => {
                                 setDraftServiceType(type);
                                 setSelectedTableId("");
+                                if (type === "DINE_IN") {
+                                  setDraftTakeawayMode("COUNTER");
+                                  setSelectedOfficeId("");
+                                }
 
                                 // Emit "dine" event immediately when user selects DINE_IN
                                 if (type === "DINE_IN") {
@@ -3529,9 +3843,142 @@ const Orders = () => {
                           ))}
                         </div>
                         {draftServiceType === "TAKEAWAY" && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Counter takeaway order - no table selection needed.
-                          </p>
+                          <div className="mt-3 space-y-3">
+                            <div className="flex items-center gap-2">
+                              {[
+                                { value: "COUNTER", label: "Counter" },
+                                { value: "OFFICE", label: "Office" },
+                              ].map((mode) => (
+                                <button
+                                  key={mode.value}
+                                  type="button"
+                                  onClick={() => {
+                                    setDraftTakeawayMode(mode.value);
+                                    if (mode.value !== "OFFICE") {
+                                      setSelectedOfficeId("");
+                                    }
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
+                                    draftTakeawayMode === mode.value
+                                      ? "bg-blue-600 text-white border-blue-600 shadow"
+                                      : "border-gray-300 text-gray-600 hover:border-blue-400"
+                                  }`}
+                                >
+                                  {mode.label}
+                                </button>
+                              ))}
+                            </div>
+                            {draftTakeawayMode === "COUNTER" ? (
+                              <p className="text-xs text-gray-500">
+                                Counter takeaway order - no table selection needed.
+                              </p>
+                            ) : (
+                              <div className="space-y-3">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2 flex items-center gap-2">
+                                  <img
+                                    src={tableIcon}
+                                    alt="Office"
+                                    className="w-5 h-5 object-contain"
+                                  />
+                                  Choose Office QR
+                                </label>
+                                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                  <select
+                                    value={selectedOfficeId}
+                                    onChange={(e) => {
+                                      const officeId = e.target.value;
+                                      setSelectedOfficeId(officeId);
+                                      const office = officeTablesForService.find(
+                                        (entry) => entry._id === officeId,
+                                      );
+                                      const officeCartId = resolveTableCartId(office);
+                                      if (officeCartId) {
+                                        loadMenu(officeCartId);
+                                        loadAddons(officeCartId);
+                                      }
+                                    }}
+                                    className="shadow-sm border border-gray-300 rounded-lg w-full md:w-72 py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                                  >
+                                    <option value="">Select an office QR</option>
+                                    {officeTablesForService.length === 0 ? (
+                                      <option value="" disabled>
+                                        No office QR found
+                                      </option>
+                                    ) : (
+                                      officeTablesForService.map((office) => {
+                                        const officeName = String(
+                                          office.officeName || "",
+                                        ).trim();
+                                        const label = officeName
+                                          ? officeName
+                                          : office.number
+                                            ? `Office QR ${office.number}`
+                                            : office.name || "Office QR";
+                                        return (
+                                          <option key={office._id} value={office._id}>
+                                            {label}
+                                          </option>
+                                        );
+                                      })
+                                    )}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={loadTables}
+                                    className="text-sm text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                                  >
+                                    🔄 Refresh offices
+                                  </button>
+                                </div>
+                                {selectedOffice && (
+                                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-gray-700 space-y-1">
+                                    <div>
+                                      <span className="font-semibold">Office:</span>{" "}
+                                      {selectedOffice.officeName ||
+                                        selectedOffice.name ||
+                                        "Office QR"}
+                                    </div>
+                                    {selectedOffice.officePhone && (
+                                      <div>
+                                        <span className="font-semibold">Phone:</span>{" "}
+                                        {selectedOffice.officePhone}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <span className="font-semibold">Address:</span>{" "}
+                                      {selectedOffice.officeAddress ||
+                                        "Address not set"}
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold">Payment:</span>{" "}
+                                      {String(
+                                        selectedOffice.officePaymentMode || "ONLINE",
+                                      ).toUpperCase() === "COD"
+                                        ? "COD Only"
+                                        : String(
+                                              selectedOffice.officePaymentMode ||
+                                                "ONLINE",
+                                            ).toUpperCase() === "BOTH"
+                                          ? "Online + COD"
+                                        : "Online Only"}
+                                    </div>
+                                    {Number(selectedOffice.officeDeliveryCharge || 0) >
+                                      0 && (
+                                      <div>
+                                        <span className="font-semibold">
+                                          Delivery Charge:
+                                        </span>{" "}
+                                        ₹
+                                        {formatMoney(
+                                          Number(selectedOffice.officeDeliveryCharge || 0),
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                       {draftServiceType === "DINE_IN" && (
@@ -3770,7 +4217,9 @@ const Orders = () => {
                             <span>Service Type</span>
                             <span className="font-semibold text-gray-700">
                               {draftServiceType === "TAKEAWAY"
-                                ? "Takeaway"
+                                ? draftTakeawayMode === "OFFICE"
+                                  ? "Office"
+                                  : "Takeaway"
                                 : "Dine-In"}
                             </span>
                           </div>

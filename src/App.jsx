@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import TabletTabs from "./components/TabletTabs";
 import AccessibilityButton from "./components/AccessibilityButton";
 import Login from "./pages/Login";
 import { getSocket } from "./utils/socket";
@@ -121,6 +122,7 @@ function App() {
               }
             >
               {showLayout && <Navbar onMenuToggle={toggleSidebar} />}
+              {showLayout && <TabletTabs userRole={user?.role} />}
               <main className="flex-1 p-4 md:p-6 bg-[#f8f9fa] overflow-x-hidden min-h-[calc(100vh-4rem)]">
                 <Routes>
                   <Route path="/" element={<Login />} />
@@ -197,7 +199,23 @@ function App() {
                     path="/tables"
                     element={
                       <ProtectedRoute allowedRoles={["admin"]}>
-                        <Tables />
+                        <Tables panelType="TABLE" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/offices"
+                    element={
+                      <ProtectedRoute allowedRoles={["admin"]}>
+                        <Tables panelType="OFFICE" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/takeaway-qr"
+                    element={
+                      <ProtectedRoute allowedRoles={["admin"]}>
+                        <Tables panelType="TAKEAWAY" />
                       </ProtectedRoute>
                     }
                   />

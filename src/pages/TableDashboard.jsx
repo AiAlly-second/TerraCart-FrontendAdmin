@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { NavLink } from "react-router-dom";
 import api from "../utils/api";
 import { createSocketConnection } from "../utils/socket";
 
@@ -165,6 +166,64 @@ const TableDashboard = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <NavLink
+              to="/tables"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Tables
+            </NavLink>
+            <NavLink
+              to="/offices"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Offices
+            </NavLink>
+            <NavLink
+              to="/takeaway-qr"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Takeaway
+            </NavLink>
+            <NavLink
+              to="/table-dashboard"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#ff6b35] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`
+              }
+            >
+              Table Dashboard
+            </NavLink>
+          </div>
+          <p className="text-xs text-slate-500">
+            Manage all QR and table panels from here.
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
           Table Occupancy Dashboard

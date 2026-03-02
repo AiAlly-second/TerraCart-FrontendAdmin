@@ -1,8 +1,38 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import {
+  FaBolt,
+  FaBoxOpen,
+  FaBuilding,
+  FaCheck,
+  FaCheckCircle,
+  FaClipboardList,
+  FaClock,
+  FaCopy,
+  FaMoneyBillWave,
+  FaStore,
+  FaSyncAlt,
+  FaTimesCircle,
+  FaWallet,
+} from "react-icons/fa";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 // Removed socket import - using HTTP polling instead
+
+const REVENUE_FILTER_OPTIONS = [
+  { key: "DAILY", label: "Daily" },
+  { key: "MONTHLY", label: "Monthly" },
+  { key: "YEARLY", label: "Yearly" },
+];
 
 const StatCard = ({
   title,
@@ -14,26 +44,46 @@ const StatCard = ({
   color = "default",
 }) => {
   const colorClasses = {
-    default: "border-[#e2c1ac]",
-    green: "border-green-300 bg-green-50",
-    red: "border-red-300 bg-red-50",
-    yellow: "border-yellow-300 bg-yellow-50",
-    blue: "border-blue-300 bg-blue-50",
+    default: {
+      card: "border-[#e2c1ac] bg-gradient-to-br from-white to-[#fff8f2]",
+      icon: "bg-[#fef4ec] text-[#a85b2e]",
+    },
+    green: {
+      card: "border-emerald-200 bg-gradient-to-br from-white to-emerald-50",
+      icon: "bg-emerald-100 text-emerald-700",
+    },
+    red: {
+      card: "border-rose-200 bg-gradient-to-br from-white to-rose-50",
+      icon: "bg-rose-100 text-rose-700",
+    },
+    yellow: {
+      card: "border-amber-200 bg-gradient-to-br from-white to-amber-50",
+      icon: "bg-amber-100 text-amber-700",
+    },
+    blue: {
+      card: "border-sky-200 bg-gradient-to-br from-white to-sky-50",
+      icon: "bg-sky-100 text-sky-700",
+    },
   };
+  const theme = colorClasses[color] || colorClasses.default;
 
   return (
     <div
       onClick={onClick}
-      className={`p-3 sm:p-4 md:p-5 bg-white rounded-lg sm:rounded-xl shadow-md border ${
-        colorClasses[color]
+      className={`p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm border ${
+        theme.card
       } flex flex-col justify-between h-full ${
         clickable
-          ? "cursor-pointer hover:shadow-xl hover:border-[#d86d2a] transition-all"
+          ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
           : ""
       }`}
     >
       <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4">
-        <div className="text-xl sm:text-2xl md:text-3xl flex-shrink-0">{icon}</div>
+        <div
+          className={`w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${theme.icon}`}
+        >
+          <span className="text-base sm:text-lg md:text-xl">{icon}</span>
+        </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] sm:text-xs md:text-sm font-medium text-[#6b4423] truncate">
             {title}
@@ -69,6 +119,7 @@ const Dashboard = () => {
   const [recentCarts, setRecentCarts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [cartOrderStats, setCartOrderStats] = useState([]);
+  const [revenueFilter, setRevenueFilter] = useState("DAILY");
 
   const franchiseName = user?.name || "Franchise Dashboard";
 
@@ -362,6 +413,128 @@ const Dashboard = () => {
     })}`;
   };
 
+  const getOrderTotal = (order) => {
+    if (!order?.kotLines || !Array.isArray(order.kotLines)) return 0;
+    return order.kotLines.reduce(
+      (sum, kot) => sum + Number(kot?.totalAmount || 0),
+      0
+    );
+  };
+
+  const formatCompactCurrency = (value) => {
+    const amount = Number(value || 0);
+    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)}Cr`;
+    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
+    if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
+    return `₹${amount.toFixed(0)}`;
+  };
+
+  const revenueTrend = useMemo(() => {
+    const localDateKey = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(date.getDate()).padStart(2, "0")}`;
+    const monthKey = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+    const paidOrders = (orders || []).filter(
+      (order) => order?.status === "Paid" && order?.createdAt
+    );
+    const now = new Date();
+    let buckets = [];
+    const indexByKey = new Map();
+
+    if (revenueFilter === "DAILY") {
+      for (let i = 23; i >= 0; i--) {
+        const slotDate = new Date(now.getTime() - i * 60 * 60 * 1000);
+        slotDate.setMinutes(0, 0, 0);
+        const key = slotDate.getTime();
+        buckets.push({
+          key,
+          label: slotDate.toLocaleTimeString("en-IN", {
+            hour: "numeric",
+          }),
+          revenue: 0,
+          orders: 0,
+        });
+        indexByKey.set(key, buckets.length - 1);
+      }
+      paidOrders.forEach((order) => {
+        const orderDate = new Date(order.createdAt);
+        orderDate.setMinutes(0, 0, 0);
+        const bucketIndex = indexByKey.get(orderDate.getTime());
+        if (bucketIndex !== undefined) {
+          buckets[bucketIndex].revenue += getOrderTotal(order);
+          buckets[bucketIndex].orders += 1;
+        }
+      });
+    } else if (revenueFilter === "MONTHLY") {
+      for (let i = 29; i >= 0; i--) {
+        const slotDate = new Date(now);
+        slotDate.setHours(0, 0, 0, 0);
+        slotDate.setDate(now.getDate() - i);
+        const key = localDateKey(slotDate);
+        buckets.push({
+          key,
+          label: slotDate.toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+          }),
+          revenue: 0,
+          orders: 0,
+        });
+        indexByKey.set(key, buckets.length - 1);
+      }
+      paidOrders.forEach((order) => {
+        const orderDate = new Date(order.createdAt);
+        const bucketIndex = indexByKey.get(localDateKey(orderDate));
+        if (bucketIndex !== undefined) {
+          buckets[bucketIndex].revenue += getOrderTotal(order);
+          buckets[bucketIndex].orders += 1;
+        }
+      });
+    } else {
+      for (let i = 11; i >= 0; i--) {
+        const slotDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = monthKey(slotDate);
+        buckets.push({
+          key,
+          label: slotDate.toLocaleDateString("en-IN", {
+            month: "short",
+            year: "2-digit",
+          }),
+          revenue: 0,
+          orders: 0,
+        });
+        indexByKey.set(key, buckets.length - 1);
+      }
+      paidOrders.forEach((order) => {
+        const orderDate = new Date(order.createdAt);
+        const bucketIndex = indexByKey.get(monthKey(orderDate));
+        if (bucketIndex !== undefined) {
+          buckets[bucketIndex].revenue += getOrderTotal(order);
+          buckets[bucketIndex].orders += 1;
+        }
+      });
+    }
+
+    const totalRevenue = buckets.reduce((sum, bucket) => sum + bucket.revenue, 0);
+    const paidOrdersCount = buckets.reduce((sum, bucket) => sum + bucket.orders, 0);
+
+    return {
+      points: buckets.map((bucket) => ({
+        label: bucket.label,
+        revenue: Number(bucket.revenue.toFixed(2)),
+        orders: bucket.orders,
+      })),
+      totalRevenue,
+      paidOrdersCount,
+      averageOrderValue:
+        paidOrdersCount > 0 ? totalRevenue / paidOrdersCount : 0,
+    };
+  }, [orders, revenueFilter]);
+
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
@@ -378,7 +551,7 @@ const Dashboard = () => {
             className="p-2 sm:px-4 sm:py-2 bg-white border border-[#e2c1ac] text-[#8b5e3c] rounded-lg hover:bg-[#fef4ec] transition-colors flex items-center gap-2 shadow-sm"
             title="Refresh Data"
           >
-            <span className={`text-lg ${loading ? 'animate-spin' : ''}`}>↻</span>
+            <FaSyncAlt className={`text-sm sm:text-base ${loading ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline text-sm font-medium">Refresh</span>
           </button>
 
@@ -386,7 +559,7 @@ const Dashboard = () => {
           <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-[#4a2e1f] to-[#6b4423] rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 shadow-lg">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <span className="text-sm sm:text-base md:text-xl">🏢</span>
+                <FaBuilding className="text-sm sm:text-base md:text-lg text-white" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70 font-medium">
@@ -420,8 +593,13 @@ const Dashboard = () => {
                     "..."
                   ) : (
                     <>
-                      <span className="hidden sm:inline">⚡ Generate Code</span>
-                      <span className="sm:hidden">⚡</span>
+                      <span className="hidden sm:inline-flex items-center gap-1">
+                        <FaBolt className="text-[10px]" />
+                        Generate Code
+                      </span>
+                      <span className="sm:hidden">
+                        <FaBolt className="text-[10px]" />
+                      </span>
                     </>
                   )}
                 </button>
@@ -432,7 +610,7 @@ const Dashboard = () => {
                 disabled={!franchiseCode && !franchiseId}
                 title="Copy Franchise ID"
               >
-                {copied ? "✓" : "📋"}
+                {copied ? <FaCheck /> : <FaCopy />}
               </button>
             </div>
           </div>
@@ -444,7 +622,7 @@ const Dashboard = () => {
         <StatCard
           title="Total Carts"
           value={loading ? "..." : stats.totalCarts.toString()}
-          icon="🏪"
+          icon={<FaStore />}
           clickable
           onClick={() => navigate("/carts")}
           color="blue"
@@ -452,7 +630,7 @@ const Dashboard = () => {
         <StatCard
           title="Active Carts"
           value={loading ? "..." : stats.activeCarts.toString()}
-          icon="✅"
+          icon={<FaCheckCircle />}
           clickable
           onClick={() => navigate("/carts?filter=active")}
           color="green"
@@ -460,7 +638,7 @@ const Dashboard = () => {
         <StatCard
           title="Inactive Carts"
           value={loading ? "..." : stats.inactiveCarts.toString()}
-          icon="❌"
+          icon={<FaTimesCircle />}
           clickable
           onClick={() => navigate("/carts?filter=inactive")}
           color="red"
@@ -468,7 +646,7 @@ const Dashboard = () => {
         <StatCard
           title="Pending Approval"
           value={loading ? "..." : stats.pendingApproval.toString()}
-          icon="⏳"
+          icon={<FaClock />}
           clickable
           onClick={() => navigate("/carts?filter=pending")}
           color="yellow"
@@ -480,29 +658,138 @@ const Dashboard = () => {
         <StatCard
           title="Today's Revenue"
           value={loading ? "..." : formatCurrency(stats.todayRevenue)}
-          icon="💵"
+          icon={<FaMoneyBillWave />}
           subtitle="From paid orders today"
         />
         <StatCard
           title="Total Revenue"
           value={loading ? "..." : formatCurrency(stats.totalRevenue)}
-          icon="💰"
+          icon={<FaWallet />}
           subtitle="All time"
         />
         <StatCard
           title="Today's Orders"
           value={loading ? "..." : stats.todayOrders.toString()}
-          icon="📦"
+          icon={<FaBoxOpen />}
           clickable
           onClick={() => navigate("/orders")}
         />
         <StatCard
           title="Total Orders"
           value={loading ? "..." : stats.totalOrders.toString()}
-          icon="📋"
+          icon={<FaClipboardList />}
           clickable
           onClick={() => navigate("/orders")}
         />
+      </div>
+
+      {/* Revenue Trend */}
+      <div className="bg-white rounded-xl shadow-md border border-[#e2c1ac] p-4 md:p-6 mb-4 md:mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h2 className="text-base md:text-lg lg:text-xl font-bold text-[#4a2e1f]">
+              Revenue Trend
+            </h2>
+            <p className="text-xs md:text-sm text-[#6b4423]">
+              Paid revenue view by {revenueFilter.toLowerCase()} period
+            </p>
+          </div>
+          <div className="inline-flex items-center rounded-lg border border-[#e2c1ac] bg-[#fef4ec] p-1 self-start md:self-auto">
+            {REVENUE_FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setRevenueFilter(option.key)}
+                className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-md transition-colors ${
+                  revenueFilter === option.key
+                    ? "bg-[#d86d2a] text-white shadow-sm"
+                    : "text-[#8b5e3c] hover:bg-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 h-72">
+          {revenueTrend.points.some((point) => point.revenue > 0) ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={revenueTrend.points}
+                margin={{ top: 12, right: 16, left: 0, bottom: 8 }}
+              >
+                <defs>
+                  <linearGradient id="franchiseRevenueFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#d86d2a" stopOpacity={0.45} />
+                    <stop offset="95%" stopColor="#d86d2a" stopOpacity={0.04} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f2ddcf" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#8b5e3c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={16}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#8b5e3c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={formatCompactCurrency}
+                />
+                <Tooltip
+                  formatter={(value) => [formatCurrency(Number(value || 0)), "Revenue"]}
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: "8px",
+                    border: "1px solid #e2c1ac",
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#d86d2a"
+                  fill="url(#franchiseRevenueFill)"
+                  strokeWidth={2.5}
+                  activeDot={{ r: 4 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center rounded-lg border border-dashed border-[#e2c1ac] text-[#8b5e3c] text-sm">
+              No paid revenue data available for this period.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-[#e2c1ac] bg-[#fff8f3] p-3">
+            <p className="text-[11px] uppercase tracking-wide text-[#8b5e3c]">
+              Period Revenue
+            </p>
+            <p className="text-lg font-bold text-[#4a2e1f] mt-1">
+              {formatCurrency(revenueTrend.totalRevenue)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#e2c1ac] bg-[#fff8f3] p-3">
+            <p className="text-[11px] uppercase tracking-wide text-[#8b5e3c]">
+              Paid Orders
+            </p>
+            <p className="text-lg font-bold text-[#4a2e1f] mt-1">
+              {revenueTrend.paidOrdersCount.toLocaleString("en-IN")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#e2c1ac] bg-[#fff8f3] p-3">
+            <p className="text-[11px] uppercase tracking-wide text-[#8b5e3c]">
+              Avg. Order Value
+            </p>
+            <p className="text-lg font-bold text-[#4a2e1f] mt-1">
+              {formatCurrency(revenueTrend.averageOrderValue)}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Cart-wise Orders Breakdown */}
@@ -570,8 +857,8 @@ const Dashboard = () => {
             onClick={() => navigate("/carts")}
             className="text-[#d86d2a] hover:text-[#c75b1a] text-xs md:text-sm font-medium transition-colors"
           >
-            <span className="hidden sm:inline">View All →</span>
-            <span className="sm:hidden">All →</span>
+            <span className="hidden sm:inline">View All</span>
+            <span className="sm:hidden">All</span>
           </button>
         </div>
 
