@@ -1,86 +1,103 @@
 // Shared order domain logic for Terra Cart Admin
 // UNIFIED sequential flow for both DINE_IN and TAKEAWAY
-// Flow: Pending → Confirmed → Preparing → Ready → Completed → Paid
+// Flow: Preparing → Ready → Served → Paid
+// Legacy statuses are mapped forward to this simplified flow.
 
 export const ORDER_SEQUENCE = {
-	Pending: 'Confirmed',
+	Pending: 'Preparing',
 	Confirmed: 'Preparing',
+	Accept: 'Preparing',
+	Accepted: 'Preparing',
 	Preparing: 'Ready',
-	Ready: 'Completed',  // Unified: both dine-in and takeaway go to Completed
-	Completed: 'Paid',
-	Served: 'Paid',       // Legacy dine-in: treat as Completed
+	'Being Prepared': 'Ready',
+	BeingPrepared: 'Ready',
+	Ready: 'Served',
+	Served: 'Paid',
+	Completed: 'Paid',    // Legacy: keep for backward compatibility
 	Finalized: 'Paid',       // Legacy: keep for backward compat
 	Paid: null,         // End of flow
 	Cancelled: null,         // End of flow
 	Returned: null,         // End of flow
-	// Legacy takeaway statuses - map to unified flow
-	Accepted: 'Preparing',  // Accepted → Preparing (same as Confirmed → Preparing)
-	'Being Prepared': 'Ready',
-	BeingPrepared: 'Ready',
 	Exit: null,
 };
 
+const TERMINAL_STATUSES = new Set(['Paid', 'Cancelled', 'Returned', 'Exit']);
+
+const STATUS_ALIASES = {
+	NEW: 'Pending',
+	PENDING: 'Pending',
+	CONFIRMED: 'Confirmed',
+	ACCEPT: 'Accept',
+	ACCEPTED: 'Accepted',
+	PREPARING: 'Preparing',
+	'BEING PREPARED': 'Being Prepared',
+	BEINGPREPARED: 'BeingPrepared',
+	READY: 'Ready',
+	SERVED: 'Served',
+	COMPLETED: 'Completed',
+	FINALIZED: 'Finalized',
+	PAID: 'Paid',
+	CANCELLED: 'Cancelled',
+	CANCELED: 'Cancelled',
+	RETURNED: 'Returned',
+	EXIT: 'Exit',
+};
+
+const toCanonicalStatus = (status) => {
+	if (!status) return '';
+	const trimmed = String(status).trim();
+	if (!trimmed) return '';
+	return STATUS_ALIASES[trimmed.toUpperCase()] || trimmed;
+};
+
 // Get next sequential status (unified for both service types)
-export const getNextStatus = (currentStatus, serviceType = 'DINE_IN') => {
-	// For legacy dine-in orders that use "Served", allow transition to Paid
-	if (currentStatus === 'Served') {
-		return 'Paid';
-	}
-	return ORDER_SEQUENCE[currentStatus] || null;
+export const getNextStatus = (currentStatus) => {
+	const canonicalStatus = toCanonicalStatus(currentStatus);
+	if (!canonicalStatus) return null;
+
+	const nextStatus = ORDER_SEQUENCE[canonicalStatus];
+	if (typeof nextStatus === 'string') return nextStatus;
+	if (TERMINAL_STATUSES.has(canonicalStatus)) return null;
+
+	// Fallback for unknown/legacy statuses: let operator move order into flow.
+	return 'Preparing';
 };
 
 // Check if order can be cancelled (always available except for Paid/Cancelled)
 export const canCancel = (status) => {
-	return status !== 'Paid' && status !== 'Cancelled' && status !== 'Returned';
+	const canonicalStatus = toCanonicalStatus(status);
+	return !['Paid', 'Cancelled', 'Returned'].includes(canonicalStatus);
 };
 
-export const canReturn = (status) => status === 'Paid';
+export const canReturn = (status) => toCanonicalStatus(status) === 'Paid';
 
 // Full transitions for edit modal (backward compatibility)
 // Unified transitions for both DINE_IN and TAKEAWAY
 export const ORDER_TRANSITIONS = {
-	Pending: ['Confirmed', 'Cancelled'],
+	Pending: ['Preparing', 'Confirmed', 'Cancelled'],
 	Confirmed: ['Preparing', 'Cancelled'],
 	Preparing: ['Ready', 'Cancelled'],
-	Ready: ['Completed', 'Cancelled'],
-	Completed: ['Paid', 'Cancelled'],
-	Served: ['Paid', 'Cancelled'],     // Legacy
+	Ready: ['Served', 'Cancelled'],
+	Served: ['Paid', 'Cancelled'],
+	Completed: ['Paid', 'Cancelled'],  // Legacy
 	Finalized: ['Paid', 'Cancelled'],     // Legacy
 	Paid: ['Returned'],
 	Cancelled: [],
 	Returned: [],
 	// Legacy takeaway statuses
-	Accepted: ['Preparing', 'Being Prepared', 'Cancelled'],
-	'Being Prepared': ['Ready', 'Completed', 'Cancelled'],
-	BeingPrepared: ['Ready', 'Completed', 'Cancelled'],
+	Accept: ['Preparing', 'Cancelled'],
+	Accepted: ['Preparing', 'Cancelled'],
+	'Being Prepared': ['Ready', 'Cancelled'],
+	BeingPrepared: ['Ready', 'Cancelled'],
 };
 
-export const canAccept = (status) => status === 'Confirmed';
+export const canAccept = () => false;
 export const nextStatusOnAccept = 'Preparing';
 
 // Takeaway: first-come-first-serve accept when Pending
-export const canAcceptTakeaway = (status) => status === 'Pending';
+export const canAcceptTakeaway = () => false;
 
 // UNIFIED: getNextStatusTakeaway now uses the same logic as getNextStatus
 // This ensures Takeaway behaves identically to Dine-In
-export const getNextStatusTakeaway = (status) => {
-	// Map legacy takeaway statuses to unified flow
-	const legacyMap = {
-		Pending: null,            // Pending → use Accept button, not status change
-		Accepted: 'Preparing',    // For orders that used Accept flow
-		'Being Prepared': 'Ready',
-		BeingPrepared: 'Ready',
-		// Unified flow statuses
-		Confirmed: 'Preparing',
-		Preparing: 'Ready',
-		Ready: 'Completed',
-		Completed: 'Paid',
-		Served: 'Paid',
-		Finalized: 'Paid',
-		Paid: null,
-		Cancelled: null,
-		Returned: null,
-	};
-	return legacyMap[status] || null;
-};
+export const getNextStatusTakeaway = (status) => getNextStatus(status);
 

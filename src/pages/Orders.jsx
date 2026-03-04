@@ -30,6 +30,14 @@ const getApiBaseUrl = () => {
 };
 
 const nodeApi = getApiBaseUrl().replace(/\/$/, "");
+const ORDER_SUMMARY_TILE_STATUSES = [
+  "Preparing",
+  "Ready",
+  "Paid",
+  "Served",
+  "Cancelled",
+  "Returned",
+];
 
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
@@ -48,6 +56,44 @@ const formatMoney = (value) => {
   const num = Number(value);
   if (Number.isNaN(num)) return "0.00";
   return num.toFixed(2);
+};
+const normalizeLegacyOrderStatus = (status) => {
+  switch (status) {
+    case "Pending":
+    case "Confirmed":
+    case "Accept":
+    case "Accepted":
+    case "Being Prepared":
+    case "BeingPrepared":
+    case "New":
+    case "NEW":
+      return "Preparing";
+    case "Completed":
+    case "Finalized":
+    case "Exit":
+      return "Served";
+    default:
+      return status;
+  }
+};
+
+const resolveOrderPaymentType = (order) => {
+  const explicitMethod = String(
+    order?.paymentMethod || order?.paymentMode || order?.payment?.method || "",
+  )
+    .trim()
+    .toUpperCase();
+
+  if (explicitMethod === "ONLINE" || explicitMethod === "CARD") return "Online";
+  if (explicitMethod === "CASH" || explicitMethod === "COD") return "COD";
+
+  if (Boolean(order?.paymentRequiredBeforeProceeding)) return "Online";
+
+  const officeMode = String(order?.officePaymentMode || "").trim().toUpperCase();
+  if (officeMode === "ONLINE" || officeMode === "BOTH") return "Online";
+  if (officeMode === "COD") return "COD";
+
+  return "COD";
 };
 
 const escapeHtml = (value) =>
@@ -1026,7 +1072,8 @@ const Orders = () => {
   }, [filterCafeId]);
 
   const getStatusClass = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyOrderStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
         return "bg-green-100 text-green-800 border-green-200";
       case "Confirmed":
@@ -1053,7 +1100,8 @@ const Orders = () => {
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyOrderStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
         return "✅";
       case "Confirmed":
@@ -1080,7 +1128,8 @@ const Orders = () => {
   };
 
   const getSummaryTileTheme = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyOrderStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
         return {
           card: "bg-emerald-50/70 border-emerald-200/80",
@@ -1275,6 +1324,11 @@ const Orders = () => {
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
+    const paymentType = resolveOrderPaymentType(order);
+    const paymentTypeBadgeClass =
+      paymentType === "Online"
+        ? "bg-blue-50 text-blue-700 border-blue-200"
+        : "bg-amber-50 text-amber-700 border-amber-200";
 
     return (
       <React.Fragment key={order._id}>
@@ -1457,17 +1511,24 @@ const Orders = () => {
               </div>
             )}
           </td>
-          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 align-top">
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold border whitespace-nowrap ${paymentTypeBadgeClass}`}
+            >
+              {paymentType}
+            </span>
+          </td>
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell align-top">
             <div className="flex flex-col gap-0.5">
-              <span className="font-medium text-gray-900 text-xs sm:text-sm">
+              <span className="font-medium text-gray-900 text-xs sm:text-sm whitespace-nowrap">
                 {formattedDate}
               </span>
-              <span className="text-[10px] sm:text-xs text-gray-500">
+              <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">
                 {formattedTime}
               </span>
             </div>
           </td>
-          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 align-top">
             <div className="flex items-center gap-1 sm:gap-2">
               {!isTakeawayOrder && (
                 <img
@@ -1495,18 +1556,18 @@ const Orders = () => {
               </div>
             )}
           </td>
-          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 align-top">
             <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
-              <span
-                className={`px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 inline-flex items-center gap-0.5 sm:gap-1 md:gap-2 text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium rounded-full border ${getStatusClass(
-                  order.status,
-                )}`}
-              >
-                <span className="text-[10px] sm:text-xs md:text-sm">
-                  {getStatusIcon(order.status)}
+              {normalizeLegacyOrderStatus(order.status) === "Paid" && (
+                <span
+                  className={`inline-flex w-fit items-center gap-1 px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border whitespace-nowrap ${getStatusClass(
+                    order.status,
+                  )}`}
+                >
+                  <span>{getStatusIcon(order.status)}</span>
+                  <span>Paid</span>
                 </span>
-                <span className="truncate">{order.status}</span>
-              </span>
+              )}
               {/* Sequential flow - show only next step + cancel option */}
               <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5 sm:mt-1">
                 {(() => {
@@ -1537,7 +1598,7 @@ const Orders = () => {
                         title="Accept Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                       >
-                        ✅ <span className="hidden sm:inline">Accept</span>
+                        ✅ <span className="hidden 2xl:inline">Accept</span>
                       </button>,
                     );
                   } else if (canShowDirectAccept) {
@@ -1549,7 +1610,7 @@ const Orders = () => {
                         title="Accept Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-green-200 text-green-700 hover:bg-green-50 bg-green-50 whitespace-nowrap"
                       >
-                        ✅ <span className="hidden sm:inline">Accept</span>
+                        ✅ <span className="hidden 2xl:inline">Accept</span>
                       </button>,
                     );
                   }
@@ -1583,7 +1644,7 @@ const Orders = () => {
                         title="Return Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50 whitespace-nowrap"
                       >
-                        ↩️ <span className="hidden sm:inline">Return</span>
+                        ↩️ <span className="hidden 2xl:inline">Return</span>
                       </button>,
                     );
                   } else if (canCancel(order.status)) {
@@ -1595,7 +1656,7 @@ const Orders = () => {
                         title="Cancel Order"
                         className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 whitespace-nowrap"
                       >
-                        ❌ <span className="hidden sm:inline">Cancel</span>
+                        ❌ <span className="hidden 2xl:inline">Cancel</span>
                       </button>,
                     );
                   }
@@ -1605,7 +1666,7 @@ const Orders = () => {
               </div>
             </div>
           </td>
-          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
+          <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm align-top">
             <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
               {/* Modify Order button - only show for unpaid orders and NOT for franchise_admin */}
               {user?.role !== "franchise_admin" &&
@@ -1617,7 +1678,7 @@ const Orders = () => {
                     className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium whitespace-nowrap"
                     title="Add more items to this order"
                   >
-                    ➕ <span className="hidden sm:inline">Modify</span>
+                    ➕ <span className="hidden 2xl:inline">Modify</span>
                   </button>
                 )}
               {/* Edit Order button - only show for cart admin (NOT for franchise_admin) */}
@@ -1627,7 +1688,7 @@ const Orders = () => {
                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-indigo-600 hover:text-indigo-900 border border-indigo-200 rounded-md hover:bg-indigo-50 whitespace-nowrap"
                   title="Edit order"
                 >
-                  ✏️ <span className="hidden sm:inline">Edit</span>
+                  ✏️ <span className="hidden 2xl:inline">Edit</span>
                 </button>
               )}
               {user?.role !== "admin" && user?.role !== "franchise_admin" && (
@@ -1637,7 +1698,7 @@ const Orders = () => {
                   className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-red-600 hover:text-red-900 border border-red-200 rounded-md hover:bg-red-50 whitespace-nowrap"
                   title="Delete order"
                 >
-                  🗑️ <span className="hidden sm:inline">Delete</span>
+                  🗑️ <span className="hidden 2xl:inline">Delete</span>
                 </button>
               )}
               <button
@@ -1645,7 +1706,7 @@ const Orders = () => {
                 className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm rounded-md border text-gray-700 border-gray-200 hover:bg-gray-100 whitespace-nowrap"
                 title="Print invoice"
               >
-                🖨️ <span className="hidden sm:inline">Print</span>
+                🖨️ <span className="hidden 2xl:inline">Print</span>
               </button>
             </div>
           </td>
@@ -1948,7 +2009,7 @@ const Orders = () => {
             )}`}
           >
             <span>{getStatusIcon(order.status)}</span>
-            <span>{order.status}</span>
+            <span>{normalizeLegacyOrderStatus(order.status)}</span>
           </span>
         </div>
 
@@ -3041,7 +3102,9 @@ const Orders = () => {
       return matches.filter(
         (o) => !["Cancelled", "Returned"].includes(o.status || "")
       );
-    return matches.filter((o) => o.status === filterStatus);
+    return matches.filter(
+      (o) => normalizeLegacyOrderStatus(o.status) === filterStatus,
+    );
   })();
 
   const handleDownloadOrdersReport = () => {
@@ -3135,7 +3198,9 @@ const Orders = () => {
       return matches.filter(
         (o) => !["Cancelled", "Returned"].includes(o.status || "")
       );
-    return matches.filter((o) => o.status === filterStatus);
+    return matches.filter(
+      (o) => normalizeLegacyOrderStatus(o.status) === filterStatus,
+    );
   };
 
   const toggleCartExpand = (cartId) => {
@@ -3419,6 +3484,17 @@ const Orders = () => {
     () => officeTablesForService.find((office) => office._id === selectedOfficeId) || null,
     [officeTablesForService, selectedOfficeId],
   );
+  const summaryStatusCounts = useMemo(
+    () =>
+      orders.reduce((acc, order) => {
+        const status = normalizeLegacyOrderStatus(order?.status);
+        if (status) {
+          acc[status] = (acc[status] || 0) + 1;
+        }
+        return acc;
+      }, {}),
+    [orders],
+  );
 
   const resetDraft = useCallback(() => {
     setDraftSelections({});
@@ -3511,68 +3587,8 @@ const Orders = () => {
 {/* Status Summary Cards */}
 <div className="mb-6">
   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-2.5">
-    {/* All Orders tile */}
-    <button
-      type="button"
-      onClick={() => setFilterStatus("all")}
-      className={`rounded-xl border px-3 py-2.5 sm:px-3.5 sm:py-3 text-left transition-all duration-200 min-h-[82px] sm:min-h-[92px] ${
-        filterStatus === "all"
-          ? "ring-1 ring-[#e0662f]/45 border-[#e8c3ab] shadow-sm bg-orange-50/70"
-          : "border-[#ead7ca] bg-white shadow-[0_1px_0_rgba(15,23,42,0.03)] hover:shadow-sm"
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[#3f291b]">
-          {orders.length}
-        </div>
-        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm bg-orange-100 text-orange-700 ring-1 ring-orange-200">
-          ALL
-        </div>
-      </div>
-      <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
-        All Orders
-      </div>
-    </button>
-
-    {/* Active Orders tile (excludes Cancelled/Returned) - default view for cart admin */}
-    {(() => {
-      const activeCount = orders.filter(
-        (o) => !["Cancelled", "Returned"].includes(o.status || "")
-      ).length;
-      const theme = getSummaryTileTheme("active");
-      return (
-        <button
-          type="button"
-          onClick={() => setFilterStatus("active")}
-          className={`rounded-xl border px-3 py-2.5 sm:px-3.5 sm:py-3 text-left transition-all duration-200 min-h-[82px] sm:min-h-[92px] ${
-            filterStatus === "active"
-              ? "ring-1 ring-[#e0662f]/45 border-[#e8c3ab] shadow-sm"
-              : "shadow-[0_1px_0_rgba(15,23,42,0.03)] hover:shadow-sm"
-          } ${theme.card}`}
-        >
-          <div className="flex items-start justify-between">
-            <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[#3f291b]">
-              {activeCount}
-            </div>
-            <div
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs sm:text-sm ${theme.icon}`}
-            >
-              {getStatusIcon("active")}
-            </div>
-          </div>
-          <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
-            Active
-          </div>
-        </button>
-      );
-    })()}
-
-    {Object.entries(
-      orders.reduce((acc, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1;
-        return acc;
-      }, {}),
-    ).map(([status, count]) => {
+    {ORDER_SUMMARY_TILE_STATUSES.map((status) => {
+      const count = summaryStatusCounts[status] || 0;
       const theme = getSummaryTileTheme(status);
       return (
         <button
@@ -3661,11 +3677,22 @@ const Orders = () => {
                           {filteredCartOrders.map((order) => renderOrderCard(order))}
                         </div>
                         <div className="hidden lg:block overflow-x-auto">
-                          <table className="min-w-full text-xs sm:text-sm">
+                          <table className="w-full table-fixed text-xs sm:text-sm">
+                            <colgroup>
+                              <col className="w-[30%]" />
+                              <col className="w-[10%]" />
+                              <col className="w-[15%]" />
+                              <col className="w-[20%]" />
+                              <col className="w-[15%]" />
+                              <col className="w-[10%]" />
+                            </colgroup>
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                                   Order Details
+                                </th>
+                                <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                                  Payment Type
                                 </th>
                                 <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                                   Date & Time
@@ -3712,11 +3739,22 @@ const Orders = () => {
               )}
             </div>
             <div className="hidden lg:block overflow-x-auto">
-              <table className="min-w-full text-xs sm:text-sm">
+              <table className="w-full table-fixed text-xs sm:text-sm">
+                <colgroup>
+                  <col className="w-[30%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
                       Order Details
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                      Payment Type
                     </th>
                     <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                       Date & Time
@@ -3736,7 +3774,7 @@ const Orders = () => {
                   {filteredOrders.length === 0 && (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="6"
                         className="px-3 sm:px-4 md:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm"
                       >
                         No orders found.
@@ -4312,11 +4350,12 @@ const Orders = () => {
                         <select
                           id="status"
                           name="status"
-                          defaultValue={currentOrder?.status || "Pending"}
+                          defaultValue={
+                            normalizeLegacyOrderStatus(currentOrder?.status) ||
+                            "Preparing"
+                          }
                           className="shadow-sm border border-gray-300 rounded-lg w-full py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         >
-                          <option value="Pending">⏳ Pending</option>
-                          <option value="Confirmed">👨‍🍳 Confirmed</option>
                           <option value="Preparing">🔥 Preparing</option>
                           <option value="Ready">🍽️ Ready</option>
                           <option value="Served">🤝 Served</option>

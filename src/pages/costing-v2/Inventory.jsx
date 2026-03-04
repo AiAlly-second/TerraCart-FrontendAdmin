@@ -17,6 +17,74 @@ import {
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { formatUnit, convertUnit } from "../../utils/unitConverter";
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_MINUTE_MS = 60 * 1000;
+
+const parseDateSafely = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toFiniteNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getShelfLifeInfo = (ingredient) => {
+  const shelfDays = toFiniteNumberOrNull(ingredient.shelfTimeDays);
+  const explicitExpiryDate = parseDateSafely(
+    ingredient.expiryDate || ingredient.expiryAt,
+  );
+  const startDate = parseDateSafely(ingredient.lastReceivedAt);
+
+  let expiryDate = explicitExpiryDate;
+  if (!expiryDate && shelfDays !== null && startDate) {
+    expiryDate = new Date(startDate);
+    expiryDate.setDate(expiryDate.getDate() + shelfDays);
+  }
+
+  if (!expiryDate) {
+    if (shelfDays !== null) {
+      return {
+        mode: "shelf_only",
+        shelfDays,
+      };
+    }
+    return { mode: "none", shelfDays: null };
+  }
+
+  const now = new Date();
+  const remainingMs = expiryDate.getTime() - now.getTime();
+  const remainingMinutes = Math.ceil(remainingMs / ONE_MINUTE_MS);
+  const daysRemaining = Math.ceil(remainingMs / ONE_DAY_MS);
+
+  let remainingText = "Expired";
+  if (remainingMs > 0 && remainingMinutes < 60) {
+    remainingText = `${remainingMinutes} min left`;
+  } else if (remainingMs > 0 && remainingMs < ONE_DAY_MS) {
+    const hours = Math.floor(remainingMinutes / 60);
+    const mins = remainingMinutes % 60;
+    remainingText =
+      mins === 0
+        ? `${hours} hr${hours !== 1 ? "s" : ""} left`
+        : `${hours} hr${hours !== 1 ? "s" : ""} ${mins} min left`;
+  } else if (remainingMs > 0) {
+    remainingText = `${daysRemaining} day${daysRemaining !== 1 ? "s" : ""} left`;
+  }
+
+  return {
+    mode: "countdown",
+    shelfDays,
+    expiryDate,
+    remainingMs,
+    daysRemaining,
+    remainingText,
+    status: remainingMs <= 0 ? "expired" : daysRemaining <= 3 ? "near" : "fresh",
+  };
+};
+
 const Inventory = () => {
   const [ingredients, setIngredients] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -642,87 +710,46 @@ const Inventory = () => {
                                 </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-700">
                                   {(() => {
-                                    const shelfDays =
-                                      ing.shelfTimeDays != null &&
-                                      ing.shelfTimeDays !== ""
-                                        ? Number(ing.shelfTimeDays)
-                                        : null;
-                                    const startDate = ing.lastReceivedAt
-                                      ? new Date(ing.lastReceivedAt)
-                                      : null;
-                                    if (
-                                      shelfDays != null &&
-                                      startDate &&
-                                      !isNaN(startDate.getTime())
-                                    ) {
-                                      const expiry = new Date(startDate);
-                                      expiry.setDate(
-                                        expiry.getDate() + shelfDays,
-                                      );
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      expiry.setHours(0, 0, 0, 0);
-                                      const msPerDay = 24 * 60 * 60 * 1000;
-                                      const daysRemaining = Math.floor(
-                                        (expiry - today) / msPerDay,
-                                      );
-                                      if (daysRemaining < 0) {
-                                        return (
-                                          <span className="block">
-                                            <span className="text-red-600 font-medium">
-                                              Expired
-                                            </span>
-                                            <span className="block text-xs text-gray-500 mt-0.5">
-                                              Shelf: {shelfDays} day
-                                              {shelfDays !== 1 ? "s" : ""}
-                                            </span>
-                                          </span>
-                                        );
-                                      }
-                                      if (daysRemaining === 0) {
-                                        return (
-                                          <span className="block">
-                                            <span className="text-amber-600 font-medium">
-                                              Expires today
-                                            </span>
-                                            <span className="block text-xs text-gray-500 mt-0.5">
-                                              Shelf: {shelfDays} day
-                                              {shelfDays !== 1 ? "s" : ""}
-                                            </span>
-                                          </span>
-                                        );
-                                      }
+                                    const shelfInfo = getShelfLifeInfo(ing);
+                                    if (shelfInfo.mode === "countdown") {
+                                      const statusClass =
+                                        shelfInfo.status === "expired"
+                                          ? "text-red-600"
+                                          : shelfInfo.status === "near"
+                                          ? "text-amber-600"
+                                          : "text-green-700";
                                       return (
                                         <span className="block">
-                                          <span className="text-green-700 font-medium">
-                                            {daysRemaining} day
-                                            {daysRemaining !== 1 ? "s" : ""}{" "}
-                                            left
+                                          <span className={`${statusClass} font-medium`}>
+                                            {shelfInfo.remainingText}
                                           </span>
                                           <span className="block text-xs text-gray-500 mt-0.5">
-                                            Expires{" "}
-                                            {expiry.toLocaleDateString()} ·
-                                            Shelf: {shelfDays} day
-                                            {shelfDays !== 1 ? "s" : ""}
+                                            Expires {shelfInfo.expiryDate.toLocaleString()}
+                                            {shelfInfo.shelfDays != null ? (
+                                              <>
+                                                {" "}- Shelf: {shelfInfo.shelfDays} day
+                                                {shelfInfo.shelfDays !== 1 ? "s" : ""}
+                                              </>
+                                            ) : null}
                                           </span>
                                         </span>
                                       );
                                     }
-                                    if (shelfDays != null) {
+                                    if (shelfInfo.mode === "shelf_only") {
                                       return (
                                         <span className="block">
                                           <span>
-                                            Shelf: {shelfDays} day
-                                            {shelfDays !== 1 ? "s" : ""}
+                                            Shelf: {shelfInfo.shelfDays} day
+                                            {shelfInfo.shelfDays !== 1 ? "s" : ""}
                                           </span>
                                           <span className="block text-xs text-gray-500 mt-0.5">
-                                            — Set start date (return stock) to
-                                            see expiry
+                                            - Set start date (receive/return stock) to
+                                            see countdown
                                           </span>
                                         </span>
                                       );
                                     }
-                                    return "—";
+                                    return "-";
                                   })()}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">

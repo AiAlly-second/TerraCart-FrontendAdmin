@@ -44,6 +44,25 @@ const formatMoney = (value) => {
   if (Number.isNaN(num)) return "0.00";
   return num.toFixed(2);
 };
+const normalizeLegacyTakeawayStatus = (status) => {
+  switch (status) {
+    case "Pending":
+    case "Confirmed":
+    case "Accept":
+    case "Accepted":
+    case "Being Prepared":
+    case "BeingPrepared":
+    case "New":
+    case "NEW":
+      return "Preparing";
+    case "Completed":
+    case "Finalized":
+    case "Exit":
+      return "Served";
+    default:
+      return status;
+  }
+};
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -1616,7 +1635,8 @@ const TakeawayOrders = () => {
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyTakeawayStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
         return "✅";
       case "Confirmed":
@@ -1636,8 +1656,6 @@ const TakeawayOrders = () => {
       case "Being Prepared":
       case "BeingPrepared":
         return "🔥";
-      case "Completed":
-        return "📦";
       case "Cancelled":
         return "❌";
       case "Returned":
@@ -1648,9 +1666,9 @@ const TakeawayOrders = () => {
   };
 
   const getTakeawayTileTheme = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyTakeawayStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
-      case "Completed":
         return {
           card: "bg-emerald-50/70 border-emerald-200/80",
           icon: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
@@ -1714,36 +1732,30 @@ const TakeawayOrders = () => {
     return orders.reduce(
       (acc, order) => {
         if (!order) return acc;
+        const status = normalizeLegacyTakeawayStatus(order.status);
         acc.total += 1;
-        acc.byStatus[order.status] = (acc.byStatus[order.status] || 0) + 1;
+        acc.byStatus[status] = (acc.byStatus[status] || 0) + 1;
         return acc;
       },
       { total: 0, byStatus: {} },
     );
   }, [orders]);
 
-  // UNIFIED status order for filter tabs (same as dine-in)
-  // Flow: Pending → Confirmed → Preparing → Ready → Completed → Paid
+  // Simplified status order for filter tabs
+  // Flow: Preparing → Ready → Served → Paid
   const TAKEAWAY_STATUS_ORDER = [
-    "Pending",
-    "Confirmed",
     "Preparing",
     "Ready",
-    "Completed",
+    "Served",
     "Paid",
     "Cancelled",
     "Returned",
-    // Legacy statuses (backward compatibility)
-    "Accepted",
-    "Being Prepared",
-    "Served",
-    "Finalized",
   ];
 
   const statusBadgeClass = (status) => {
-    switch (status) {
+    const normalizedStatus = normalizeLegacyTakeawayStatus(status);
+    switch (normalizedStatus) {
       case "Paid":
-      case "Completed":
         return "border-green-200 text-green-700 bg-green-50";
       case "Confirmed":
       case "Accepted":
@@ -1803,7 +1815,9 @@ const TakeawayOrders = () => {
           order.status === "Being Prepared" || order.status === "BeingPrepared",
       );
     }
-    return matches.filter((order) => order.status === filterStatus);
+    return matches.filter(
+      (order) => normalizeLegacyTakeawayStatus(order.status) === filterStatus,
+    );
   }, [
     orders,
     searchOrderId,
@@ -2335,7 +2349,9 @@ const TakeawayOrders = () => {
                           <span className="text-[10px] sm:text-xs md:text-sm">
                             {getStatusIcon(order.status)}
                           </span>
-                          <span className="truncate">{order.status}</span>
+                          <span className="truncate">
+                            {normalizeLegacyTakeawayStatus(order.status)}
+                          </span>
                         </span>
                         {/*
                         {order.acceptedBy?.employeeName && (
@@ -2893,20 +2909,15 @@ const TakeawayOrders = () => {
                       </label>
                       <select
                         name="status"
-                        defaultValue={currentOrder?.status || "Pending"}
+                        defaultValue={
+                          normalizeLegacyTakeawayStatus(currentOrder?.status) ||
+                          "Preparing"
+                        }
                         className="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
-                        <option value="Pending">⏳ Pending</option>
-                        <option value="Accepted">✅ Accepted</option>
-                        <option value="Being Prepared">
-                          🔥 Being Prepared
-                        </option>
-                        <option value="Completed">📦 Completed</option>
-                        <option value="Confirmed">👨‍🍳 Confirmed</option>
                         <option value="Preparing">🔥 Preparing</option>
                         <option value="Ready">🍽️ Ready</option>
                         <option value="Served">🍴 Served</option>
-                        <option value="Finalized">📋 Finalized</option>
                         <option value="Paid">✅ Paid</option>
                         <option value="Cancelled">❌ Cancelled</option>
                         <option value="Returned">↩️ Returned</option>
@@ -3071,7 +3082,9 @@ const TakeawayOrders = () => {
                       ) ? (
                         <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                           You cannot add items to this order because it is{" "}
-                          <strong>{currentOrder?.status}</strong>. Items can
+                          <strong>
+                            {normalizeLegacyTakeawayStatus(currentOrder?.status)}
+                          </strong>. Items can
                           only be added to unpaid takeaway orders.
                         </div>
                       ) : (
