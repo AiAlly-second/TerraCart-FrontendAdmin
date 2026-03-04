@@ -13,7 +13,7 @@ export const ORDER_SEQUENCE = {
 	BeingPrepared: 'Ready',
 	Ready: 'Served',
 	Served: 'Paid',
-	Completed: 'Paid',    // Legacy: keep for backward compatibility
+	Completed: 'Paid',    // Legacy alias for Served
 	Finalized: 'Paid',       // Legacy: keep for backward compat
 	Paid: null,         // End of flow
 	Cancelled: null,         // End of flow
@@ -34,7 +34,7 @@ const STATUS_ALIASES = {
 	BEINGPREPARED: 'BeingPrepared',
 	READY: 'Ready',
 	SERVED: 'Served',
-	COMPLETED: 'Completed',
+	COMPLETED: 'Served',
 	FINALIZED: 'Finalized',
 	PAID: 'Paid',
 	CANCELLED: 'Cancelled',
@@ -79,7 +79,7 @@ export const ORDER_TRANSITIONS = {
 	Preparing: ['Ready', 'Cancelled'],
 	Ready: ['Served', 'Cancelled'],
 	Served: ['Paid', 'Cancelled'],
-	Completed: ['Paid', 'Cancelled'],  // Legacy
+	Completed: ['Paid', 'Cancelled'],  // Legacy alias for Served
 	Finalized: ['Paid', 'Cancelled'],     // Legacy
 	Paid: ['Returned'],
 	Cancelled: [],

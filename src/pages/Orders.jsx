@@ -3325,7 +3325,41 @@ const Orders = () => {
         tablesData = [];
       }
 
-      const sortedTables = tablesData.sort((a, b) => {
+      const filteredTables = tablesData
+        .filter((table) => table && typeof table === "object")
+        // New QR system guard: ignore legacy records without slug.
+        .filter((table) => String(table.qrSlug || "").trim().length > 0)
+        // When Orders is scoped to one cafe, tables must be scoped too.
+        .filter((table) => {
+          if (!filterCafeId) return true;
+          return (
+            String(resolveTableCartId(table) || "") ===
+            String(filterCafeId || "")
+          );
+        });
+
+      // Deduplicate cart+tableNo and prefer latest record.
+      const dedupedByKey = new Map();
+      filteredTables.forEach((table) => {
+        const cartId = String(resolveTableCartId(table) || "unknown");
+        const key = `${cartId}-${table.number ?? table.tableNumber ?? "0"}`;
+        const existing = dedupedByKey.get(key);
+        if (!existing) {
+          dedupedByKey.set(key, table);
+          return;
+        }
+        const currentTs = new Date(
+          table.updatedAt || table.createdAt || 0,
+        ).getTime();
+        const existingTs = new Date(
+          existing.updatedAt || existing.createdAt || 0,
+        ).getTime();
+        if (currentTs >= existingTs) {
+          dedupedByKey.set(key, table);
+        }
+      });
+
+      const sortedTables = Array.from(dedupedByKey.values()).sort((a, b) => {
         const numA = Number(a.number);
         const numB = Number(b.number);
         if (Number.isFinite(numA) && Number.isFinite(numB)) {
@@ -3349,7 +3383,7 @@ const Orders = () => {
     } finally {
       setTableLoading(false);
     }
-  }, []);
+  }, [filterCafeId]);
 
   useEffect(() => {
     loadMenu();
