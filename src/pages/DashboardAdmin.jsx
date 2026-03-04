@@ -356,18 +356,62 @@ const StaffStatus = ({ staff, activeOrders }) => {
 
 
 
-/** Compute days remaining until expiry from lastReceivedAt + shelfTimeDays. Returns null if no start date. */
-function getShelfDaysRemaining(ing) {
-  const shelfDays = ing.shelfTimeDays != null && ing.shelfTimeDays !== "" ? Number(ing.shelfTimeDays) : null;
-  const startDate = ing.lastReceivedAt ? new Date(ing.lastReceivedAt) : null;
-  if (shelfDays == null || !startDate || isNaN(startDate.getTime())) return null;
-  const expiry = new Date(startDate);
-  expiry.setDate(expiry.getDate() + shelfDays);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  expiry.setHours(0, 0, 0, 0);
-  const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor((expiry - today) / msPerDay);
+const DASH_ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DASH_ONE_MINUTE_MS = 60 * 1000;
+
+const parseDateSafe = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toFiniteNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/** Compute live shelf-life details from explicit expiryDate or lastReceivedAt + shelfTimeDays. */
+function getShelfLifeAlertData(ing) {
+  const shelfDays = toFiniteNumberOrNull(ing.shelfTimeDays);
+  const startDate = parseDateSafe(ing.lastReceivedAt);
+  const explicitExpiryDate = parseDateSafe(ing.expiryDate || ing.expiryAt);
+
+  let expiryDate = explicitExpiryDate;
+  if (!expiryDate && shelfDays !== null && startDate) {
+    expiryDate = new Date(startDate);
+    expiryDate.setDate(expiryDate.getDate() + shelfDays);
+  }
+
+  if (!expiryDate) return null;
+
+  const now = new Date();
+  const remainingMs = expiryDate.getTime() - now.getTime();
+  const remainingMinutes = Math.ceil(remainingMs / DASH_ONE_MINUTE_MS);
+  const daysRemaining = Math.ceil(remainingMs / DASH_ONE_DAY_MS);
+
+  let remainingText = "Expired";
+  if (remainingMs > 0 && remainingMinutes < 60) {
+    remainingText = `${remainingMinutes} min left`;
+  } else if (remainingMs > 0 && remainingMs < DASH_ONE_DAY_MS) {
+    const hours = Math.floor(remainingMinutes / 60);
+    const mins = remainingMinutes % 60;
+    remainingText =
+      mins === 0
+        ? `${hours} hr${hours !== 1 ? "s" : ""} left`
+        : `${hours} hr${hours !== 1 ? "s" : ""} ${mins} min left`;
+  } else if (remainingMs > 0) {
+    remainingText = `${daysRemaining} day${daysRemaining !== 1 ? "s" : ""} left`;
+  }
+
+  return {
+    shelfDays,
+    expiryDate,
+    remainingMs,
+    daysRemaining,
+    remainingText,
+    status: remainingMs <= 0 ? "expired" : daysRemaining <= 3 ? "near" : "fresh",
+  };
 }
 
 const normalizeAlertId = (id) => {
@@ -644,18 +688,20 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
   const shelfAlerts = useMemo(() => {
     const list = [];
     (ingredients || []).forEach((ing) => {
-      const daysRemaining = getShelfDaysRemaining(ing);
-      if (daysRemaining === null) return; // no start date
-      if (daysRemaining < 0 || daysRemaining <= 3) {
+      const shelfLife = getShelfLifeAlertData(ing);
+      if (!shelfLife) return;
+      if (shelfLife.status === "expired" || shelfLife.daysRemaining <= 3) {
         const shelfId = `shelf_${ing._id}`;
         list.push({
           id: shelfId,
           dismissKeys: [shelfId],
-          type: daysRemaining < 0 ? 'shelf_expired' : 'shelf_near_expiry',
+          type: shelfLife.status === "expired" ? "shelf_expired" : "shelf_near_expiry",
           ingredientId: ing._id,
           name: ing.name,
-          daysRemaining,
-          shelfTimeDays: ing.shelfTimeDays,
+          daysRemaining: shelfLife.daysRemaining,
+          remainingText: shelfLife.remainingText,
+          shelfTimeDays: shelfLife.shelfDays ?? ing.shelfTimeDays,
+          expiryAt: shelfLife.expiryDate.toISOString(),
           createdAt: ing.lastReceivedAt,
         });
       }
@@ -900,7 +946,8 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                     )}
                     {(isShelfExpired || isShelfNear) && (
                       <p className="text-xs text-gray-600 ml-7">
-                        {isShelfExpired ? 'Shelf life passed.' : `${alert.daysRemaining} day(s) left.`} Shelf: {alert.shelfTimeDays} day(s).
+                        {isShelfExpired ? "Shelf life passed." : alert.remainingText || `${alert.daysRemaining} day(s) left.`}
+                        {alert.shelfTimeDays != null ? ` Shelf: ${alert.shelfTimeDays} day(s).` : ""}
                       </p>
                     )}
                     <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2 ml-7">
@@ -908,7 +955,7 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
                       <span>
                         {isRequest && new Date(alert.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         {(isKitchen || isOverstay) && `${alert.minutesElapsed} mins ago`}
-                        {(isShelfExpired || isShelfNear) && (alert.createdAt ? `Received ${new Date(alert.createdAt).toLocaleDateString()}` : '')}
+                        {(isShelfExpired || isShelfNear) && (alert.expiryAt ? `Expires ${new Date(alert.expiryAt).toLocaleString()}` : (alert.createdAt ? `Received ${new Date(alert.createdAt).toLocaleDateString()}` : ''))}
                       </span>
                     </div>
                   </div>
