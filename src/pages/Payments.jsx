@@ -325,6 +325,9 @@ const Payments = () => {
                       Order
                     </th>
                     <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs hidden sm:table-cell">
+                      Token
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs hidden sm:table-cell">
                       Date & Time
                     </th>
                     <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-600 text-[10px] sm:text-xs">
@@ -354,6 +357,11 @@ const Payments = () => {
                         <p className="font-semibold text-slate-800 text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{payment.orderId}</p>
                         <p className="text-[10px] sm:text-xs text-slate-500 sm:hidden">
                           {new Date(payment.createdAt).toLocaleDateString()}
+                        </p>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">
+                        <p className="text-xs sm:text-sm text-slate-700 font-medium">
+                          {payment.tokenNumber ?? payment.takeawayToken ?? "-"}
                         </p>
                       </td>
                       <td className="px-2 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">
@@ -426,6 +434,17 @@ const Payments = () => {
                 <div className="space-y-1">
                   <p className="text-sm text-slate-500">Order</p>
                   <p className="font-semibold text-slate-800">{selectedPayment.orderId}</p>
+                  {(selectedPayment.tokenNumber ?? selectedPayment.takeawayToken) !==
+                    undefined &&
+                    (selectedPayment.tokenNumber ?? selectedPayment.takeawayToken) !==
+                      null && (
+                    <p className="text-xs text-slate-600">
+                      Token:{" "}
+                      <span className="font-semibold text-slate-800">
+                        {selectedPayment.tokenNumber ?? selectedPayment.takeawayToken}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>

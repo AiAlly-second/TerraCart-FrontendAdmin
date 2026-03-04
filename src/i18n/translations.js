@@ -373,7 +373,7 @@ export const translations = {
 
 export const languages = [
   { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'hi', name: 'Hindi', nativeName: 'हिंदी' },
-  { code: 'mr', name: 'Marathi', nativeName: 'मराठी' },
-  { code: 'gu', name: 'Gujarati', nativeName: 'ગુજરાતી' }
+  { code: 'hi', name: 'Hindi', nativeName: '\u0939\u093f\u0902\u0926\u0940' },
+  { code: 'mr', name: 'Marathi', nativeName: '\u092e\u0930\u093e\u0920\u0940' },
+  { code: 'gu', name: 'Gujarati', nativeName: '\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0' }
 ];
