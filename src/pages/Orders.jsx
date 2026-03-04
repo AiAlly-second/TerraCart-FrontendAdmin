@@ -2706,35 +2706,28 @@ const Orders = () => {
         tableNumber = table.number || table.tableNumber;
         sessionToken = table.sessionToken;
         if (!sessionToken) {
-          if (!table.qrSlug) {
-            throw new Error("Unable to claim table: missing QR slug.");
-          }
-          const lookupRes = await fetch(
-            `${nodeApi}/api/tables/lookup/${table.qrSlug}`,
-          );
-          const lookupPayload = await lookupRes.json().catch(() => ({}));
-          if (lookupRes.status === 423) {
-            throw new Error(
-              lookupPayload?.message ||
-                "Table is currently assigned to another guest.",
+          if (table.qrSlug) {
+            const lookupRes = await fetch(
+              `${nodeApi}/api/tables/lookup/${table.qrSlug}`,
             );
+            const lookupPayload = await lookupRes.json().catch(() => ({}));
+            if (lookupRes.status === 423) {
+              throw new Error(
+                lookupPayload?.message ||
+                  "Table is currently assigned to another guest.",
+              );
+            }
+            if (lookupRes.ok) {
+              sessionToken =
+                lookupPayload.sessionToken ||
+                lookupPayload.table?.sessionToken ||
+                null;
+            }
           }
-          if (!lookupRes.ok) {
-            throw new Error(
-              lookupPayload?.message ||
-                "Failed to allocate table. Please try again.",
-            );
-          }
-          sessionToken =
-            lookupPayload.sessionToken ||
-            lookupPayload.table?.sessionToken ||
-            null;
         }
 
         if (!sessionToken) {
-          throw new Error(
-            "Unable to obtain a session token for this table. Ask staff to release the table.",
-          );
+          sessionToken = `STAFF_${table._id || selectedTableId}_${Date.now()}`;
         }
       } else if (isOfficeTakeawayOrder) {
         officeTable = tables.find((t) => t._id === selectedOfficeId) || null;
