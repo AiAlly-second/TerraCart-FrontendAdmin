@@ -66,6 +66,9 @@ import CostingV2Reports from "./pages/costing-v2/Reports";
 function App() {
   const location = useLocation();
   const { user } = useAuth();
+  const normalizedUserRole =
+    user?.role === "cart_admin" ? "admin" : user?.role || "guest";
+  const isCartAdmin = normalizedUserRole === "admin";
   const showLayout = user && !["/login", "/"].includes(location.pathname);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
@@ -109,7 +112,10 @@ function App() {
         <ConfirmProvider>
           <AlertInitializer />
           <ConfirmInitializer />
-          <div className="bg-white min-h-screen font-sans">
+          <div
+            className={`bg-white min-h-screen font-sans ${isCartAdmin ? "cart-admin-shell" : ""}`}
+            data-user-role={normalizedUserRole}
+          >
             {showLayout && (
               <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
             )}
@@ -117,13 +123,13 @@ function App() {
             <div
               className={
                 showLayout
-                  ? "flex flex-col min-h-screen transition-all duration-300 lg:ml-64"
-                  : "flex flex-col min-h-screen"
+                  ? "tc-app-body flex flex-col min-h-screen transition-all duration-300 lg:ml-64"
+                  : "tc-app-body flex flex-col min-h-screen"
               }
             >
               {showLayout && <Navbar onMenuToggle={toggleSidebar} />}
-              {showLayout && <TabletTabs userRole={user?.role} />}
-              <main className="flex-1 p-4 md:p-6 bg-[#f8f9fa] overflow-x-hidden min-h-[calc(100vh-4rem)]">
+              {showLayout && <TabletTabs userRole={normalizedUserRole} />}
+              <main className="tc-main-content flex-1 p-4 md:p-6 bg-[#f8f9fa] overflow-x-hidden min-h-[calc(100vh-4rem)]">
                 <Routes>
                   <Route path="/" element={<Login />} />
                   <Route path="/login" element={<Login />} />

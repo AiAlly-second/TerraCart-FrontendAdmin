@@ -53,13 +53,13 @@ const Navbar = ({ onMenuToggle }) => {
   };
 
   return (
-    <header className="h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
+    <header className="tc-navbar h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       {/* Left Section: Mobile Menu + Time */}
       <div className="flex items-center space-x-4">
         {/* Mobile Menu Button */}
         <button
           onClick={onMenuToggle}
-          className="md:hidden text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+          className="tc-menu-toggle md:hidden text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded-lg"
           aria-label="Toggle menu"
         >
           <svg
@@ -79,10 +79,10 @@ const Navbar = ({ onMenuToggle }) => {
 
         {/* Date and Time Display */}
         <div className="text-gray-800">
-          <p className="font-bold text-xl md:text-2xl">
+          <p className="tc-navbar-time font-bold text-xl md:text-2xl">
             {formatTime(currentDateTime)}
           </p>
-          <p className="text-xs text-gray-500 hidden sm:block">
+          <p className="tc-navbar-date text-xs text-gray-500 hidden sm:block">
             {formatDate(currentDateTime)}
           </p>
         </div>
@@ -91,7 +91,7 @@ const Navbar = ({ onMenuToggle }) => {
       {/* Right Section: User Info + Logout */}
       <div className="flex items-center space-x-3">
         {/* User Name (hidden on mobile) */}
-        <span className="text-gray-700 font-medium text-sm hidden md:block">
+        <span className="tc-user-name text-gray-700 font-medium text-sm hidden md:block">
           {user?.name || "Admin"}
         </span>
 
@@ -105,7 +105,7 @@ const Navbar = ({ onMenuToggle }) => {
         </button>
 
         {/* User Avatar */}
-        <div className="w-10 h-10 bg-[#ff6b35] rounded-full flex items-center justify-center text-white font-bold text-base shadow-md">
+        <div className="tc-user-avatar w-10 h-10 bg-[#ff6b35] rounded-full flex items-center justify-center text-white font-bold text-base shadow-md">
           {getUserInitial()}
         </div>
       </div>
