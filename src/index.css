@@ -146,3 +146,88 @@ code {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
+
+/* Cart Admin tablet profile (OnePlus Pad Lite / 16:10 landscape) */
+@media (min-width: 1024px) and (max-width: 1400px) and (min-aspect-ratio: 8/5) and (max-aspect-ratio: 17/10) {
+  .cart-admin-shell[data-user-role="admin"] .tc-app-body {
+    margin-left: 0 !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-main-content {
+    padding: 0.875rem 1rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-navbar {
+    height: 3.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-navbar-time {
+    font-size: 1.35rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-navbar-date {
+    font-size: 0.75rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-menu-toggle {
+    display: inline-flex !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-user-name {
+    display: none !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-user-avatar {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    font-size: 0.95rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-tablet-tabs {
+    display: block !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar {
+    width: 14rem !important;
+    transform: translateX(-100%) !important;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar[data-open="true"] {
+    transform: translateX(0) !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar-profile {
+    padding: 0.75rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar-nav {
+    padding: 0.5rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar-footer {
+    padding: 0.75rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar-item {
+    padding-top: 0.6rem !important;
+    padding-bottom: 0.6rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] .tc-sidebar-label {
+    font-size: 0.82rem !important;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] main table {
+    font-size: 0.82rem;
+  }
+
+  .cart-admin-shell[data-user-role="admin"] main table th,
+  .cart-admin-shell[data-user-role="admin"] main table td {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+}

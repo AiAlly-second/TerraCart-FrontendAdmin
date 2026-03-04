@@ -15,7 +15,7 @@ const TabletTabs = ({ userRole }) => {
   if (!userRole || !items.length) return null;
 
   return (
-    <div className="hidden md:block lg:hidden sticky top-16 z-20 bg-white border-b border-gray-200 shadow-sm">
+    <div className="tc-tablet-tabs hidden md:block lg:hidden sticky top-16 z-20 bg-white border-b border-gray-200 shadow-sm">
       <div className="px-4 py-2 overflow-x-auto">
         <div className="inline-flex min-w-max items-center gap-2">
           {items.map((item) => {

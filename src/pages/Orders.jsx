@@ -1010,6 +1010,7 @@ const Orders = () => {
   const [selectedOfficeId, setSelectedOfficeId] = useState("");
   const [draftServiceType, setDraftServiceType] = useState("DINE_IN");
   const [draftTakeawayMode, setDraftTakeawayMode] = useState("COUNTER");
+  const [draftPaymentType, setDraftPaymentType] = useState("");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -2690,6 +2691,15 @@ const Orders = () => {
       return;
     }
 
+    const normalizedPaymentType = String(draftPaymentType || "")
+      .trim()
+      .toUpperCase();
+    if (normalizedPaymentType !== "COD" && normalizedPaymentType !== "ONLINE") {
+      setCreateError("Please select a payment type before creating the order.");
+      return;
+    }
+    const isOnlinePaymentType = normalizedPaymentType === "ONLINE";
+
     const isOfficeTakeawayOrder =
       draftServiceType === "TAKEAWAY" && draftTakeawayMode === "OFFICE";
 
@@ -2828,6 +2838,8 @@ const Orders = () => {
 
       const payload = {
         serviceType: draftServiceType,
+        paymentRequiredBeforeProceeding: isOnlinePaymentType,
+        paymentMode: isOnlinePaymentType ? "ONLINE" : "CASH",
         tableId: isOfficeTakeawayOrder
           ? officeTable?._id || null
           : draftServiceType === "TAKEAWAY"
@@ -3539,6 +3551,7 @@ const Orders = () => {
     setSelectedOfficeId("");
     setDraftServiceType("DINE_IN");
     setDraftTakeawayMode("COUNTER");
+    setDraftPaymentType("");
     setCreateError("");
   }, []);
 
@@ -4121,6 +4134,34 @@ const Orders = () => {
                           )}
                         </div>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        Payment Type
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {[
+                          { value: "COD", label: "COD" },
+                          { value: "ONLINE", label: "Online" },
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setDraftPaymentType(option.value)}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
+                              draftPaymentType === option.value
+                                ? "bg-blue-600 text-white border-blue-600 shadow"
+                                : "border-gray-300 text-gray-600 hover:border-blue-400"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Select payment type before creating the order.
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
