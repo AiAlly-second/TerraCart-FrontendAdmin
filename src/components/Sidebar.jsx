@@ -190,12 +190,13 @@ const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Sidebar */}
       <div
-        className={`w-64 fixed top-0 left-0 h-screen bg-[#3d3028] text-white flex flex-col shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+        data-open={isOpen ? "true" : "false"}
+        className={`tc-sidebar w-64 fixed top-0 left-0 h-screen bg-[#3d3028] text-white flex flex-col shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         {/* User Profile Section */}
-        <div className="p-4 border-b border-white/10 bg-[#3d3028]">
+        <div className="tc-sidebar-profile p-4 border-b border-white/10 bg-[#3d3028]">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-[#ff6b35] rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-lg">
               {getUserInitial()}
@@ -232,7 +233,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Nav Links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <nav className="tc-sidebar-nav flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {menuItems.map((item) => {
             if (Array.isArray(item.children) && item.children.length > 0) {
               const isGroupActive = item.children.some(
@@ -244,7 +245,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               return (
                 <div key={item.key || item.label} className="space-y-1">
                   <div
-                    className={`flex items-center px-4 py-3 rounded-lg transition-all duration-200 ${
+                    className={`tc-sidebar-item flex items-center px-4 py-3 rounded-lg transition-all duration-200 ${
                       isGroupActive
                         ? "bg-[#ff6b35]/20 text-white"
                         : "text-gray-300"
@@ -253,7 +254,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <span className="flex-shrink-0">
                       {iconMap[item.icon] || item.icon}
                     </span>
-                    <span className="ml-3 font-medium text-sm truncate">
+                    <span className="tc-sidebar-label ml-3 font-medium text-sm truncate">
                       {item.label}
                     </span>
                   </div>
@@ -264,7 +265,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         key={child.path}
                         to={child.path}
                         className={({ isActive }) =>
-                          `flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
+                          `tc-sidebar-item flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
                             isActive
                               ? "bg-[#ff6b35] text-white shadow-lg"
                               : "text-gray-300 hover:bg-white/5 hover:text-white"
@@ -279,7 +280,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         <span className="flex-shrink-0">
                           {iconMap[child.icon] || child.icon}
                         </span>
-                        <span className="ml-3 font-medium text-sm truncate">
+                        <span className="tc-sidebar-label ml-3 font-medium text-sm truncate">
                           {child.label}
                         </span>
                       </NavLink>
@@ -305,7 +306,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         location.pathname === "/table-dashboard" ||
                         location.pathname.startsWith("/table-dashboard/"));
                     const isMenuItemActive = isActive || isQrCodeSection;
-                    return `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
+                    return `tc-sidebar-item flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
                       isMenuItemActive
                         ? "bg-[#ff6b35] text-white shadow-lg"
                         : "text-gray-300 hover:bg-white/5 hover:text-white"
@@ -322,7 +323,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   <span className="flex-shrink-0">
                     {iconMap[item.icon] || item.icon}
                   </span>
-                  <span className="font-medium text-sm truncate">
+                  <span className="tc-sidebar-label font-medium text-sm truncate">
                     {item.label}
                   </span>
                 </div>
@@ -337,13 +338,13 @@ const Sidebar = ({ isOpen, onClose }) => {
         </nav>
 
         {/* Logout Button */}
-        <div className="p-4 border-t border-white/10">
+        <div className="tc-sidebar-footer p-4 border-t border-white/10">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-all duration-200 group"
+            className="tc-sidebar-item w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-all duration-200 group"
           >
             <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
-            <span className="font-medium text-sm">Logout</span>
+            <span className="tc-sidebar-label font-medium text-sm">Logout</span>
           </button>
         </div>
       </div>
