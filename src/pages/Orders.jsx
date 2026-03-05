@@ -57,24 +57,76 @@ const formatMoney = (value) => {
   if (Number.isNaN(num)) return "0.00";
   return num.toFixed(2);
 };
-const normalizeLegacyOrderStatus = (status) => {
-  switch (status) {
-    case "Pending":
-    case "Confirmed":
-    case "Accept":
-    case "Accepted":
-    case "Being Prepared":
-    case "BeingPrepared":
-    case "New":
-    case "NEW":
-      return "Preparing";
-    case "Completed":
-    case "Finalized":
-    case "Exit":
-      return "Served";
-    default:
-      return status;
+const normalizeStatusToken = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const PREPARING_LIKE_STATUSES = new Set([
+  "new",
+  "new order",
+  "pending",
+  "confirmed",
+  "accept",
+  "accepted",
+  "being prepared",
+  "beingprepared",
+  "preparing",
+  "queued",
+  "queue",
+  "in progress",
+  "inprogress",
+  "processing",
+]);
+const READY_LIKE_STATUSES = new Set(["ready"]);
+const SERVED_LIKE_STATUSES = new Set([
+  "served",
+  "completed",
+  "finalized",
+  "exit",
+  "closed",
+]);
+const PAID_LIKE_STATUSES = new Set(["paid"]);
+const CANCELLED_LIKE_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "rejected",
+]);
+const RETURNED_LIKE_STATUSES = new Set(["returned", "refunded"]);
+
+const normalizeLegacyOrderStatus = (status, order = null) => {
+  const primaryToken = normalizeStatusToken(status);
+  const lifecycleToken = normalizeStatusToken(order?.lifecycleStatus);
+  const effectiveToken = primaryToken || lifecycleToken;
+  const paymentPaid =
+    normalizeStatusToken(order?.paymentStatus) === "paid" ||
+    order?.isPaid === true;
+
+  if (CANCELLED_LIKE_STATUSES.has(effectiveToken)) return "Cancelled";
+  if (RETURNED_LIKE_STATUSES.has(effectiveToken)) return "Returned";
+  if (PAID_LIKE_STATUSES.has(effectiveToken)) return "Paid";
+  if (
+    SERVED_LIKE_STATUSES.has(effectiveToken) ||
+    SERVED_LIKE_STATUSES.has(lifecycleToken)
+  ) {
+    return paymentPaid ? "Paid" : "Served";
   }
+  if (
+    READY_LIKE_STATUSES.has(effectiveToken) ||
+    READY_LIKE_STATUSES.has(lifecycleToken)
+  ) {
+    return "Ready";
+  }
+  if (
+    PREPARING_LIKE_STATUSES.has(effectiveToken) ||
+    PREPARING_LIKE_STATUSES.has(lifecycleToken)
+  ) {
+    return "Preparing";
+  }
+
+  return "Preparing";
 };
 
 const resolveOrderPaymentType = (order) => {
@@ -289,10 +341,40 @@ const resolveTakeawayOrderType = (order) => {
   return null;
 };
 
+const normalizeOrderForDisplay = (order, previousOrder = null) => {
+  if (!order || typeof order !== "object") return order;
+
+  // Merge with previous value so partial socket payloads do not blank fields.
+  const mergedOrder = previousOrder ? { ...previousOrder, ...order } : { ...order };
+  const rawStatus =
+    order?.rawStatus ??
+    order?.status ??
+    previousOrder?.rawStatus ??
+    previousOrder?.status ??
+    null;
+  const statusContext = {
+    ...mergedOrder,
+    status: rawStatus,
+  };
+
+  return {
+    ...mergedOrder,
+    rawStatus,
+    status: normalizeLegacyOrderStatus(
+      rawStatus || mergedOrder.lifecycleStatus,
+      statusContext,
+    ),
+  };
+};
+
 const normalizeOrdersPayload = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  return [];
+  const source = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
+
+  return source.map((order) => normalizeOrderForDisplay(order));
 };
 
 const getOrderCafeId = (order) => {
@@ -1048,9 +1130,11 @@ const Orders = () => {
 
   const upsertOrder = useCallback((incoming, { prepend = false } = {}) => {
     if (!incoming) return;
+    const incomingCafeId = getOrderCafeId(incoming)?.toString();
     if (
       filterCafeId &&
-      getOrderCafeId(incoming)?.toString() !== filterCafeId.toString()
+      incomingCafeId &&
+      incomingCafeId !== filterCafeId.toString()
     ) {
       return;
     }
@@ -1064,11 +1148,14 @@ const Orders = () => {
       );
 
       if (index >= 0) {
-        list[index] = incoming;
+        list[index] = normalizeOrderForDisplay(incoming, list[index]);
         return list;
       }
 
-      return prepend ? [incoming, ...list] : [...list, incoming];
+      const normalizedIncoming = normalizeOrderForDisplay(incoming);
+      return prepend
+        ? [normalizedIncoming, ...list]
+        : [...list, normalizedIncoming];
     });
   }, [filterCafeId]);
 
@@ -1575,10 +1662,18 @@ const Orders = () => {
                   const isTakeaway =
                     isTakeawayServiceType(order.serviceType) ||
                     Boolean(resolveTakeawayOrderType(order));
+                  const isOrderPaidForFlow =
+                    normalizeStatusToken(order?.paymentStatus) === "paid" ||
+                    order?.isPaid === true ||
+                    normalizeLegacyOrderStatus(order.status, order) === "Paid";
+                  const transitionStatus =
+                    isOrderPaidForFlow
+                      ? "Paid"
+                      : order.rawStatus || order.lifecycleStatus || order.status;
                   // const alreadyAccepted = isOrderAccepted(order);
                   const nextStatus = isTakeaway
-                    ? getNextStatusTakeaway(order.status)
-                    : getNextStatus(order.status, order.serviceType);
+                    ? getNextStatusTakeaway(transitionStatus)
+                    : getNextStatus(transitionStatus, order.serviceType);
                   const buttons = [];
                   /*
                   const canShowTakeawayAccept =
@@ -1620,6 +1715,7 @@ const Orders = () => {
                   // Show next sequential step button (but skip if accept action is available)
                   if (
                     nextStatus &&
+                    !isOrderPaidForFlow &&
                     !canShowDirectAccept &&
                     !canShowTakeawayAccept
                   ) {
@@ -1884,10 +1980,18 @@ const Orders = () => {
       const isTakeaway =
         isTakeawayServiceType(order.serviceType) ||
         Boolean(resolveTakeawayOrderType(order));
+      const isOrderPaidForFlow =
+        normalizeStatusToken(order?.paymentStatus) === "paid" ||
+        order?.isPaid === true ||
+        normalizeLegacyOrderStatus(order.status, order) === "Paid";
+      const transitionStatus =
+        isOrderPaidForFlow
+          ? "Paid"
+          : order.rawStatus || order.lifecycleStatus || order.status;
       // const alreadyAccepted = isOrderAccepted(order);
       const nextStatus = isTakeaway
-        ? getNextStatusTakeaway(order.status)
-        : getNextStatus(order.status, order.serviceType);
+        ? getNextStatusTakeaway(transitionStatus)
+        : getNextStatus(transitionStatus, order.serviceType);
       const buttons = [];
       /*
       const canShowTakeawayAccept =
@@ -1928,6 +2032,7 @@ const Orders = () => {
 
       if (
         nextStatus &&
+        !isOrderPaidForFlow &&
         !canShowDirectAccept &&
         !canShowTakeawayAccept
       ) {
@@ -2423,6 +2528,7 @@ const Orders = () => {
     const matchesActiveFilter = (orderPayload) => {
       if (!filterCafeId) return true;
       const payloadCafeId = getOrderCafeId(orderPayload);
+      if (!payloadCafeId) return true;
       return payloadCafeId?.toString() === filterCafeId.toString();
     };
 
@@ -2486,7 +2592,7 @@ const Orders = () => {
   };
 
   const handleEdit = (order) => {
-    setCurrentOrder(order);
+    setCurrentOrder(normalizeOrderForDisplay(order));
     setDraftSelections({});
     setDraftAddonSelections({});
     setDraftSearch("");
@@ -2596,7 +2702,7 @@ const Orders = () => {
           currentOrder &&
           normalizeId(currentOrder._id) === normalizeId(updatedOrder._id)
         ) {
-          setCurrentOrder(updatedOrder);
+          setCurrentOrder(normalizeOrderForDisplay(updatedOrder, currentOrder));
         }
       } else {
         await refreshOrders();
@@ -4615,7 +4721,10 @@ const Orders = () => {
                                                                 `/orders/${currentOrder._id}`,
                                                               );
                                                             setCurrentOrder(
-                                                              res.data,
+                                                              normalizeOrderForDisplay(
+                                                                res.data,
+                                                                currentOrder,
+                                                              ),
                                                             );
                                                             // Refresh orders list
                                                             await refreshOrders();
@@ -4678,7 +4787,10 @@ const Orders = () => {
                                                                     `/orders/${currentOrder._id}`,
                                                                   );
                                                                 setCurrentOrder(
-                                                                  res.data,
+                                                                  normalizeOrderForDisplay(
+                                                                    res.data,
+                                                                    currentOrder,
+                                                                  ),
                                                                 );
                                                                 // Refresh orders list
                                                                 await refreshOrders();
@@ -4747,7 +4859,10 @@ const Orders = () => {
                                                                 `/orders/${currentOrder._id}`,
                                                               );
                                                             setCurrentOrder(
-                                                              res.data,
+                                                              normalizeOrderForDisplay(
+                                                                res.data,
+                                                                currentOrder,
+                                                              ),
                                                             );
                                                             // Refresh orders list
                                                             await refreshOrders();

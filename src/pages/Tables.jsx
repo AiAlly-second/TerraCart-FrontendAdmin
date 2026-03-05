@@ -874,6 +874,14 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     return filtered;
   }, [sortedTables, statusFilter, isOfficePanel, isTablePanel]);
 
+  const qrContextCounts = useMemo(() => {
+    const officeCount = sortedTables.filter(
+      (table) => table.qrContextType === PANEL_OFFICE,
+    ).length;
+    const tableCount = sortedTables.length - officeCount;
+    return { officeCount, tableCount };
+  }, [sortedTables]);
+
   const updateTableWaitlistCount = (tableId, count) => {
     setTables((prev) =>
       prev.map((t) => (t._id === tableId ? { ...t, waitlistLength: count } : t))
@@ -1256,6 +1264,9 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                   placeholder="e.g. 12"
                 />
+                <p className="mt-1 text-xs text-slate-400">
+                  Number must be unique in this outlet (Tables and Offices).
+                </p>
               </div>
               <div>
                 <label className="block text-sm text-slate-500 mb-1">
@@ -1433,13 +1444,25 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
         <div className="p-8 text-center text-slate-500">Loading tables...</div>
       ) : visibleTables.length === 0 ? (
         <div className="p-8 text-center text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl">
-          {isOfficePanel
-            ? "No office QR configured yet."
-            : statusFilter === "ALL"
-              ? "No tables configured yet."
-              : `No tables are currently ${STATUS_MAP[
-                  statusFilter
-                ]?.label?.toLowerCase()}.`}
+          {isOfficePanel ? (
+            "No office QR configured yet."
+          ) : statusFilter === "ALL" ? (
+            isTablePanel && qrContextCounts.tableCount === 0 && qrContextCounts.officeCount > 0 ? (
+              <>
+                No dine-in tables configured yet.
+                <br />
+                {qrContextCounts.officeCount} Office QR
+                {qrContextCounts.officeCount > 1 ? "s are" : " is"} available in
+                the Offices tab.
+              </>
+            ) : (
+              "No tables configured yet."
+            )
+          ) : (
+            `No tables are currently ${STATUS_MAP[
+              statusFilter
+            ]?.label?.toLowerCase()}.`
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
