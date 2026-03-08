@@ -31,6 +31,8 @@ const getApiBaseUrl = () => {
 
 const nodeApi = getApiBaseUrl().replace(/\/$/, "");
 const ORDER_SUMMARY_TILE_STATUSES = [
+  "all",
+  "active",
   "Preparing",
   "Ready",
   "Paid",
@@ -38,6 +40,10 @@ const ORDER_SUMMARY_TILE_STATUSES = [
   "Cancelled",
   "Returned",
 ];
+const ORDER_SUMMARY_TILE_LABELS = {
+  all: "All",
+  active: "Active",
+};
 
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
@@ -98,15 +104,31 @@ const RETURNED_LIKE_STATUSES = new Set(["returned", "refunded"]);
 
 const normalizeLegacyOrderStatus = (status, order = null) => {
   const primaryToken = normalizeStatusToken(status);
+  if (!order && (primaryToken === "all" || primaryToken === "active")) {
+    return primaryToken;
+  }
   const lifecycleToken = normalizeStatusToken(order?.lifecycleStatus);
   const effectiveToken = primaryToken || lifecycleToken;
   const paymentPaid =
     normalizeStatusToken(order?.paymentStatus) === "paid" ||
     order?.isPaid === true;
+  const serviceTypeToken = String(order?.serviceType || "")
+    .trim()
+    .toUpperCase();
+  const isPaidNonDineInOrder =
+    paymentPaid &&
+    (serviceTypeToken === "TAKEAWAY" ||
+      serviceTypeToken === "PICKUP" ||
+      serviceTypeToken === "DELIVERY");
+  const hasCancellationReason = String(order?.cancellationReason || "").trim() !== "";
+  const hasReturnedMarker = Boolean(order?.returnedAt);
 
+  if (hasReturnedMarker) return "Returned";
   if (CANCELLED_LIKE_STATUSES.has(effectiveToken)) return "Cancelled";
   if (RETURNED_LIKE_STATUSES.has(effectiveToken)) return "Returned";
   if (PAID_LIKE_STATUSES.has(effectiveToken)) return "Paid";
+  if (isPaidNonDineInOrder) return "Paid";
+  if (hasCancellationReason && !paymentPaid) return "Cancelled";
   if (
     SERVED_LIKE_STATUSES.has(effectiveToken) ||
     SERVED_LIKE_STATUSES.has(lifecycleToken)
@@ -139,14 +161,55 @@ const resolveOrderPaymentType = (order) => {
   if (explicitMethod === "ONLINE" || explicitMethod === "CARD") return "Online";
   if (explicitMethod === "CASH" || explicitMethod === "COD") return "COD";
 
-  if (Boolean(order?.paymentRequiredBeforeProceeding)) return "Online";
-
   const officeMode = String(order?.officePaymentMode || "").trim().toUpperCase();
-  if (officeMode === "ONLINE" || officeMode === "BOTH") return "Online";
+  if (officeMode === "ONLINE") return "Online";
   if (officeMode === "COD") return "COD";
+  if (officeMode === "BOTH") return "COD";
+
+  if (Boolean(order?.paymentRequiredBeforeProceeding)) return "COD";
 
   return "COD";
 };
+
+const toUpperToken = (value) => String(value || "").trim().toUpperCase();
+
+const isPickupOrDeliveryServiceOrder = (order) => {
+  const orderType = toUpperToken(order?.orderType);
+  const serviceType = toUpperToken(order?.serviceType);
+  return (
+    orderType === "PICKUP" ||
+    orderType === "DELIVERY" ||
+    serviceType === "PICKUP" ||
+    serviceType === "DELIVERY"
+  );
+};
+
+const requiresPaymentBeforeStatusProgress = (order) => {
+  const sourceType = toUpperToken(order?.sourceQrType);
+  if (sourceType === "OFFICE") return true;
+
+  const serviceType = toUpperToken(order?.serviceType);
+  if (serviceType === "DINE_IN") return false;
+
+  if (Boolean(order?.paymentRequiredBeforeProceeding)) return true;
+  return isPickupOrDeliveryServiceOrder(order);
+};
+
+const isPaymentClearedForStatusProgress = (order) => {
+  const paymentMode = toUpperToken(order?.paymentMode);
+  if (paymentMode === "CASH") return true; // Backend treats CASH as COD flow.
+
+  const paymentStatus = toUpperToken(order?.paymentStatus);
+  if (paymentStatus === "PAID") return true;
+
+  if (order?.isPaid === true) return true;
+  if (normalizeLegacyOrderStatus(order?.status, order) === "Paid") return true;
+  return false;
+};
+
+const isStatusProgressBlockedByPayment = (order) =>
+  requiresPaymentBeforeStatusProgress(order) &&
+  !isPaymentClearedForStatusProgress(order);
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -372,6 +435,8 @@ const normalizeOrdersPayload = (payload) => {
     ? payload
     : Array.isArray(payload?.data)
       ? payload.data
+      : Array.isArray(payload?.orders)
+        ? payload.orders
       : [];
 
   return source.map((order) => normalizeOrderForDisplay(order));
@@ -1073,7 +1138,7 @@ const Orders = () => {
   const [searchInvoice, setSearchInvoice] = useState("");
   const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
   const [expanded, setExpanded] = useState({}); // track expanded rows
-  const [filterStatus, setFilterStatus] = useState("active"); // "active" = exclude Cancelled/Returned (default for cart admin)
+  const [filterStatus, setFilterStatus] = useState("all");
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState("");
   const [menuItems, setMenuItems] = useState([]);
@@ -1159,9 +1224,11 @@ const Orders = () => {
     });
   }, [filterCafeId]);
 
-  const getStatusClass = (status) => {
-    const normalizedStatus = normalizeLegacyOrderStatus(status);
+  const getStatusClass = (status, order = null) => {
+    const normalizedStatus = normalizeLegacyOrderStatus(status, order);
     switch (normalizedStatus) {
+      case "all":
+        return "bg-slate-100 text-slate-800 border-slate-200";
       case "Paid":
         return "bg-green-100 text-green-800 border-green-200";
       case "Confirmed":
@@ -1187,37 +1254,44 @@ const Orders = () => {
     }
   };
 
-  const getStatusIcon = (status) => {
-    const normalizedStatus = normalizeLegacyOrderStatus(status);
+  const getStatusIcon = (status, order = null) => {
+    const normalizedStatus = normalizeLegacyOrderStatus(status, order);
     switch (normalizedStatus) {
+      case "all":
+        return "\uD83D\uDCCB";
       case "Paid":
-        return "✅";
+        return "\u2705";
       case "Confirmed":
-        return "👨‍🍳";
+        return "\uD83D\uDC68\u200D\uD83C\uDF73";
       case "Preparing":
-        return "🔥";
+        return "\uD83D\uDD25";
       case "Ready":
-        return "🍽️";
+        return "\uD83C\uDF7D\uFE0F";
       case "Served":
-        return "🤝";
+        return "\uD83E\uDD1D";
       case "Finalized":
-        return "✨";
+        return "\u2728";
       case "Pending":
-        return "⏳";
+        return "\u23F3";
       case "Cancelled":
-        return "❌";
+        return "\u274C";
       case "Returned":
-        return "↩️";
+        return "\u21A9\uFE0F";
       case "active":
-        return "📋";
+        return "\uD83D\uDCCB";
       default:
-        return "⚪";
+        return "\u26AA";
     }
   };
 
   const getSummaryTileTheme = (status) => {
     const normalizedStatus = normalizeLegacyOrderStatus(status);
     switch (normalizedStatus) {
+      case "all":
+        return {
+          card: "bg-slate-50/70 border-slate-200/80",
+          icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+        };
       case "Paid":
         return {
           card: "bg-emerald-50/70 border-emerald-200/80",
@@ -1282,14 +1356,41 @@ const Orders = () => {
 
   const changeStatus = async (orderId, newStatus, reason = null) => {
     const requestType = `order-status-${orderId}`;
+    const targetOrder = orders.find(
+      (order) => normalizeId(order?._id) === normalizeId(orderId),
+    );
+    const requestedUiStatus = normalizeLegacyOrderStatus(newStatus);
+    const isCancelOrReturnAction =
+      requestedUiStatus === "Cancelled" || requestedUiStatus === "Returned";
+    const isProgressingStatus = ["Preparing", "Ready", "Served", "Paid"].includes(
+      requestedUiStatus,
+    );
+    if (
+      targetOrder &&
+      isProgressingStatus &&
+      isStatusProgressBlockedByPayment(targetOrder)
+    ) {
+      alert("Payment must be completed or marked COD before updating order status.");
+      return;
+    }
 
     try {
+      const endpoint = isCancelOrReturnAction
+        ? `/orders/${orderId}/customer-status`
+        : `/orders/${orderId}/status`;
+      const payload = {
+        status: requestedUiStatus,
+        reason,
+      };
+      if (isCancelOrReturnAction && targetOrder?.sessionToken) {
+        payload.sessionToken = targetOrder.sessionToken;
+      }
+      if (isCancelOrReturnAction && targetOrder?.anonymousSessionId) {
+        payload.anonymousSessionId = targetOrder.anonymousSessionId;
+      }
+
       const response = await withCancellation(requestType, async (signal) => {
-        return await api.patch(
-          `/orders/${orderId}/status`,
-          { status: newStatus, reason },
-          { signal },
-        );
+        return await api.patch(endpoint, payload, { signal });
       });
       upsertOrder(response.data);
       if (reasonModal.open) closeReasonModal();
@@ -1412,6 +1513,7 @@ const Orders = () => {
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
+    const displayStatus = normalizeLegacyOrderStatus(order.status, order);
     const paymentType = resolveOrderPaymentType(order);
     const paymentTypeBadgeClass =
       paymentType === "Online"
@@ -1590,8 +1692,8 @@ const Orders = () => {
                   </div>
                 )}
                 {order.cancellationReason &&
-                  (order.status === "Cancelled" ||
-                    order.status === "Returned") && (
+                  (displayStatus === "Cancelled" ||
+                    displayStatus === "Returned") && (
                     <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded mt-1 border border-red-100">
                       Reason: {order.cancellationReason}
                     </div>
@@ -1646,14 +1748,15 @@ const Orders = () => {
           </td>
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 align-top">
             <div className="flex flex-col gap-1 sm:gap-1.5 md:gap-2">
-              {normalizeLegacyOrderStatus(order.status) === "Paid" && (
+              {["Paid", "Cancelled", "Returned"].includes(displayStatus) && (
                 <span
                   className={`inline-flex w-fit items-center gap-1 px-1.5 sm:px-2 md:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-semibold rounded border whitespace-nowrap ${getStatusClass(
-                    order.status,
+                    displayStatus,
+                    order,
                   )}`}
                 >
-                  <span>{getStatusIcon(order.status)}</span>
-                  <span>Paid</span>
+                  <span>{getStatusIcon(displayStatus, order)}</span>
+                  <span>{displayStatus}</span>
                 </span>
               )}
               {/* Sequential flow - show only next step + cancel option */}
@@ -1665,7 +1768,10 @@ const Orders = () => {
                   const isOrderPaidForFlow =
                     normalizeStatusToken(order?.paymentStatus) === "paid" ||
                     order?.isPaid === true ||
-                    normalizeLegacyOrderStatus(order.status, order) === "Paid";
+                    displayStatus === "Paid";
+                  const isPaymentBlockedForFlow =
+                    isStatusProgressBlockedByPayment(order) &&
+                    !isOrderPaidForFlow;
                   const transitionStatus =
                     isOrderPaidForFlow
                       ? "Paid"
@@ -1716,6 +1822,7 @@ const Orders = () => {
                   if (
                     nextStatus &&
                     !isOrderPaidForFlow &&
+                    !isPaymentBlockedForFlow &&
                     !canShowDirectAccept &&
                     !canShowTakeawayAccept
                   ) {
@@ -1732,7 +1839,7 @@ const Orders = () => {
                     );
                   }
 
-                  if (canReturn(order.status)) {
+                  if (canReturn(displayStatus)) {
                     buttons.push(
                       <button
                         key="return"
@@ -1744,7 +1851,7 @@ const Orders = () => {
                         ↩️ <span className="hidden 2xl:inline">Return</span>
                       </button>,
                     );
-                  } else if (canCancel(order.status)) {
+                  } else if (canCancel(displayStatus)) {
                     buttons.push(
                       <button
                         key="cancel"
@@ -1767,9 +1874,9 @@ const Orders = () => {
             <div className="flex flex-wrap gap-1 sm:gap-1.5 md:gap-2">
               {/* Modify Order button - only show for unpaid orders and NOT for franchise_admin */}
               {user?.role !== "franchise_admin" &&
-                order.status !== "Paid" &&
-                order.status !== "Cancelled" &&
-                order.status !== "Returned" && (
+                displayStatus !== "Paid" &&
+                displayStatus !== "Cancelled" &&
+                displayStatus !== "Returned" && (
                   <button
                     onClick={() => handleEdit(order)}
                     className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs md:text-sm text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium whitespace-nowrap"
@@ -1975,6 +2082,7 @@ const Orders = () => {
     const isExpanded = Boolean(expanded[order._id]);
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
+    const displayStatus = normalizeLegacyOrderStatus(order.status, order);
 
     const statusActionButtons = (() => {
       const isTakeaway =
@@ -1983,7 +2091,10 @@ const Orders = () => {
       const isOrderPaidForFlow =
         normalizeStatusToken(order?.paymentStatus) === "paid" ||
         order?.isPaid === true ||
-        normalizeLegacyOrderStatus(order.status, order) === "Paid";
+        displayStatus === "Paid";
+      const isPaymentBlockedForFlow =
+        isStatusProgressBlockedByPayment(order) &&
+        !isOrderPaidForFlow;
       const transitionStatus =
         isOrderPaidForFlow
           ? "Paid"
@@ -2033,6 +2144,7 @@ const Orders = () => {
       if (
         nextStatus &&
         !isOrderPaidForFlow &&
+        !isPaymentBlockedForFlow &&
         !canShowDirectAccept &&
         !canShowTakeawayAccept
       ) {
@@ -2049,7 +2161,7 @@ const Orders = () => {
         );
       }
 
-      if (canReturn(order.status)) {
+      if (canReturn(displayStatus)) {
         buttons.push(
           <button
             key="return"
@@ -2061,7 +2173,7 @@ const Orders = () => {
             Return
           </button>,
         );
-      } else if (canCancel(order.status)) {
+      } else if (canCancel(displayStatus)) {
         buttons.push(
           <button
             key="cancel"
@@ -2111,11 +2223,12 @@ const Orders = () => {
           </div>
           <span
             className={`px-2 py-1 inline-flex items-center gap-1 text-xs font-semibold rounded-full border whitespace-nowrap ${getStatusClass(
-              order.status,
+              displayStatus,
+              order,
             )}`}
           >
-            <span>{getStatusIcon(order.status)}</span>
-            <span>{normalizeLegacyOrderStatus(order.status)}</span>
+            <span>{getStatusIcon(displayStatus, order)}</span>
+            <span>{displayStatus}</span>
           </span>
         </div>
 
@@ -2202,9 +2315,9 @@ const Orders = () => {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {user?.role !== "franchise_admin" &&
-              order.status !== "Paid" &&
-              order.status !== "Cancelled" &&
-              order.status !== "Returned" && (
+              displayStatus !== "Paid" &&
+              displayStatus !== "Cancelled" &&
+              displayStatus !== "Returned" && (
                 <button
                   onClick={() => handleEdit(order)}
                   className="px-2 py-1 text-xs text-blue-600 hover:text-blue-900 border border-blue-200 rounded-md hover:bg-blue-50 font-medium whitespace-nowrap"
@@ -2325,7 +2438,7 @@ const Orders = () => {
                 </div>
               )}
               {order.cancellationReason &&
-                (order.status === "Cancelled" || order.status === "Returned") && (
+                (displayStatus === "Cancelled" || displayStatus === "Returned") && (
                   <div className="text-red-600 font-medium bg-red-50 p-1.5 rounded border border-red-100">
                     Reason: {order.cancellationReason}
                   </div>
@@ -2427,7 +2540,9 @@ const Orders = () => {
   };
 
   const refreshOrders = useCallback(async () => {
-    const ordersRes = await api.get("/orders");
+    const ordersRes = await api.get("/orders", {
+      params: { includeHistory: "true" },
+    });
     const allOrders = normalizeOrdersPayload(ordersRes.data);
     const scopedOrders = filterOrdersByCafeId(allOrders, filterCafeId);
     setOrders(scopedOrders);
@@ -2731,14 +2846,36 @@ const Orders = () => {
     try {
       // Update status if changed
       const newStatus = form.status.value;
-      if (newStatus !== currentOrder.status) {
+      const normalizedNewStatus = normalizeLegacyOrderStatus(newStatus, currentOrder);
+      const isCancelOrReturnAction =
+        normalizedNewStatus === "Cancelled" || normalizedNewStatus === "Returned";
+      const isProgressingStatus = ["Preparing", "Ready", "Served", "Paid"].includes(
+        normalizedNewStatus,
+      );
+
+      if (
+        isProgressingStatus &&
+        isStatusProgressBlockedByPayment(currentOrder)
+      ) {
+        throw new Error(
+          "Payment must be completed or marked COD before updating order status.",
+        );
+      }
+
+      if (normalizedNewStatus !== currentOrder.status) {
         const requestType = `order-status-${currentOrder._id}`;
+        const endpoint = isCancelOrReturnAction
+          ? `/orders/${currentOrder._id}/customer-status`
+          : `/orders/${currentOrder._id}/status`;
+        const payload = { status: normalizedNewStatus };
+        if (isCancelOrReturnAction && currentOrder?.sessionToken) {
+          payload.sessionToken = currentOrder.sessionToken;
+        }
+        if (isCancelOrReturnAction && currentOrder?.anonymousSessionId) {
+          payload.anonymousSessionId = currentOrder.anonymousSessionId;
+        }
         await withCancellation(requestType, async (signal) => {
-          return await api.patch(
-            `/orders/${currentOrder._id}/status`,
-            { status: newStatus },
-            { signal },
-          );
+          return await api.patch(endpoint, payload, { signal });
         });
       }
 
@@ -3218,10 +3355,13 @@ const Orders = () => {
     if (filterStatus === "all") return matches;
     if (filterStatus === "active")
       return matches.filter(
-        (o) => !["Cancelled", "Returned"].includes(o.status || "")
+        (o) =>
+          !["Cancelled", "Returned"].includes(
+            normalizeLegacyOrderStatus(o.status, o),
+          )
       );
     return matches.filter(
-      (o) => normalizeLegacyOrderStatus(o.status) === filterStatus,
+      (o) => normalizeLegacyOrderStatus(o.status, o) === filterStatus,
     );
   })();
 
@@ -3314,10 +3454,13 @@ const Orders = () => {
     if (filterStatus === "all") return matches;
     if (filterStatus === "active")
       return matches.filter(
-        (o) => !["Cancelled", "Returned"].includes(o.status || "")
+        (o) =>
+          !["Cancelled", "Returned"].includes(
+            normalizeLegacyOrderStatus(o.status, o),
+          )
       );
     return matches.filter(
-      (o) => normalizeLegacyOrderStatus(o.status) === filterStatus,
+      (o) => normalizeLegacyOrderStatus(o.status, o) === filterStatus,
     );
   };
 
@@ -3637,14 +3780,22 @@ const Orders = () => {
     [officeTablesForService, selectedOfficeId],
   );
   const summaryStatusCounts = useMemo(
-    () =>
-      orders.reduce((acc, order) => {
-        const status = normalizeLegacyOrderStatus(order?.status);
+    () => {
+      const base = {
+        all: Array.isArray(orders) ? orders.length : 0,
+        active: 0,
+      };
+      return (Array.isArray(orders) ? orders : []).reduce((acc, order) => {
+        const status = normalizeLegacyOrderStatus(order?.status, order);
         if (status) {
           acc[status] = (acc[status] || 0) + 1;
         }
+        if (status !== "Cancelled" && status !== "Returned") {
+          acc.active = (acc.active || 0) + 1;
+        }
         return acc;
-      }, {}),
+      }, base);
+    },
     [orders],
   );
 
@@ -3743,6 +3894,7 @@ const Orders = () => {
     {ORDER_SUMMARY_TILE_STATUSES.map((status) => {
       const count = summaryStatusCounts[status] || 0;
       const theme = getSummaryTileTheme(status);
+      const tileLabel = ORDER_SUMMARY_TILE_LABELS[status] || status;
       return (
         <button
           type="button"
@@ -3765,7 +3917,7 @@ const Orders = () => {
             </div>
           </div>
           <div className="mt-2 text-[10px] sm:text-[11px] text-[#6f5240] font-semibold uppercase tracking-[0.09em] leading-tight">
-            {status}
+            {tileLabel}
           </div>
         </button>
       );
@@ -4526,13 +4678,13 @@ const Orders = () => {
                           className="block text-gray-700 text-xs sm:text-sm font-bold mb-1 sm:mb-2"
                         >
                           Order Status{" "}
-                          {getStatusIcon(currentOrder?.status || "Pending")}
+                          {getStatusIcon(currentOrder?.status || "Pending", currentOrder)}
                         </label>
                         <select
                           id="status"
                           name="status"
                           defaultValue={
-                            normalizeLegacyOrderStatus(currentOrder?.status) ||
+                            normalizeLegacyOrderStatus(currentOrder?.status, currentOrder) ||
                             "Preparing"
                           }
                           className="shadow-sm border border-gray-300 rounded-lg w-full py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
@@ -5394,3 +5546,4 @@ const Orders = () => {
 };
 
 export default Orders;
+
