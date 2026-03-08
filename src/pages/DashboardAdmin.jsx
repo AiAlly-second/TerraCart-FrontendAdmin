@@ -1507,6 +1507,50 @@ const DashboardAdmin = () => {
     }
   }, []);
 
+  // Dashboard table strip should represent dine-in tables only (exclude OFFICE QR entries)
+  // and avoid duplicate logical rows for the same table number.
+  const liveDineInTables = useMemo(() => {
+    const list = Array.isArray(tables) ? tables : [];
+    const tableOnly = list.filter((table) => {
+      const qrContextType = String(table?.qrContextType || "TABLE")
+        .trim()
+        .toUpperCase();
+      return qrContextType !== "OFFICE";
+    });
+
+    const byLogicalKey = new Map();
+    tableOnly.forEach((table) => {
+      const tableNumber =
+        table?.number ?? table?.tableNumber ?? table?._id ?? null;
+      if (tableNumber === null || tableNumber === undefined) return;
+
+      const cartScope =
+        (typeof table?.cartId === "object" ? table?.cartId?._id : table?.cartId) ||
+        (typeof table?.cafeId === "object" ? table?.cafeId?._id : table?.cafeId) ||
+        "unknown";
+      const logicalKey = `${String(cartScope)}-${String(tableNumber)}`;
+
+      if (!byLogicalKey.has(logicalKey)) {
+        byLogicalKey.set(logicalKey, table);
+        return;
+      }
+
+      const existing = byLogicalKey.get(logicalKey);
+      const existingTs = new Date(
+        existing?.updatedAt || existing?.createdAt || 0,
+      ).getTime();
+      const currentTs = new Date(
+        table?.updatedAt || table?.createdAt || 0,
+      ).getTime();
+
+      if (currentTs >= existingTs) {
+        byLogicalKey.set(logicalKey, table);
+      }
+    });
+
+    return Array.from(byLogicalKey.values());
+  }, [tables]);
+
   // Helper to calculate total amount from KOT lines
   const calculateOrderTotal = (order) => {
       if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return 0;
@@ -1598,7 +1642,7 @@ const DashboardAdmin = () => {
       {/* Middle Section: Tables & Kitchen */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
-            <LiveTableStatus tables={tables} />
+            <LiveTableStatus tables={liveDineInTables} />
         </div>
         <div className="h-full">
             <KitchenLoad loadPercentage={kitchenLoadImg} />
