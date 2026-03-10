@@ -45,9 +45,24 @@ const InventoryManagement = () => {
         api.get("/inventory"),
         api.get("/inventory/stats").catch(() => null),
       ]);
-      setInventory(itemsRes.data || []);
+
+      const itemsPayload = itemsRes?.data;
+      const normalizedItems = Array.isArray(itemsPayload)
+        ? itemsPayload
+        : Array.isArray(itemsPayload?.data)
+          ? itemsPayload.data
+          : [];
+      setInventory(normalizedItems);
+
       if (statsRes?.data) {
-        setStats(statsRes.data);
+        const statsPayload = statsRes.data;
+        const normalizedStats =
+          statsPayload && typeof statsPayload === "object"
+            ? statsPayload.data && typeof statsPayload.data === "object"
+              ? statsPayload.data
+              : statsPayload
+            : null;
+        setStats(normalizedStats);
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load inventory");
