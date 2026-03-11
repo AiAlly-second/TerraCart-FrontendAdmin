@@ -114,6 +114,27 @@ const formatMoney = (value) => {
   return num.toFixed(2);
 };
 
+const normalizeStatusToken = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const isOrderPaid = (order) => {
+  if (!order) return false;
+  if (normalizeStatusToken(order?.paymentStatus) === "paid") return true;
+  if (order?.isPaid === true) return true;
+  return normalizeStatusToken(order?.status) === "paid";
+};
+
+const resolveOrderId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+  return String(value || "").trim();
+};
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -341,7 +362,9 @@ const Invoices = () => {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/orders");
+      const { data } = await api.get("/orders", {
+        params: { includeHistory: "true" },
+      });
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(
@@ -414,7 +437,7 @@ const Invoices = () => {
       const { data } = await api.get("/payments");
       const grouped = {};
       (Array.isArray(data) ? data : []).forEach((payment) => {
-        const orderId = payment.orderId;
+        const orderId = resolveOrderId(payment?.orderId);
         if (!orderId) return;
         if (!grouped[orderId]) grouped[orderId] = [];
         grouped[orderId].push(payment);
@@ -443,7 +466,7 @@ const Invoices = () => {
   useEffect(() => {
     loadOrders();
     loadPayments();
-  }, []);
+  }, [loadOrders, loadPayments]);
 
   useEffect(() => {
     if (selected) {
@@ -463,12 +486,8 @@ const Invoices = () => {
     return `INV-${date}-${tail}`;
   };
 
-  const getInvoiceNumberMemoized = useCallback(getInvoiceNumber, []);
-
   const paidOrders = useMemo(() => {
-    let filtered = orders.filter(
-      (o) => (o.status || "").toString().toLowerCase() === "paid"
-    );
+    let filtered = orders.filter((order) => isOrderPaid(order));
 
     // Filter by date if provided
     if (filterDate) {
@@ -494,7 +513,11 @@ const Invoices = () => {
   }, [orders, filterDate, searchQuery]);
 
   const selectedPayments = useMemo(
-    () => (selected ? paymentsByOrder[selected._id] || [] : []),
+    () => {
+      const selectedOrderId = resolveOrderId(selected?._id);
+      if (!selectedOrderId) return [];
+      return paymentsByOrder[selectedOrderId] || [];
+    },
     [selected, paymentsByOrder]
   );
 
