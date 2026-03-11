@@ -66,8 +66,15 @@ const Purchases = () => {
           unitPrice: item.unitPrice === "" || item.unitPrice === null || item.unitPrice === undefined ? 0 : parseFloat(item.unitPrice) || 0,
         }))
       };
-      await createPurchase(submitData);
-      alert("Purchase order created successfully!");
+      const response = await createPurchase(submitData);
+      const createdPurchase = response?.data?.data || null;
+      const wasAutoReceived =
+        String(createdPurchase?.status || "").toLowerCase() === "received";
+      alert(
+        wasAutoReceived
+          ? "Purchase created and inventory stock updated automatically!"
+          : "Purchase order created successfully!",
+      );
       setModalOpen(false);
       setFormData({
         supplierId: "",

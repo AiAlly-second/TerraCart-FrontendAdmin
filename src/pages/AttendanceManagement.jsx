@@ -38,6 +38,7 @@ const AttendanceManagement = () => {
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'history', 'tasks', 'leaves'
   const pollingIntervalRef = useRef(null); // For HTTP polling interval
+  const socketRefreshTimeoutRef = useRef(null); // Debounce socket-triggered refreshes
   const [processingAction, setProcessingAction] = useState(null); // Track which action is being processed
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [leaveLoading, setLeaveLoading] = useState(false);
@@ -80,41 +81,73 @@ const AttendanceManagement = () => {
     }
   }, []);
 
-  // Socket: join cafe + cart rooms and refetch on attendance:updated (app/web sync)
+  // Socket: join cafe/cart rooms and refetch on attendance lifecycle events (app/web sync)
   useEffect(() => {
     const socket = getSocket();
-    const getEffectiveCartId = () => {
-      if (selectedCart) return selectedCart;
+    const attendanceEvents = [
+      "attendance:updated",
+      "attendance:checked_in",
+      "attendance:checked_out",
+      "attendance:break_started",
+      "attendance:break_ended",
+      "attendance:deleted",
+    ];
+    const getEffectiveCartIds = () => {
+      const ids = new Set();
+      if (selectedCart) ids.add(String(selectedCart));
       if (userRole === "admin") {
         try {
           const raw = localStorage.getItem("adminUser");
           if (raw) {
             const u = JSON.parse(raw);
-            return u?._id ?? u?.id ?? null;
+            [u?._id, u?.id, u?.cartId, u?.cafeId].forEach((id) => {
+              if (id) ids.add(String(id));
+            });
           }
         } catch (e) {}
       }
-      return null;
+      return Array.from(ids);
     };
     const joinRooms = () => {
-      const cartId = getEffectiveCartId();
-      if (cartId) {
-        socket.emit("join:cafe", cartId);
-        socket.emit("join:cart", cartId);
+      const cartIds = getEffectiveCartIds();
+      if (cartIds.length > 0) {
+        cartIds.forEach((cartId) => {
+          socket.emit("join:cafe", cartId);
+          socket.emit("join:cart", cartId);
+        });
         if (import.meta.env.DEV) {
-          console.log("[AttendanceManagement] Joined socket rooms cafe:" + cartId + " cart:" + cartId);
+          console.log("[AttendanceManagement] Joined socket rooms for carts:", cartIds);
         }
       }
     };
-    const onAttendanceUpdated = () => {
-      fetchTodayAttendance();
+    const onAttendanceEvent = () => {
+      if (socketRefreshTimeoutRef.current) {
+        clearTimeout(socketRefreshTimeoutRef.current);
+      }
+      socketRefreshTimeoutRef.current = setTimeout(() => {
+        fetchTodayAttendance();
+        socketRefreshTimeoutRef.current = null;
+      }, 200);
     };
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
     joinRooms();
     socket.on("connect", joinRooms);
-    socket.on("attendance:updated", onAttendanceUpdated);
+    attendanceEvents.forEach((eventName) => {
+      socket.on(eventName, onAttendanceEvent);
+    });
     return () => {
       socket.off("connect", joinRooms);
-      socket.off("attendance:updated", onAttendanceUpdated);
+      attendanceEvents.forEach((eventName) => {
+        socket.off(eventName, onAttendanceEvent);
+      });
+      if (socketRefreshTimeoutRef.current) {
+        clearTimeout(socketRefreshTimeoutRef.current);
+        socketRefreshTimeoutRef.current = null;
+      }
     };
   }, [selectedCart, userRole]);
 
