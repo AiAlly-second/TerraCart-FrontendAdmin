@@ -31,8 +31,17 @@ import { getIngredients } from "../services/costingV2Api";
 
 // --- Components ---
 
-const RevenueCard = ({ revenueDineIn, revenueTakeaway }) => {
-  const total = revenueDineIn + revenueTakeaway;
+const RevenueCard = ({
+  revenueDineIn,
+  revenueTakeaway,
+  revenueOffices,
+  totalRevenue = null,
+}) => {
+  const computedTotal = revenueDineIn + revenueTakeaway + revenueOffices;
+  const displayTotal =
+    Number.isFinite(Number(totalRevenue)) && Number(totalRevenue) >= 0
+      ? Number(totalRevenue)
+      : computedTotal;
   return (
     <div className="bg-[#fff7ed] p-5 rounded-xl shadow-sm border border-orange-100 flex flex-col justify-between h-full relative overflow-hidden">
       <div className="absolute top-0 right-0 p-3 opacity-10">
@@ -58,7 +67,18 @@ const RevenueCard = ({ revenueDineIn, revenueTakeaway }) => {
               {revenueTakeaway.toLocaleString()}
             </span>
           </div>
+          <div className="w-px bg-orange-200 h-8 self-center"></div>
+          <div>
+            <span className="text-xs text-[#8b5e3c] block">Offices</span>
+            <span className="text-lg font-bold text-[#4a2e1f] flex items-center gap-1">
+              <FiCheckCircle className="text-green-500 text-xs" />₹
+              {revenueOffices.toLocaleString()}
+            </span>
+          </div>
         </div>
+        <p className="text-[11px] text-[#8b5e3c] mt-2">
+          Total: ₹{displayTotal.toLocaleString()}
+        </p>
       </div>
     </div>
   );
@@ -1414,10 +1434,30 @@ const DashboardAdmin = () => {
   const [todayOrders, setTodayOrders] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [ingredients, setIngredients] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState({});
   const [feedbackStats, setFeedbackStats] = useState({
     averageRating: 0,
     total: 0,
   });
+  const istDayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }),
+    [],
+  );
+  const istDateKey = useCallback(
+    (value) => {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return istDayFormatter.format(date);
+    },
+    [istDayFormatter],
+  );
   
   // Fetch Data
   useEffect(() => {
@@ -1429,17 +1469,25 @@ const DashboardAdmin = () => {
                          (ordersRes.data?.orders || ordersRes.data?.data || []);
         setOrders(ordersData);
 
-        // Filter Today's Orders (Local Time)
-        const now = new Date();
+        // Filter today's orders in IST (same reference as backend manager dashboard)
+        const todayIstKey = istDateKey(new Date());
         const today = ordersData.filter(o => {
-            if (!o.createdAt || !o.updatedAt) return false;
-            // Use createdAt if available, otherwise fallback to now (which is wrong but safe)
-            const orderDate = new Date(o.createdAt);
-            return orderDate.getDate() === now.getDate() &&
-                   orderDate.getMonth() === now.getMonth() &&
-                   orderDate.getFullYear() === now.getFullYear();
+            if (!o.createdAt) return false;
+            return istDateKey(o.createdAt) === todayIstKey;
         });
         setTodayOrders(today);
+
+        // Fetch canonical dashboard stats (same source as manager app dashboard)
+        try {
+          const statsRes = await api.get("/dashboard/stats");
+          const statsData = statsRes?.data?.data ?? statsRes?.data ?? {};
+          setDashboardStats(statsData);
+        } catch (statsErr) {
+          if (import.meta.env.DEV) {
+            console.warn("Failed to fetch dashboard stats:", statsErr);
+          }
+          setDashboardStats({});
+        }
 
         // Fetch Tables
         const tablesRes = await api.get("/tables");
@@ -1494,7 +1542,7 @@ const DashboardAdmin = () => {
     fetchData();
     const interval = setInterval(fetchData, 60000); // 60s polling
     return () => clearInterval(interval);
-  }, []);
+  }, [istDateKey]);
 
   const refetchPendingRequests = useCallback(async () => {
     try {
@@ -1551,28 +1599,109 @@ const DashboardAdmin = () => {
     return Array.from(byLogicalKey.values());
   }, [tables]);
 
-  // Helper to calculate total amount from KOT lines
+  // Keep revenue math aligned with backend dashboardController.calculateOrderRevenue
   const calculateOrderTotal = (order) => {
-      if (!order || !order.kotLines || !Array.isArray(order.kotLines)) return 0;
-      return order.kotLines.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0);
+    const kotLines = Array.isArray(order?.kotLines) ? order.kotLines : [];
+    const selectedAddons = Array.isArray(order?.selectedAddons)
+      ? order.selectedAddons
+      : [];
+
+    let kotTotal = kotLines.reduce(
+      (sum, kot) => sum + (Number(kot?.totalAmount) || 0),
+      0,
+    );
+
+    if (kotTotal <= 0) {
+      const kotPaise = kotLines.reduce((sum, kot) => {
+        const items = Array.isArray(kot?.items) ? kot.items : [];
+        return (
+          sum +
+          items.reduce((itemSum, item) => {
+            if (!item || item.returned) return itemSum;
+            const qty = Math.max(0, Math.floor(Number(item?.quantity) || 0));
+            const pricePaise = Number(item?.price) || 0;
+            return itemSum + qty * pricePaise;
+          }, 0)
+        );
+      }, 0);
+      kotTotal = Number((kotPaise / 100).toFixed(2));
+    }
+
+    const addonsTotal = selectedAddons.reduce((sum, addon) => {
+      const qty = Math.max(0, Math.floor(Number(addon?.quantity) || 1));
+      return sum + (Number(addon?.price) || 0) * qty;
+    }, 0);
+
+    const officeDeliveryCharge = Math.max(0, Number(order?.officeDeliveryCharge) || 0);
+    const combinedTotal = kotTotal + addonsTotal + officeDeliveryCharge;
+    if (combinedTotal > 0) return combinedTotal;
+
+    return Number(order?.totalAmount) || 0;
+  };
+
+  const normalizeStatus = (status) => String(status || "").trim().toUpperCase();
+  const normalizeServiceType = (serviceType) =>
+    String(serviceType || "").trim().toUpperCase();
+  const normalizePaymentStatus = (paymentStatus) =>
+    String(paymentStatus || "").trim().toUpperCase();
+  const isOfficeOrder = (order) =>
+    String(order?.sourceQrType || "").trim().toUpperCase() === "OFFICE" ||
+    ["COD", "ONLINE", "BOTH"].includes(
+      String(order?.officePaymentMode || "").trim().toUpperCase(),
+    ) ||
+    String(order?.officeName || "").trim().length > 0;
+  const isPaidOrder = (order) => {
+    const status = normalizeStatus(order?.status);
+    const paymentStatus = normalizePaymentStatus(order?.paymentStatus);
+    return (
+      status === "PAID" ||
+      paymentStatus === "PAID" ||
+      (status === "COMPLETED" && paymentStatus === "PAID")
+    );
+  };
+  const isRevenueForToday = (order) => {
+    if (!isPaidOrder(order)) return false;
+    const revenueAnchor = order?.paidAt || order?.createdAt;
+    return istDateKey(revenueAnchor) === istDateKey(new Date());
   };
 
   // metrics
   const revenueDineIn = useMemo(() => 
-    todayOrders.filter(o => o.serviceType === 'DINE_IN').reduce((sum, o) => sum + (o.status === 'Paid' ? calculateOrderTotal(o) : 0), 0)
-  , [todayOrders]);
+    todayOrders
+      .filter((o) => normalizeServiceType(o.serviceType) === "DINE_IN" && !isOfficeOrder(o))
+      .reduce((sum, o) => sum + (isRevenueForToday(o) ? calculateOrderTotal(o) : 0), 0)
+  , [todayOrders, istDateKey]);
 
   const revenueTakeaway = useMemo(() => 
-    todayOrders.filter(o => ['TAKEAWAY', 'PICKUP', 'DELIVERY'].includes(o.serviceType)).reduce((sum, o) => sum + (o.status === 'Paid' ? calculateOrderTotal(o) : 0), 0)
-  , [todayOrders]);
+    todayOrders
+      .filter((o) =>
+        ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(normalizeServiceType(o.serviceType)) &&
+        !isOfficeOrder(o),
+      )
+      .reduce((sum, o) => sum + (isRevenueForToday(o) ? calculateOrderTotal(o) : 0), 0)
+  , [todayOrders, istDateKey]);
 
-  const pendingCount = todayOrders.filter(o => ['Pending', 'Preparing', 'Cooking'].includes(o.status)).length;
+  const revenueOffices = useMemo(
+    () =>
+      todayOrders
+        .filter((o) => isOfficeOrder(o))
+        .reduce((sum, o) => sum + (isRevenueForToday(o) ? calculateOrderTotal(o) : 0), 0),
+    [todayOrders, istDateKey],
+  );
+
+  const pendingCount = todayOrders.filter((o) =>
+    ["PENDING", "NEW", "PREPARING", "COOKING"].includes(normalizeStatus(o.status)),
+  ).length;
   // Calculate bill requests from active customer requests
   const billReqCount = pendingRequests.filter(r => r.requestType === 'bill' && r.status === 'pending').length; 
 
-  const prepCount = todayOrders.filter(o => ['Pending', 'Preparing', 'Cooking'].includes(o.status)).length;
-  const servedCount = todayOrders.filter(o => ['Ready', 'Served'].includes(o.status)).length;
-  const paidCount = todayOrders.filter(o => o.status === 'Paid').length;
+  const prepCount = todayOrders.filter((o) =>
+    ["PENDING", "NEW", "PREPARING", "COOKING"].includes(normalizeStatus(o.status)),
+  ).length;
+  const servedCount = todayOrders.filter((o) =>
+    ["READY", "SERVED", "COMPLETED"].includes(normalizeStatus(o.status)),
+  ).length;
+  const paidCount = todayOrders.filter((o) => isPaidOrder(o)).length;
 
   // New Customers (Count unique mobiles if available, else 20% estimate)
   const uniqueMobiles = new Set(todayOrders.map(o => o.customerMobile).filter(Boolean)).size;
@@ -1596,7 +1725,9 @@ const DashboardAdmin = () => {
 
   // Kitchen Load (Active items / 50 capacity)
   const activeItemsCount = todayOrders
-    .filter(o => ['Pending', 'Preparing', 'Cooking'].includes(o.status))
+    .filter((o) =>
+      ["PENDING", "NEW", "PREPARING", "COOKING"].includes(normalizeStatus(o.status)),
+    )
     .reduce((sum, o) => {
         if (!o.kotLines || !Array.isArray(o.kotLines)) return sum;
         const orderItemsCount = o.kotLines.reduce((acc, kot) => {
@@ -1619,16 +1750,29 @@ const DashboardAdmin = () => {
   }, [orders]);
 
   // Active Orders for Live Status
-  const activeOrders = todayOrders.filter(o => !['Paid', 'Cancelled', 'Returned'].includes(o.status));
-  const liveDineIn = activeOrders.filter(o => o.serviceType === 'DINE_IN');
-  const liveTakeaway = activeOrders.filter(o => ['TAKEAWAY', 'PICKUP', 'DELIVERY'].includes(o.serviceType));
+  const activeOrders = todayOrders.filter(
+    (o) => !["PAID", "CANCELLED", "RETURNED"].includes(normalizeStatus(o.status)),
+  );
+  const liveDineIn = activeOrders.filter(
+    (o) => normalizeServiceType(o.serviceType) === "DINE_IN" && !isOfficeOrder(o),
+  );
+  const liveTakeaway = activeOrders.filter(
+    (o) =>
+      ["TAKEAWAY", "PICKUP", "DELIVERY"].includes(normalizeServiceType(o.serviceType)) &&
+      !isOfficeOrder(o),
+  );
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] p-4 md:p-6 lg:p-8 font-sans text-[#4a2e1f]">
       
       {/* Top Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
-        <RevenueCard revenueDineIn={revenueDineIn} revenueTakeaway={revenueTakeaway} />
+        <RevenueCard
+          revenueDineIn={revenueDineIn}
+          revenueTakeaway={revenueTakeaway}
+          revenueOffices={revenueOffices}
+          totalRevenue={dashboardStats?.todayRevenue}
+        />
         <PendingActionsCard pendingOrders={pendingCount} billRequests={billReqCount} />
         <TotalOrdersCard preparing={prepCount} served={servedCount} paid={paidCount} cartId={user?.cartCode} />
         <OverallRatingCard

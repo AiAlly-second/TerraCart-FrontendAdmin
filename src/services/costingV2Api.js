@@ -34,6 +34,12 @@ export const returnToInventory = (data) =>
   api.post("/costing-v2/inventory/return", data);
 export const getInventoryTransactions = (params) =>
   api.get("/costing-v2/inventory/transactions", { params });
+export const directPurchaseInventory = (formData) =>
+  api.post("/costing-v2/inventory/direct-purchase", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 export const diagnoseConsumption = (params) =>
   api.get("/costing-v2/diagnose-consumption", { params });
 export const getLowStock = () => api.get("/costing-v2/low-stock");

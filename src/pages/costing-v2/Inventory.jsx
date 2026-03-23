@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getInventoryTransactions,
   consumeInventory,
   returnToInventory,
   getIngredients,
+  directPurchaseInventory,
 } from "../../services/costingV2Api";
 import {
   FaPlus,
@@ -13,9 +14,11 @@ import {
   FaExclamationTriangle,
   FaUndo,
   FaShoppingCart,
+  FaFileInvoice,
 } from "react-icons/fa";
 import OutletFilter from "../../components/costing-v2/OutletFilter";
 import { formatUnit, convertUnit } from "../../utils/unitConverter";
+import apiClient from "../../utils/api";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
@@ -30,6 +33,46 @@ const toFiniteNumberOrNull = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getInvoicePathFromTransaction = (txn) =>
+  txn?.invoiceImagePath ||
+  txn?.invoicePath ||
+  txn?.invoiceImageUrl ||
+  txn?.invoiceUrl ||
+  "";
+
+const getInvoiceLabelFromTransaction = (txn) =>
+  txn?.invoiceImageOriginalName ||
+  txn?.invoiceFileName ||
+  txn?.invoiceName ||
+  "View Invoice";
+
+const getInvoiceMimeTypeFromTransaction = (txn) =>
+  txn?.invoiceImageMimeType || txn?.invoiceMimeType || txn?.mimeType || "";
+
+const getInvoiceUrl = (pathValue) => {
+  const path = (pathValue || "").trim();
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const baseApiUrl = (apiClient?.defaults?.baseURL || "").replace(
+    /\/api\/?$/,
+    "",
+  );
+  if (!baseApiUrl) return path;
+
+  if (path.startsWith("/")) {
+    return `${baseApiUrl}${path}`;
+  }
+  return `${baseApiUrl}/${path}`;
+};
+
+const isPdfInvoice = (invoiceUrl, mimeType = "") => {
+  const normalizedMime = String(mimeType || "").toLowerCase();
+  if (normalizedMime.includes("pdf")) return true;
+  const cleanUrl = String(invoiceUrl || "").split("?")[0].toLowerCase();
+  return cleanUrl.endsWith(".pdf");
 };
 
 const getShelfLifeInfo = (ingredient) => {
@@ -81,7 +124,8 @@ const getShelfLifeInfo = (ingredient) => {
     remainingMs,
     daysRemaining,
     remainingText,
-    status: remainingMs <= 0 ? "expired" : daysRemaining <= 3 ? "near" : "fresh",
+    status:
+      remainingMs <= 0 ? "expired" : daysRemaining <= 3 ? "near" : "fresh",
   };
 };
 
@@ -96,8 +140,9 @@ const Inventory = () => {
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
+  const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
   const [formData, setFormData] = useState({
     ingredientId: "",
     qty: 0,
@@ -111,49 +156,114 @@ const Inventory = () => {
     originalTransactionId: null,
     notes: "",
   });
+  const [purchaseFormData, setPurchaseFormData] = useState({
+    ingredientId: "",
+    qty: "",
+    uom: "kg",
+    totalAmount: "",
+    supplier: "",
+    notes: "",
+    invoiceFile: null,
+  });
+  const [invoicePreview, setInvoicePreview] = useState({
+    open: false,
+    url: "",
+    label: "",
+    isPdf: false,
+  });
 
-  const fetchData = useCallback(async ({ silent = false } = {}) => {
+  const currentUserRole = useMemo(() => {
     try {
-      if (!silent) setLoading(true);
-      const params = selectedOutlet ? { cartId: selectedOutlet } : {};
-      const [transactionsRes, ingredientsRes] = await Promise.all([
-        getInventoryTransactions(params),
-        getIngredients(params),
-      ]);
-      if (transactionsRes.data.success)
-        setTransactions(transactionsRes.data.data);
-      if (ingredientsRes.data.success) {
-        // DEBUG: Log what we received
-        if (import.meta.env.DEV) {
-          console.log(
-            `[FRONTEND] Received ${ingredientsRes.data.data.length} ingredients`,
-          );
-          if (ingredientsRes.data.data.length > 0) {
-            const sampleIng = ingredientsRes.data.data[0];
-            console.log(`[FRONTEND] Sample ingredient:`, {
-              name: sampleIng.name,
-              qtyOnHand: sampleIng.qtyOnHand,
-              currentCostPerBaseUnit: sampleIng.currentCostPerBaseUnit,
-              lastPurchaseUnitPrice: sampleIng.lastPurchaseUnitPrice,
-              lastPurchaseUom: sampleIng.lastPurchaseUom,
-              baseUnit: sampleIng.baseUnit,
-              uom: sampleIng.uom,
-            });
-          }
-        }
-        setIngredients(ingredientsRes.data.data);
-      }
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error("Error fetching data:", error);
-      }
-      if (!silent) {
-        alert("Failed to fetch data");
-      }
-    } finally {
-      if (!silent) setLoading(false);
+      const rawAdmin = localStorage.getItem("adminUser");
+      const rawFranchise = localStorage.getItem("franchiseAdminUser");
+      const rawSuper = localStorage.getItem("superAdminUser");
+      const parsed =
+        (rawAdmin && JSON.parse(rawAdmin)) ||
+        (rawFranchise && JSON.parse(rawFranchise)) ||
+        (rawSuper && JSON.parse(rawSuper)) ||
+        null;
+      return parsed?.role || "";
+    } catch {
+      return "";
     }
-  }, [selectedOutlet]);
+  }, []);
+
+  const canDirectPurchase =
+    !currentUserRole ||
+    currentUserRole === "admin" ||
+    currentUserRole === "cart_admin";
+
+  const openInvoicePreview = useCallback((txn) => {
+    const invoicePath = getInvoicePathFromTransaction(txn);
+    const invoiceUrl = getInvoiceUrl(invoicePath);
+    if (!invoiceUrl) {
+      alert("No invoice attached.");
+      return;
+    }
+    const invoiceLabel = getInvoiceLabelFromTransaction(txn);
+    const mimeType = getInvoiceMimeTypeFromTransaction(txn);
+    setInvoicePreview({
+      open: true,
+      url: invoiceUrl,
+      label: invoiceLabel,
+      isPdf: isPdfInvoice(invoiceUrl, mimeType),
+    });
+  }, []);
+
+  const closeInvoicePreview = useCallback(() => {
+    setInvoicePreview({
+      open: false,
+      url: "",
+      label: "",
+      isPdf: false,
+    });
+  }, []);
+
+  const fetchData = useCallback(
+    async ({ silent = false } = {}) => {
+      try {
+        if (!silent) setLoading(true);
+        const params = selectedOutlet ? { cartId: selectedOutlet } : {};
+        const [transactionsRes, ingredientsRes] = await Promise.all([
+          getInventoryTransactions(params),
+          getIngredients(params),
+        ]);
+        if (transactionsRes.data.success)
+          setTransactions(transactionsRes.data.data);
+        if (ingredientsRes.data.success) {
+          // DEBUG: Log what we received
+          if (import.meta.env.DEV) {
+            console.log(
+              `[FRONTEND] Received ${ingredientsRes.data.data.length} ingredients`,
+            );
+            if (ingredientsRes.data.data.length > 0) {
+              const sampleIng = ingredientsRes.data.data[0];
+              console.log(`[FRONTEND] Sample ingredient:`, {
+                name: sampleIng.name,
+                qtyOnHand: sampleIng.qtyOnHand,
+                currentCostPerBaseUnit: sampleIng.currentCostPerBaseUnit,
+                lastPurchaseUnitPrice: sampleIng.lastPurchaseUnitPrice,
+                lastPurchaseUom: sampleIng.lastPurchaseUom,
+                baseUnit: sampleIng.baseUnit,
+                uom: sampleIng.uom,
+              });
+            }
+          }
+          setIngredients(ingredientsRes.data.data);
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Error fetching data:", error);
+        }
+        if (!silent) {
+          alert("Failed to fetch data");
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [selectedOutlet],
+  );
 
   useEffect(() => {
     fetchData();
@@ -239,7 +349,6 @@ const Inventory = () => {
 
   const handleReturnClick = () => {
     // Simple return - just open modal to return unused ingredients
-    setSelectedTransaction(null);
     setReturnFormData({
       ingredientId: "",
       qty: 0,
@@ -248,6 +357,66 @@ const Inventory = () => {
       notes: "",
     });
     setReturnModalOpen(true);
+  };
+
+  const handleDirectPurchaseSubmit = async (e) => {
+    e.preventDefault();
+
+    const parsedQty = Number(purchaseFormData.qty);
+    const parsedTotalAmount = Number(purchaseFormData.totalAmount);
+    if (
+      !purchaseFormData.ingredientId ||
+      !Number.isFinite(parsedQty) ||
+      parsedQty <= 0 ||
+      !Number.isFinite(parsedTotalAmount) ||
+      parsedTotalAmount <= 0
+    ) {
+      alert("Please select item and enter valid quantity and total amount.");
+      return;
+    }
+
+    try {
+      setIsSubmittingPurchase(true);
+
+      const formData = new FormData();
+      formData.append("ingredientId", purchaseFormData.ingredientId);
+      formData.append("qty", String(parsedQty));
+      formData.append("uom", purchaseFormData.uom);
+      formData.append("totalAmount", String(parsedTotalAmount));
+      if (purchaseFormData.supplier?.trim()) {
+        formData.append("supplier", purchaseFormData.supplier.trim());
+      }
+      if (purchaseFormData.notes?.trim()) {
+        formData.append("notes", purchaseFormData.notes.trim());
+      }
+      if (selectedOutlet) {
+        formData.append("cartId", selectedOutlet);
+      }
+      if (purchaseFormData.invoiceFile) {
+        formData.append("invoiceImage", purchaseFormData.invoiceFile);
+      }
+
+      await directPurchaseInventory(formData);
+
+      alert("Purchase stock added successfully.");
+      setPurchaseModalOpen(false);
+      setPurchaseFormData({
+        ingredientId: "",
+        qty: "",
+        uom: "kg",
+        totalAmount: "",
+        supplier: "",
+        notes: "",
+        invoiceFile: null,
+      });
+      fetchData();
+    } catch (error) {
+      alert(
+        `Failed to add purchase stock: ${error.response?.data?.message || error.message}`,
+      );
+    } finally {
+      setIsSubmittingPurchase(false);
+    }
   };
 
   // Get unique categories
@@ -259,6 +428,13 @@ const Inventory = () => {
     "all",
     ...new Set(ingredients.map((ing) => ing.storageLocation || "Dry Storage")),
   ];
+  const selectedPurchaseIngredient = ingredients.find(
+    (ing) => ing._id === purchaseFormData.ingredientId,
+  );
+  const derivedPurchaseRate =
+    Number(purchaseFormData.qty) > 0 && Number(purchaseFormData.totalAmount) > 0
+      ? Number(purchaseFormData.totalAmount) / Number(purchaseFormData.qty)
+      : null;
 
   // Filter ingredients
   const filteredIngredients = ingredients.filter((ing) => {
@@ -280,6 +456,34 @@ const Inventory = () => {
     if (showLowStockOnly && ing.qtyOnHand > ing.reorderLevel) return false;
     return true;
   });
+
+  const latestInvoiceTransactionByIngredient = useMemo(() => {
+    const map = {};
+
+    transactions.forEach((txn) => {
+      const ingredientId =
+        txn?.ingredientId?._id || txn?.ingredientId || txn?.ingredient || "";
+      const ingredientKey = String(ingredientId || "").trim();
+      const invoicePath = getInvoicePathFromTransaction(txn);
+      if (!ingredientKey || !invoicePath) return;
+
+      const txnDate = parseDateSafely(txn?.date || txn?.createdAt);
+      const previous = map[ingredientKey];
+      if (!previous) {
+        map[ingredientKey] = txn;
+        return;
+      }
+
+      const prevDate = parseDateSafely(previous?.date || previous?.createdAt);
+      const txnTime = txnDate?.getTime() ?? 0;
+      const prevTime = prevDate?.getTime() ?? 0;
+      if (txnTime >= prevTime) {
+        map[ingredientKey] = txn;
+      }
+    });
+
+    return map;
+  }, [transactions]);
 
   // Group by category
   const groupedByCategory = filteredIngredients.reduce((acc, ing) => {
@@ -339,6 +543,12 @@ const Inventory = () => {
             The &quot;Return to Inventory&quot; option below is for returning
             unused ingredients from previous consumption only.
           </p>
+          {canDirectPurchase ? (
+            <p className="text-sm text-blue-600 mt-1">
+              Cart admins can also use &quot;Add Purchase Stock&quot; below to
+              upload invoice and add stock directly.
+            </p>
+          ) : null}
         </div>
         <Link
           to="/costing-v2/purchases"
@@ -378,6 +588,16 @@ const Inventory = () => {
                 Return Unused Ingredients
               </span>
             </button>
+            {canDirectPurchase && (
+              <button
+                onClick={() => setPurchaseModalOpen(true)}
+                className="bg-emerald-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2 text-sm sm:text-base"
+                title="Add purchase stock directly with total amount and optional invoice."
+              >
+                <FaFileInvoice />
+                <span className="whitespace-nowrap">Add Purchase Stock</span>
+              </button>
+            )}
           </div>
         </div>
         <div className="flex justify-end">
@@ -550,6 +770,9 @@ const Inventory = () => {
                               Shelf Life
                             </th>
                             <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
+                              Invoice
+                            </th>
+                            <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
                               Status
                             </th>
                           </tr>
@@ -585,6 +808,18 @@ const Inventory = () => {
                                 stockValue = 0;
                               }
                             }
+
+                            const latestInvoiceTxn =
+                              latestInvoiceTransactionByIngredient[
+                                String(ing._id)
+                              ];
+                            const latestInvoicePath =
+                              getInvoicePathFromTransaction(latestInvoiceTxn);
+                            const latestInvoiceUrl =
+                              getInvoiceUrl(latestInvoicePath);
+                            const latestInvoiceLabel =
+                              getInvoiceLabelFromTransaction(latestInvoiceTxn);
+
                             return (
                               <tr
                                 key={ing._id}
@@ -696,7 +931,7 @@ const Inventory = () => {
                                         unitPrice =
                                           baseCost * baseUnitsPerDisplayUnit;
                                         displayUom = ing.uom;
-                                      } catch (error) {
+                                      } catch {
                                         unitPrice = 0;
                                       }
                                     }
@@ -716,19 +951,28 @@ const Inventory = () => {
                                         shelfInfo.status === "expired"
                                           ? "text-red-600"
                                           : shelfInfo.status === "near"
-                                          ? "text-amber-600"
-                                          : "text-green-700";
+                                            ? "text-amber-600"
+                                            : "text-green-700";
                                       return (
                                         <span className="block">
-                                          <span className={`${statusClass} font-medium`}>
+                                          <span
+                                            className={`${statusClass} font-medium`}
+                                          >
                                             {shelfInfo.remainingText}
                                           </span>
                                           <span className="block text-xs text-gray-500 mt-0.5">
-                                            Expires {shelfInfo.expiryDate.toLocaleString()}
+                                            Expires{" "}
+                                            {shelfInfo.expiryDate.toLocaleString()}
                                             {shelfInfo.shelfDays != null ? (
                                               <>
-                                                {" "}- Shelf: {shelfInfo.shelfDays} day
-                                                {shelfInfo.shelfDays !== 1 ? "s" : ""}
+                                                {" "}
+                                                - Shelf: {
+                                                  shelfInfo.shelfDays
+                                                }{" "}
+                                                day
+                                                {shelfInfo.shelfDays !== 1
+                                                  ? "s"
+                                                  : ""}
                                               </>
                                             ) : null}
                                           </span>
@@ -740,17 +984,36 @@ const Inventory = () => {
                                         <span className="block">
                                           <span>
                                             Shelf: {shelfInfo.shelfDays} day
-                                            {shelfInfo.shelfDays !== 1 ? "s" : ""}
+                                            {shelfInfo.shelfDays !== 1
+                                              ? "s"
+                                              : ""}
                                           </span>
                                           <span className="block text-xs text-gray-500 mt-0.5">
-                                            - Set start date (receive/return stock) to
-                                            see countdown
+                                            - Set start date (receive/return
+                                            stock) to see countdown
                                           </span>
                                         </span>
                                       );
                                     }
                                     return "-";
                                   })()}
+                                </td>
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
+                                  {latestInvoiceUrl ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openInvoicePreview(latestInvoiceTxn)
+                                      }
+                                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                      title={latestInvoiceLabel}
+                                    >
+                                      <FaFileInvoice className="text-xs" />
+                                      View
+                                    </button>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-sm">
                                   <span
@@ -805,7 +1068,7 @@ const Inventory = () => {
                       Reference
                     </th>
                     <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
-                      Actions
+                      Invoice
                     </th>
                   </tr>
                 </thead>
@@ -862,7 +1125,25 @@ const Inventory = () => {
                             : txn.refType}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
-                          {/* Actions column - can be used for future features */}
+                          {(() => {
+                            const invoicePath =
+                              getInvoicePathFromTransaction(txn);
+                            const invoiceUrl = getInvoiceUrl(invoicePath);
+                            if (!invoiceUrl) {
+                              return <span className="text-gray-400">-</span>;
+                            }
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => openInvoicePreview(txn)}
+                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                title={getInvoiceLabelFromTransaction(txn)}
+                              >
+                                <FaFileInvoice className="text-xs" />
+                                View
+                              </button>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))
@@ -873,6 +1154,50 @@ const Inventory = () => {
           </div>
         )}
       </div>
+
+      {invoicePreview.open && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-4">
+          <div className="bg-white rounded-xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <h3 className="text-sm sm:text-base font-semibold text-slate-800 truncate">
+                {invoicePreview.label || "Invoice Preview"}
+              </h3>
+              <button
+                type="button"
+                onClick={closeInvoicePreview}
+                className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-50 p-2 sm:p-4 overflow-auto">
+              {invoicePreview.isPdf ? (
+                <iframe
+                  src={invoicePreview.url}
+                  title="Invoice Preview"
+                  className="w-full h-[72vh] rounded-lg border border-slate-200 bg-white"
+                />
+              ) : (
+                <img
+                  src={invoicePreview.url}
+                  alt={invoicePreview.label || "Invoice"}
+                  className="w-full max-h-[72vh] object-contain rounded-lg border border-slate-200 bg-white"
+                />
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-slate-200 flex justify-end">
+              <a
+                href={invoicePreview.url}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 text-sm text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50"
+              >
+                Open in New Tab
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Consume Modal */}
       {modalOpen && (
@@ -975,6 +1300,214 @@ const Inventory = () => {
                   className="px-4 py-2 bg-[#d86d2a] text-white rounded-lg hover:bg-[#c75b1a]"
                 >
                   Consume
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Purchase Modal - cart admin/admin */}
+      {purchaseModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4">
+              Add Purchase Stock
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 mb-4">
+              Enter the purchased quantity and total invoice amount. The system
+              auto-derives per-unit rate and updates weighted average cost.
+            </p>
+            <form onSubmit={handleDirectPurchaseSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ingredient *
+                </label>
+                <select
+                  required
+                  value={purchaseFormData.ingredientId}
+                  onChange={(e) => {
+                    const selectedIng = ingredients.find(
+                      (ing) => ing._id === e.target.value,
+                    );
+                    setPurchaseFormData((prev) => ({
+                      ...prev,
+                      ingredientId: e.target.value,
+                      uom: selectedIng?.uom || prev.uom || "kg",
+                    }));
+                  }}
+                  className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg"
+                >
+                  <option value="">Select Ingredient</option>
+                  {ingredients
+                    .filter((ing) => ing.isActive)
+                    .map((ing) => (
+                      <option key={ing._id} value={ing._id}>
+                        {ing.name} ({ing.category || "Other"})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0.0001"
+                    step="0.01"
+                    value={purchaseFormData.qty}
+                    onChange={(e) =>
+                      setPurchaseFormData((prev) => ({
+                        ...prev,
+                        qty: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    UOM *
+                  </label>
+                  <select
+                    required
+                    value={purchaseFormData.uom}
+                    onChange={(e) =>
+                      setPurchaseFormData((prev) => ({
+                        ...prev,
+                        uom: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="l">l</option>
+                    <option value="ml">ml</option>
+                    <option value="pcs">pcs</option>
+                    <option value="pack">pack</option>
+                    <option value="box">box</option>
+                    <option value="bottle">bottle</option>
+                    <option value="dozen">dozen</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Total Amount (Rs) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0.01"
+                  step="0.01"
+                  value={purchaseFormData.totalAmount}
+                  onChange={(e) =>
+                    setPurchaseFormData((prev) => ({
+                      ...prev,
+                      totalAmount: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+                {derivedPurchaseRate ? (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Auto rate: Rs {derivedPurchaseRate.toFixed(2)} /{" "}
+                    {purchaseFormData.uom}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Supplier
+                </label>
+                <input
+                  type="text"
+                  value={purchaseFormData.supplier}
+                  onChange={(e) =>
+                    setPurchaseFormData((prev) => ({
+                      ...prev,
+                      supplier: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={purchaseFormData.notes}
+                  onChange={(e) =>
+                    setPurchaseFormData((prev) => ({
+                      ...prev,
+                      notes: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows="2"
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Invoice Image / PDF
+                </label>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"
+                  onChange={(e) =>
+                    setPurchaseFormData((prev) => ({
+                      ...prev,
+                      invoiceFile: e.target.files?.[0] || null,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                {purchaseFormData.invoiceFile ? (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Attached: {purchaseFormData.invoiceFile.name}
+                  </p>
+                ) : null}
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <p className="text-xs text-emerald-800">
+                  {selectedPurchaseIngredient
+                    ? `This purchase will update "${selectedPurchaseIngredient.name}" stock and weighted-average cost.`
+                    : "This purchase will add stock and update weighted-average cost."}
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseModalOpen(false);
+                    setPurchaseFormData({
+                      ingredientId: "",
+                      qty: "",
+                      uom: "kg",
+                      totalAmount: "",
+                      supplier: "",
+                      notes: "",
+                      invoiceFile: null,
+                    });
+                  }}
+                  disabled={isSubmittingPurchase}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPurchase}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {isSubmittingPurchase ? "Saving..." : "Add Stock"}
                 </button>
               </div>
             </form>
@@ -1114,7 +1647,6 @@ const Inventory = () => {
                   type="button"
                   onClick={() => {
                     setReturnModalOpen(false);
-                    setSelectedTransaction(null);
                     setReturnFormData({
                       ingredientId: "",
                       qty: 0,

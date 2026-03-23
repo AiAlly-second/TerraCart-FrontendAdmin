@@ -166,7 +166,7 @@ const resolveOrderPaymentType = (order) => {
   if (officeMode === "COD") return "COD";
   if (officeMode === "BOTH") return "COD";
 
-  if (Boolean(order?.paymentRequiredBeforeProceeding)) return "COD";
+  if (Boolean(order?.paymentRequiredBeforeProceeding)) return "Online";
 
   return "COD";
 };
@@ -186,7 +186,14 @@ const isPickupOrDeliveryServiceOrder = (order) => {
 
 const requiresPaymentBeforeStatusProgress = (order) => {
   const sourceType = toUpperToken(order?.sourceQrType);
-  if (sourceType === "OFFICE") return true;
+  if (sourceType === "OFFICE") {
+    const paymentMode = toUpperToken(
+      order?.paymentMode || order?.paymentMethod || order?.payment?.method,
+    );
+    if (paymentMode === "CASH" || paymentMode === "COD") return false;
+    if (paymentMode === "ONLINE" || paymentMode === "CARD") return true;
+    return Boolean(order?.paymentRequiredBeforeProceeding);
+  }
 
   const serviceType = toUpperToken(order?.serviceType);
   if (serviceType === "DINE_IN") return false;
@@ -210,6 +217,14 @@ const isPaymentClearedForStatusProgress = (order) => {
 const isStatusProgressBlockedByPayment = (order) =>
   requiresPaymentBeforeStatusProgress(order) &&
   !isPaymentClearedForStatusProgress(order);
+
+const resolveOfficePaymentModeToken = (office) => {
+  const mode = String(office?.officePaymentMode || "").trim().toUpperCase();
+  if (mode === "COD" || mode === "BOTH" || mode === "ONLINE") {
+    return mode;
+  }
+  return "ONLINE";
+};
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -3000,6 +3015,21 @@ const Orders = () => {
         );
         return;
       }
+
+      const officePaymentModeToken = resolveOfficePaymentModeToken(officeSource);
+      if (
+        officePaymentModeToken === "ONLINE" &&
+        normalizedPaymentType !== "ONLINE"
+      ) {
+        setCreateError(
+          "This office QR accepts online payment only. Please select Online.",
+        );
+        return;
+      }
+      if (officePaymentModeToken === "COD" && normalizedPaymentType !== "COD") {
+        setCreateError("This office QR accepts COD only. Please select COD.");
+        return;
+      }
     }
 
     setCreateSubmitting(true);
@@ -3779,6 +3809,24 @@ const Orders = () => {
     () => officeTablesForService.find((office) => office._id === selectedOfficeId) || null,
     [officeTablesForService, selectedOfficeId],
   );
+  const isOfficeTakeawayDraft =
+    draftServiceType === "TAKEAWAY" && draftTakeawayMode === "OFFICE";
+  const selectedOfficePaymentMode = isOfficeTakeawayDraft
+    ? resolveOfficePaymentModeToken(selectedOffice)
+    : null;
+  const allowedDraftPaymentTypes = isOfficeTakeawayDraft
+    ? selectedOfficePaymentMode === "COD"
+      ? ["COD"]
+      : selectedOfficePaymentMode === "BOTH"
+        ? ["COD", "ONLINE"]
+        : ["ONLINE"]
+    : ["COD", "ONLINE"];
+
+  useEffect(() => {
+    if (allowedDraftPaymentTypes.includes(draftPaymentType)) return;
+    setDraftPaymentType(allowedDraftPaymentTypes[0] || "");
+  }, [allowedDraftPaymentTypes, draftPaymentType]);
+
   const summaryStatusCounts = useMemo(
     () => {
       const base = {
@@ -4403,18 +4451,28 @@ const Orders = () => {
                           { value: "COD", label: "COD" },
                           { value: "ONLINE", label: "Online" },
                         ].map((option) => (
+                          (() => {
+                            const isDisabled = !allowedDraftPaymentTypes.includes(
+                              option.value,
+                            );
+                            return (
                           <button
                             key={option.value}
                             type="button"
                             onClick={() => setDraftPaymentType(option.value)}
+                            disabled={isDisabled}
                             className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
                               draftPaymentType === option.value
                                 ? "bg-blue-600 text-white border-blue-600 shadow"
-                                : "border-gray-300 text-gray-600 hover:border-blue-400"
+                                : isDisabled
+                                  ? "border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed"
+                                  : "border-gray-300 text-gray-600 hover:border-blue-400"
                             }`}
                           >
                             {option.label}
                           </button>
+                            );
+                          })()
                         ))}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
