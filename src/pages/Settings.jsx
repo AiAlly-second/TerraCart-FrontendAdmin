@@ -65,6 +65,7 @@ const Settings = () => {
   const [cartSettings, setCartSettings] = useState({
     pickupEnabled: true,
     deliveryEnabled: false,
+    allowVipQR: false,
     deliveryRadius: 5,
     deliveryCharge: 0,
     pinCode: "",
@@ -141,6 +142,8 @@ const Settings = () => {
             cart.pickupEnabled !== undefined ? cart.pickupEnabled : true,
           deliveryEnabled:
             cart.deliveryEnabled !== undefined ? cart.deliveryEnabled : false,
+          allowVipQR:
+            cart.allowVipQR !== undefined ? Boolean(cart.allowVipQR) : false,
           deliveryRadius: cart.deliveryRadius || 5,
           deliveryCharge: cart.deliveryCharge || 0,
           pinCode: cart.pinCode || "",
@@ -1420,6 +1423,36 @@ const Settings = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* VIP QR feature toggle (admin roles only) */}
+                    {(userRole === "admin" || userRole === "cart_admin") && (
+                      <div className="p-4 bg-rose-50 rounded-lg border border-rose-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-gray-800">
+                              VIP QR
+                            </h3>
+                            <p className="text-xs sm:text-sm text-gray-600">
+                              Enable VIP QR option in QR generation for this outlet
+                            </p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cartSettings.allowVipQR)}
+                              onChange={(e) =>
+                                setCartSettings({
+                                  ...cartSettings,
+                                  allowVipQR: e.target.checked,
+                                })
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:ring-4 peer-focus:ring-rose-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Contact us */}
                     <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">

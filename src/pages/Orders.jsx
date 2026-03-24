@@ -187,11 +187,15 @@ const isPickupOrDeliveryServiceOrder = (order) => {
 const requiresPaymentBeforeStatusProgress = (order) => {
   const sourceType = toUpperToken(order?.sourceQrType);
   if (sourceType === "OFFICE") {
+    const officeMode = toUpperToken(order?.officePaymentMode);
     const paymentMode = toUpperToken(
       order?.paymentMode || order?.paymentMethod || order?.payment?.method,
     );
-    if (paymentMode === "CASH" || paymentMode === "COD") return false;
-    if (paymentMode === "ONLINE" || paymentMode === "CARD") return true;
+    if (officeMode === "ONLINE") return true;
+    if (officeMode === "COD") return false;
+    if (officeMode === "BOTH") {
+      return paymentMode !== "CASH" && paymentMode !== "COD";
+    }
     return Boolean(order?.paymentRequiredBeforeProceeding);
   }
 
@@ -1529,6 +1533,11 @@ const Orders = () => {
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
     const displayStatus = normalizeLegacyOrderStatus(order.status, order);
+    const isVipHighlightActive =
+      order.isVIP === true &&
+      !["Paid", "Served", "Completed", "Cancelled", "Returned"].includes(
+        displayStatus,
+      );
     const paymentType = resolveOrderPaymentType(order);
     const paymentTypeBadgeClass =
       paymentType === "Online"
@@ -1539,7 +1548,11 @@ const Orders = () => {
       <React.Fragment key={order._id}>
         <tr
           className={`hover:bg-gray-50 ${
-            order.status === "Pending" ? "bg-orange-50" : ""
+            isVipHighlightActive
+              ? "bg-gradient-to-r from-amber-50 via-yellow-50 to-rose-50"
+              : order.status === "Pending"
+                ? "bg-orange-50"
+                : ""
           }`}
         >
           <td className="px-2 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm">
@@ -1560,6 +1573,14 @@ const Orders = () => {
                 {formattedTime}
               </span>
             </button>
+            {isVipHighlightActive && (
+              <div className="mt-1">
+                <span className="inline-flex items-center gap-1 rounded-full border-2 border-amber-500 bg-gradient-to-r from-yellow-100 via-amber-100 to-rose-100 px-2.5 py-0.5 text-[10px] font-extrabold text-rose-700 shadow">
+                  <span aria-hidden="true">🏅</span>
+                  VIP PRIORITY
+                </span>
+              </div>
+            )}
             {hasTakeawayMeta && !isExpanded && (
               <div className="mt-1 space-y-0.5">
                 {isOfficeOrder ? (
@@ -2098,6 +2119,11 @@ const Orders = () => {
     const { dateLabel: formattedDate, timeLabel: formattedTime } =
       formatOrderDateTime(orderDate);
     const displayStatus = normalizeLegacyOrderStatus(order.status, order);
+    const isVipHighlightActive =
+      order.isVIP === true &&
+      !["Paid", "Served", "Completed", "Cancelled", "Returned"].includes(
+        displayStatus,
+      );
 
     const statusActionButtons = (() => {
       const isTakeaway =
@@ -2209,9 +2235,11 @@ const Orders = () => {
       <article
         key={order._id}
         className={`rounded-xl border shadow-sm p-3 space-y-3 ${
-          order.status === "Pending"
-            ? "bg-orange-50 border-orange-200"
-            : "bg-white border-slate-200"
+          isVipHighlightActive
+            ? "bg-gradient-to-r from-amber-50 via-yellow-50 to-rose-50 border-amber-400 ring-2 ring-amber-300 animate-pulse"
+            : order.status === "Pending"
+              ? "bg-orange-50 border-orange-200"
+              : "bg-white border-slate-200"
         }`}
       >
         <div className="flex items-start justify-between gap-2">
@@ -2235,6 +2263,12 @@ const Orders = () => {
               </span>
             </button>
             <div className="text-[11px] text-gray-500 mt-1">{formattedDate}</div>
+            {isVipHighlightActive && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full border-2 border-amber-500 bg-gradient-to-r from-yellow-100 via-amber-100 to-rose-100 px-3 py-1 text-xs font-extrabold text-rose-700 shadow">
+                <span aria-hidden="true">🏅</span>
+                VIP PRIORITY
+              </span>
+            )}
           </div>
           <span
             className={`px-2 py-1 inline-flex items-center gap-1 text-xs font-semibold rounded-full border whitespace-nowrap ${getStatusClass(

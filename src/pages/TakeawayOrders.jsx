@@ -2068,12 +2068,28 @@ const TakeawayOrders = () => {
               const orderDate = createdAtDate || updatedAtDate;
               const { dateLabel: formattedDate, timeLabel: formattedTime } =
                 formatOrderDateTime(orderDate);
+              const normalizedTakeawayStatus = normalizeLegacyTakeawayStatus(
+                order.status,
+              );
+              const isVipHighlightActive =
+                order.isVIP === true &&
+                ![
+                  "Paid",
+                  "Served",
+                  "Completed",
+                  "Cancelled",
+                  "Returned",
+                ].includes(normalizedTakeawayStatus);
 
               return (
                 <React.Fragment key={order._id}>
                   <tr
                     className={`hover:bg-gray-50 ${
-                      order.status === "Pending" ? "bg-orange-50" : ""
+                      isVipHighlightActive
+                        ? "bg-gradient-to-r from-amber-50 via-yellow-50 to-rose-50 animate-pulse"
+                        : order.status === "Pending"
+                          ? "bg-orange-50"
+                          : ""
                     }`}
                   >
                     <td className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs">
@@ -2102,6 +2118,14 @@ const TakeawayOrders = () => {
                       </button>
                       {expanded[order._id] !== false && (
                         <div className="mt-1.5 text-[9px] sm:text-[10px] text-gray-600 space-y-0.5">
+                          {isVipHighlightActive && (
+                            <div>
+                              <span className="inline-flex items-center gap-1 rounded-full border-2 border-amber-500 bg-gradient-to-r from-yellow-100 via-amber-100 to-rose-100 px-3 py-1 text-[10px] font-extrabold text-rose-700 shadow">
+                                <span aria-hidden="true">🏅</span>
+                                VIP PRIORITY
+                              </span>
+                            </div>
+                          )}
                           <div className="truncate">
                             Created:{" "}
                             {formatOrderDateTimeLong(createdAtDate || orderDate)}

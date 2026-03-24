@@ -70,6 +70,7 @@ if (import.meta.env.PROD) {
 const nodeApi = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
 const PANEL_TABLE = "TABLE";
 const PANEL_OFFICE = "OFFICE";
+const PANEL_VIP = "VIP";
 const PANEL_TAKEAWAY = "TAKEAWAY";
 
 const createDefaultFormState = (panelType = PANEL_TABLE) => ({
@@ -82,6 +83,7 @@ const createDefaultFormState = (panelType = PANEL_TABLE) => ({
   officePhone: "",
   officeDeliveryCharge: "",
   officePaymentMode: "ONLINE",
+  isVIP: false,
 });
 
 const createEditFormState = (table) => ({
@@ -101,6 +103,7 @@ const createEditFormState = (table) => ({
       : String(table?.officePaymentMode || "ONLINE").toUpperCase() === "BOTH"
         ? "BOTH"
         : "ONLINE",
+  isVIP: table?.isVIP === true,
 });
 
 const downloadQrAsPng = async (svgElement, fileName) => {
@@ -173,6 +176,7 @@ const TableCard = ({
   const displayStatus = isMerged ? "MERGED" : table.status;
   const statusMeta = STATUS_MAP[displayStatus] || STATUS_MAP.AVAILABLE;
   const isOfficeQr = table.qrContextType === "OFFICE";
+  const isVipQr = isOfficeQr && table.isVIP === true;
   const qrUrl = `${customerBaseUrl}/?table=${table.qrSlug}`;
   const qrFileName = `table-${table.number}-qr`;
 
@@ -198,7 +202,12 @@ const TableCard = ({
               : `Table ${table.number}`}
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            QR Type: {isOfficeQr ? "Office / Fixed Delivery" : "Table Dine-In"}
+            QR Type:{" "}
+            {isVipQr
+              ? "VIP QR"
+              : isOfficeQr
+                ? "Office / Fixed Delivery"
+                : "Table Dine-In"}
           </p>
           {table.name && <p className="text-sm text-slate-500">{table.name}</p>}
           {isOfficeQr && table.officeAddress && (
@@ -438,6 +447,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
   const socketRef = useRef(null);
   const takeawayQrRef = useRef(null);
   const [cartId, setCartId] = useState(null);
+  const [allowVipQR, setAllowVipQR] = useState(false);
 
   useEffect(() => {
     setForm(createDefaultFormState(panelType));
@@ -482,6 +492,18 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
 
   useEffect(() => {
     fetchTables();
+  }, []);
+
+  useEffect(() => {
+    const fetchVipToggle = async () => {
+      try {
+        const res = await api.get("/carts/my-settings");
+        setAllowVipQR(Boolean(res?.data?.data?.allowVipQR));
+      } catch (_err) {
+        setAllowVipQR(false);
+      }
+    };
+    fetchVipToggle();
   }, []);
 
   // --- Socket setup for live table status updates ---
@@ -602,7 +624,15 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
       : isTablePanel
         ? PANEL_TABLE
         : form.qrContextType || PANEL_TABLE;
-    const isOfficeQr = selectedQrContextType === PANEL_OFFICE;
+    const isVipQr =
+      selectedQrContextType === PANEL_VIP ||
+      (selectedQrContextType === PANEL_OFFICE &&
+        allowVipQR &&
+        form.isVIP === true);
+    const isOfficeQr = selectedQrContextType === PANEL_OFFICE || isVipQr;
+    const normalizedQrContextType = isVipQr
+      ? PANEL_OFFICE
+      : selectedQrContextType;
     if (!isOfficeQr && (!form.number || !form.capacity)) {
       alert("Table number and capacity are required");
       return;
@@ -619,7 +649,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     try {
       const payload = {
         name: isOfficeQr ? undefined : form.name || undefined,
-        qrContextType: selectedQrContextType,
+        qrContextType: normalizedQrContextType,
         officeName:
           isOfficeQr && form.officeName.trim() ? form.officeName.trim() : undefined,
         officeAddress:
@@ -635,13 +665,18 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
             ? Number(form.officeDeliveryCharge)
             : undefined,
         officePaymentMode: isOfficeQr
-          ? String(form.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+          ? isVipQr
+            ? String(form.officePaymentMode || "ONLINE").toUpperCase() === "COD"
+              ? "COD"
+              : "ONLINE"
+            : String(form.officePaymentMode || "ONLINE").toUpperCase() === "COD"
             ? "COD"
             : String(form.officePaymentMode || "ONLINE").toUpperCase() ===
                 "BOTH"
               ? "BOTH"
               : "ONLINE"
           : undefined,
+        isVIP: isVipQr ? true : undefined,
       };
 
       if (!isOfficeQr) {
@@ -720,6 +755,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     if (!currentTable?._id) return;
 
     const isOfficeQr = currentTable.qrContextType === PANEL_OFFICE;
+    const isVipQr = isOfficeQr && allowVipQR && editModal.form.isVIP === true;
     if (!isOfficeQr && (!editModal.form.number || !editModal.form.capacity)) {
       alert("Table number and capacity are required");
       return;
@@ -750,13 +786,20 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
             ? Number(editModal.form.officeDeliveryCharge)
             : 0;
         payload.officePaymentMode =
-          String(editModal.form.officePaymentMode || "ONLINE").toUpperCase() ===
-          "COD"
-            ? "COD"
+          isVipQr
+            ? String(editModal.form.officePaymentMode || "ONLINE").toUpperCase() ===
+              "COD"
+              ? "COD"
+              : "ONLINE"
             : String(editModal.form.officePaymentMode || "ONLINE").toUpperCase() ===
-                "BOTH"
-              ? "BOTH"
-              : "ONLINE";
+                "COD"
+              ? "COD"
+              : String(
+                    editModal.form.officePaymentMode || "ONLINE",
+                  ).toUpperCase() === "BOTH"
+                ? "BOTH"
+                : "ONLINE";
+        payload.isVIP = isVipQr;
       } else {
         payload.qrContextType = PANEL_TABLE;
         payload.number = Number(editModal.form.number);
@@ -1075,6 +1118,10 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     : isTablePanel
       ? PANEL_TABLE
       : form.qrContextType;
+  const isOfficeLikeFormQr = selectedFormQrType === PANEL_OFFICE || selectedFormQrType === PANEL_VIP;
+  const isVipFormSelection =
+    selectedFormQrType === PANEL_VIP ||
+    (selectedFormQrType === PANEL_OFFICE && allowVipQR && form.isVIP === true);
   const editingOfficeQr = editModal.table?.qrContextType === PANEL_OFFICE;
 
   return (
@@ -1249,7 +1296,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
           onSubmit={handleSubmit}
           className="grid grid-cols-1 md:grid-cols-6 gap-4"
         >
-          {selectedFormQrType !== PANEL_OFFICE && (
+          {selectedFormQrType !== PANEL_OFFICE && selectedFormQrType !== PANEL_VIP && (
             <>
               <div>
                 <label className="block text-sm text-slate-500 mb-1">
@@ -1298,10 +1345,11 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
               >
                 <option value="TABLE">Table (Dine-in)</option>
                 <option value="OFFICE">Office / Fixed Customer</option>
+                {allowVipQR && <option value="VIP">VIP QR</option>}
               </select>
             </div>
           )}
-          {selectedFormQrType !== PANEL_OFFICE && (
+          {selectedFormQrType !== PANEL_OFFICE && selectedFormQrType !== PANEL_VIP && (
             <div>
               <label className="block text-sm text-slate-500 mb-1">
                 Label (optional)
@@ -1316,14 +1364,14 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
               />
             </div>
           )}
-          {selectedFormQrType === PANEL_OFFICE && (
+          {isOfficeLikeFormQr && (
             <>
               <div>
                 <label className="block text-sm text-slate-500 mb-1">
                   Office Name
                 </label>
                 <input
-                  required={selectedFormQrType === PANEL_OFFICE}
+                  required={isOfficeLikeFormQr}
                   value={form.officeName}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, officeName: e.target.value }))
@@ -1380,15 +1428,40 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
                 >
                   <option value="ONLINE">Online Only</option>
                   <option value="COD">COD Only</option>
-                  <option value="BOTH">Online + COD</option>
+                  {!isVipFormSelection ? (
+                    <option value="BOTH">Online + COD</option>
+                  ) : null}
                 </select>
               </div>
+              {allowVipQR && selectedFormQrType === PANEL_OFFICE && (
+                <div className="md:col-span-2">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.isVIP)}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          isVIP: e.target.checked,
+                          officePaymentMode: e.target.checked
+                            ? prev.officePaymentMode === "COD"
+                              ? "COD"
+                              : "ONLINE"
+                            : prev.officePaymentMode,
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    Mark as VIP QR
+                  </label>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <label className="block text-sm text-slate-500 mb-1">
                   Office Address
                 </label>
                 <input
-                  required={selectedFormQrType === PANEL_OFFICE}
+                  required={isOfficeLikeFormQr}
                   value={form.officeAddress}
                   onChange={(e) =>
                     setForm((prev) => ({
@@ -1618,10 +1691,27 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
                       >
                         <option value="ONLINE">Online Only</option>
                         <option value="COD">COD Only</option>
-                        <option value="BOTH">Online + COD</option>
+                        {!(allowVipQR && editModal.form.isVIP === true) ? (
+                          <option value="BOTH">Online + COD</option>
+                        ) : null}
                       </select>
                     </div>
                   </div>
+                  {allowVipQR && (
+                    <div>
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editModal.form.isVIP)}
+                          onChange={(e) =>
+                            handleEditFieldChange("isVIP", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                        />
+                        Mark as VIP QR
+                      </label>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm text-slate-500 mb-1">
