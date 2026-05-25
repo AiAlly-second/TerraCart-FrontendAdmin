@@ -20,9 +20,9 @@ A unified admin portal that combines TerraCart Admin, Franchise Admin, and Super
 npm install
 ```
 
-2. Create a `.env` file in the root directory (optional, defaults to `http://localhost:5001`):
+2. Create a `.env` file in the root directory (optional, defaults to `http://127.0.0.1:5001`):
 ```
-VITE_NODE_API_URL=http://localhost:5001
+VITE_NODE_API_URL=http://127.0.0.1:5001
 VITE_FEATURE_COSTING_ENABLED=true
 ```
 
@@ -33,7 +33,9 @@ VITE_FEATURE_COSTING_ENABLED=true
 npm run dev
 ```
 
-4. Access the portal at `http://localhost:5173` (or the port shown in terminal)
+   - `npm run dev` now auto-checks the backend and will start `../backend` on port `5001` if needed.
+
+4. Access the portal at `http://localhost:5174` (or the port shown in terminal)
 
 ## Login Credentials
 
@@ -87,7 +89,7 @@ unified-admin/
 ## Backend Connection
 
 The unified admin connects to the same backend API as the individual admin portals:
-- **API Base URL**: Configured via `VITE_NODE_API_URL` environment variable (default: `http://localhost:5001`)
+- **API Base URL**: Configured via `VITE_NODE_API_URL` environment variable (default: `http://127.0.0.1:5001`)
 - **Authentication**: Uses JWT tokens stored in localStorage
 - **CORS**: Backend CORS is configured to allow requests from the unified admin
 

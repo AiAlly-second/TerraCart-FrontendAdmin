@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import api from "../utils/api";
+import { getMenuCached, invalidateMenuCache } from "../utils/menuCache";
 import { useAuth } from "../context/AuthContext";
 
 // Helper: get API base URL with protocol ensured
@@ -124,7 +125,7 @@ const emptyItemForm = {
 const MenuManager = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const userRole = user?.role;
+  const userRole = user?.role === "cart_admin" ? "admin" : user?.role;
   
   // Debug: Log user role to verify it's being read correctly
   useEffect(() => {
@@ -163,12 +164,12 @@ const MenuManager = () => {
     [menu, selectedCategoryId]
   );
 
-  const loadMenu = async () => {
+  const loadMenu = async ({ force = false } = {}) => {
     setLoading(true);
     setError(null);
     try {
       const [menuRes, spiceRes] = await Promise.all([
-        api.get("/menu"),
+        getMenuCached({}, { force }),
         api.get("/menu/meta/spice-levels").catch(() => null),
       ]);
       const menuData = normalizeMenuPayload(menuRes.data || []);
@@ -267,7 +268,8 @@ const MenuManager = () => {
       }
       setCategoryForm(emptyCategoryForm);
       setEditingCategoryId(null);
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save category");
     } finally {
@@ -319,7 +321,8 @@ const MenuManager = () => {
       if (selectedCategoryId === category._id) {
         setSelectedCategoryId(null);
       }
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete category");
     }
@@ -375,7 +378,8 @@ const MenuManager = () => {
       }
       setItemForm(emptyItemForm);
       setEditingItemId(null);
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save menu item");
     } finally {
@@ -398,7 +402,8 @@ const MenuManager = () => {
         categoryId: targetCategoryId,
       });
       // Reload menu so UI reflects new category assignment
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
       // Optionally, keep current category selected; item will disappear from this list
     } catch (err) {
       alert(
@@ -460,7 +465,8 @@ const MenuManager = () => {
 
     try {
       await api.delete(`/menu/items/${item._id}`);
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete menu item");
     }
@@ -475,7 +481,8 @@ const MenuManager = () => {
       await api.patch(`/menu/items/${item._id}/availability`, {
         isAvailable: !item.isAvailable,
       });
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update availability");
     }
@@ -490,7 +497,8 @@ const MenuManager = () => {
       await api.patch(`/menu/items/${item._id}`, {
         isFeatured: !(item.isFeatured === true),
       });
-      await loadMenu();
+      invalidateMenuCache();
+      await loadMenu({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update special item flag");
     }

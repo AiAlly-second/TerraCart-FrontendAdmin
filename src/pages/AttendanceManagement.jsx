@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { FaDownload } from "react-icons/fa";
 import { getSocket } from "../utils/socket";
 import { confirm } from "../utils/confirm";
+import { exportRowsToExcel } from "../utils/excelReport";
 import TaskManagement from "./TaskManagement";
 
 const AttendanceManagement = () => {
@@ -44,6 +46,7 @@ const AttendanceManagement = () => {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [leaveStatusFilter, setLeaveStatusFilter] = useState("pending");
   const [leaveActionId, setLeaveActionId] = useState("");
+  const [exportingHistory, setExportingHistory] = useState(false);
   
   // Use auth context
   // We need to import useAuth dynamically or assume it's available via context if we can't import easily
@@ -274,22 +277,10 @@ const AttendanceManagement = () => {
     if (!apiRef.current) return;
     try {
       setLoading(true);
-      const params = {};
-      if (selectedEmployee) params.employeeId = selectedEmployee;
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
-      if (selectedCart) params.cartId = selectedCart;
+      const params = getAttendanceHistoryParams();
 
       const response = await apiRef.current.get("/attendance", { params });
-      // Ensure attendance is always an array
-      let attendanceData = [];
-      if (Array.isArray(response.data)) {
-        attendanceData = response.data;
-      } else if (response.data && Array.isArray(response.data.attendance)) {
-        attendanceData = response.data.attendance;
-      } else if (response.data && Array.isArray(response.data.data)) {
-        attendanceData = response.data.data;
-      }
+      const attendanceData = extractAttendanceList(response.data);
       setAttendance(attendanceData);
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -298,6 +289,22 @@ const AttendanceManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getAttendanceHistoryParams = () => {
+    const params = {};
+    if (selectedEmployee) params.employeeId = selectedEmployee;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    if (selectedCart) params.cartId = selectedCart;
+    return params;
+  };
+
+  const extractAttendanceList = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.attendance)) return payload.attendance;
+    if (payload && Array.isArray(payload.data)) return payload.data;
+    return [];
   };
 
   const fetchStats = async () => {
@@ -691,6 +698,19 @@ const AttendanceManagement = () => {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
@@ -701,9 +721,22 @@ const AttendanceManagement = () => {
     });
   };
 
+  const formatDateForExcel = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  };
+
   const formatHours = (minutes) => {
     if (minutes === null || minutes === undefined) return "-";
-    const totalMins = Math.round(Number(minutes));
+    const numericMinutes = Number(minutes);
+    if (!Number.isFinite(numericMinutes)) return "-";
+    const totalMins = Math.round(numericMinutes);
     if (totalMins <= 0) return "0m";
     
     const hours = Math.floor(totalMins / 60);
@@ -713,6 +746,148 @@ const AttendanceManagement = () => {
       return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
     return `${mins}m`;
+  };
+
+  const formatStatusText = (value) => {
+    const normalized = String(value || "")
+      .replace(/_/g, " ")
+      .trim();
+    if (!normalized) return "";
+    return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getWorkingMinutes = (record) => {
+    const totalMinutes = Number(record?.totalWorkingMinutes);
+    if (Number.isFinite(totalMinutes) && totalMinutes > 0) {
+      return Math.round(totalMinutes);
+    }
+
+    const workingHours = Number(record?.workingHours);
+    if (Number.isFinite(workingHours) && workingHours > 0) {
+      return Math.round(workingHours * 60);
+    }
+
+    return 0;
+  };
+
+  const getBreakMinutes = (record) => {
+    const breakMinutes = Number(record?.breakDuration ?? record?.breakMinutes);
+    if (Number.isFinite(breakMinutes) && breakMinutes >= 0) {
+      return Math.round(breakMinutes);
+    }
+    return 0;
+  };
+
+  const getBreakDetails = (record) => {
+    const breaks = Array.isArray(record?.breaks) ? record.breaks : [];
+    return breaks
+      .map((entry, index) => {
+        const rawMinutes = Number(entry?.durationMinutes || 0);
+        const minutes = Number.isFinite(rawMinutes) ? rawMinutes : 0;
+        return [
+          `Break ${index + 1}`,
+          formatDateTime(entry?.breakStart) || "Start N/A",
+          formatDateTime(entry?.breakEnd) || "End N/A",
+          formatHours(minutes),
+        ].join(" | ");
+      })
+      .join("; ");
+  };
+
+  const buildAttendanceHistoryFileName = () => {
+    const safePart = (value, fallback) =>
+      String(value || fallback)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-_]/g, "");
+    return `attendance-history-${safePart(startDate, "start")}-to-${safePart(
+      endDate,
+      "end"
+    )}.xlsx`;
+  };
+
+  const buildAttendanceHistoryRows = (records) =>
+    (Array.isArray(records) ? records : []).map((record) => {
+      const employee = record?.employeeId || {};
+      const checkIn = record?.checkIn || {};
+      const checkOut = record?.checkOut || {};
+      const workingMinutes = getWorkingMinutes(record);
+      const breakMinutes = getBreakMinutes(record);
+      const rawOvertimeMinutes = Number(record?.overtime || 0);
+      const overtimeMinutes = Number.isFinite(rawOvertimeMinutes)
+        ? Math.max(0, Math.round(rawOvertimeMinutes))
+        : 0;
+      const breaks = Array.isArray(record?.breaks) ? record.breaks : [];
+
+      return {
+        "Attendance Date": record?.attendanceDateIST || formatDateForExcel(record?.date),
+        "Employee Name": employee?.name || "N/A",
+        "Employee Role": formatStatusText(employee?.employeeRole),
+        "Mobile": employee?.mobile || "",
+        "Day Status": formatStatusText(record?.status),
+        "Attendance Status": formatStatusText(record?.attendanceStatus),
+        "Check-In": formatDateTime(checkIn?.time || record?.checkInTime),
+        "Check-Out": formatDateTime(checkOut?.time || record?.checkOutTime),
+        "Working Duration": formatHours(workingMinutes),
+        "Working Minutes": workingMinutes,
+        "Break Count": breaks.length,
+        "Break Duration": formatHours(breakMinutes),
+        "Break Minutes": breakMinutes,
+        "Break Details": getBreakDetails(record),
+        "Overtime Duration": formatHours(overtimeMinutes),
+        "Overtime Minutes": overtimeMinutes,
+        "Check-In Location": checkIn?.location || "",
+        "Check-Out Location": checkOut?.location || "",
+        "Check-In Notes": checkIn?.notes || "",
+        "Check-Out Notes": checkOut?.notes || "",
+        "Auto Checked Out": record?.autoCheckedOut ? "Yes" : "No",
+        "Pending Tasks At Checkout": record?.pendingTasksAtCheckout ?? "",
+        "Manager Override Used": record?.managerOverrideUsed ? "Yes" : "No",
+        "Manager Override Reason": record?.managerOverrideReason || "",
+        "Record Created At": formatDateTime(record?.createdAt),
+        "Record Updated At": formatDateTime(record?.updatedAt),
+        "Attendance Record ID": record?._id || "",
+      };
+    });
+
+  const handleDownloadAttendanceHistory = async () => {
+    if (!apiRef.current) {
+      alert("System is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      alert("Please select both start date and end date before exporting.");
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      alert("Start date cannot be after end date.");
+      return;
+    }
+
+    try {
+      setExportingHistory(true);
+      const response = await apiRef.current.get("/attendance", {
+        params: getAttendanceHistoryParams(),
+      });
+      const exportRecords = extractAttendanceList(response.data);
+      const exported = exportRowsToExcel({
+        rows: buildAttendanceHistoryRows(exportRecords),
+        fileName: buildAttendanceHistoryFileName(),
+        sheetName: "Attendance History",
+      });
+
+      if (!exported) {
+        alert("No attendance records available for the selected date range.");
+      }
+    } catch (error) {
+      console.error("Error exporting attendance history:", error);
+      alert(error.response?.data?.message || "Failed to export attendance history");
+    } finally {
+      setExportingHistory(false);
+    }
   };
 
   const getEmployeeIdFromAttendance = (record) => {
@@ -1133,7 +1308,7 @@ End Break
           {/* Attendance History Tab */}
           {activeTab === "history" && (
             <div className="space-y-4">
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-col lg:flex-row gap-4 lg:items-end">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Employee
@@ -1174,12 +1349,24 @@ End Break
                     className="rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
-                <button
-                  onClick={fetchAttendance}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Search
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchAttendance}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Search
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadAttendanceHistory}
+                    disabled={exportingHistory}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <FaDownload className="text-sm" />
+                    {exportingHistory ? "Exporting..." : "Download Excel"}
+                  </button>
+                </div>
               </div>
               {loading ? (
                 <div className="flex justify-center items-center h-64">

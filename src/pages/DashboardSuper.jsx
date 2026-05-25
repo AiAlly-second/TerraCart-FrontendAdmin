@@ -12,10 +12,19 @@ import {
   FaChartBar,
 } from "react-icons/fa";
 import api from "../utils/api";
+import { getSocket } from "../utils/socket";
 
 // Revenue Timeline Graph Component
 const RevenueTimeline = ({ orders }) => {
     const data = useMemo(() => {
+        const istDayFormatter = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        });
+        const todayIstKey = istDayFormatter.format(new Date());
+
         // Create array for 24 hours
         const hours = Array.from({ length: 24 }, (_, i) => ({
             name: i === 0 ? '12 AM' : i === 12 ? '12 PM' : i > 12 ? `${i-12} PM` : `${i} AM`,
@@ -23,12 +32,22 @@ const RevenueTimeline = ({ orders }) => {
             revenue: 0
         }));
 
-        orders.forEach(o => {
-            if (!o.createdAt) return;
+        (orders || []).forEach(o => {
+            if (!o?.createdAt) return;
             // Only count PAID orders for revenue
-            if (o.status !== 'Paid') return;
+            if (String(o.status || "").trim().toUpperCase() !== "PAID") return;
 
-            const hour = new Date(o.createdAt).getHours();
+            const createdAt = new Date(o.createdAt);
+            if (Number.isNaN(createdAt.getTime())) return;
+            if (istDayFormatter.format(createdAt) !== todayIstKey) return;
+
+            const hour = Number(
+              createdAt.toLocaleString("en-US", {
+                timeZone: "Asia/Kolkata",
+                hour: "2-digit",
+                hour12: false,
+              }),
+            );
             if (hours[hour]) {
                 const orderTotal = o.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
                 hours[hour].revenue += orderTotal;
@@ -142,6 +161,7 @@ const Dashboard = () => {
   });
 
   const isFetchingRef = useRef(false);
+  const refreshTimerRef = useRef(null);
 
   const updateRevenue = (ordersData) => {
     // Super admin aggregates revenue from ACTIVE franchises only
@@ -175,8 +195,7 @@ const Dashboard = () => {
   const activeFranchiseIdsStr = Array.from(activeFranchiseIds).sort().join(',');
 
   useEffect(() => {
-    // HTTP polling for real-time updates (replaces Socket.IO)
-    // Poll orders every 12 seconds to check for new/updated orders and payments
+    // HTTP polling fallback for dashboards in case socket events are missed.
     const pollingInterval = setInterval(async () => {
       try {
         // Fetch dashboard data in the background (no spinner)
@@ -193,6 +212,51 @@ const Dashboard = () => {
       clearInterval(pollingInterval);
     };
   }, [activeFranchiseIdsStr]); // Re-run only if the actual IDs change
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const refreshEvents = [
+      "newOrder",
+      "order:created",
+      "orderUpdated",
+      "order:status:updated",
+      "order_status_updated",
+      "order:upsert",
+      "orderDeleted",
+      "order:deleted",
+      "paymentCreated",
+      "paymentUpdated",
+      "table:status:updated",
+    ];
+
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        fetchDashboardData(false);
+      }, 1200);
+    };
+
+    socket.on("connect", scheduleRefresh);
+    refreshEvents.forEach((eventName) => {
+      socket.on(eventName, scheduleRefresh);
+    });
+
+    return () => {
+      socket.off("connect", scheduleRefresh);
+      refreshEvents.forEach((eventName) => {
+        socket.off(eventName, scheduleRefresh);
+      });
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [activeFranchiseIdsStr]);
 
   const fetchDashboardData = async (showLoading = false) => {
     if (isFetchingRef.current) return;
@@ -223,18 +287,10 @@ const Dashboard = () => {
         setActiveFranchiseIds(activeFranchiseIdsSet);
       }
 
-      // Fetch revenue and orders
+      // Fetch orders and derive metrics from ACTIVE franchises only.
       let totalRevenue = 0;
       let totalOrdersCount = 0;
       let fetchedOrders = [];
-
-      try {
-        const revenueResponse = await api.get("/revenue/current");
-        if (revenueResponse.data?.success && revenueResponse.data?.data) {
-          totalRevenue = revenueResponse.data.data.totalRevenue || 0;
-          totalOrdersCount = revenueResponse.data.data.totalOrders || 0;
-        }
-      } catch (e) { /* ignore */ }
 
       try {
         const ordersResponse = await api.get("/orders");
@@ -248,15 +304,19 @@ const Dashboard = () => {
         return franchiseId && activeFranchiseIdsSet.has(franchiseId);
       });
 
-      // Recalculate if needed
-      const revenueInfo = updateRevenue(activeOrders);
-      if (totalRevenue === 0) {
-        totalRevenue = activeOrders.filter(o => o.status === 'Paid').reduce((sum, order) => {
-           if (!order.kotLines) return sum;
-           return sum + order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
+      totalRevenue = activeOrders
+        .filter((o) => String(o?.status || "").trim().toUpperCase() === "PAID")
+        .reduce((sum, order) => {
+          if (!order?.kotLines) return sum;
+          return (
+            sum +
+            order.kotLines.reduce(
+              (kSum, k) => kSum + Number(k?.totalAmount || 0),
+              0,
+            )
+          );
         }, 0);
-        totalOrdersCount = activeOrders.length;
-      }
+      totalOrdersCount = activeOrders.length;
 
       // Daily Stats
       const todayStr = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -346,6 +406,65 @@ const Dashboard = () => {
 
   const statsArray = Object.values(stats);
   const statRoutes = ["/franchises", "/users", "/revenue-history", "/orders"];
+  const superTrends = useMemo(() => {
+    const now = new Date();
+    const currentPeriodStart = new Date(now);
+    currentPeriodStart.setHours(0, 0, 0, 0);
+    currentPeriodStart.setDate(currentPeriodStart.getDate() - 29);
+    const previousPeriodStart = new Date(currentPeriodStart);
+    previousPeriodStart.setDate(previousPeriodStart.getDate() - 30);
+
+    const getOrderTotal = (order) =>
+      (order?.kotLines || []).reduce(
+        (sum, kot) => sum + (Number(kot?.totalAmount) || 0),
+        0,
+      );
+    const isPaidOrder = (order) =>
+      String(order?.status || "").trim().toUpperCase() === "PAID";
+
+    let currentRevenue = 0;
+    let previousRevenue = 0;
+    let currentOrders = 0;
+    let previousOrders = 0;
+
+    (orders || []).forEach((order) => {
+      const createdAt = new Date(order?.createdAt);
+      if (Number.isNaN(createdAt.getTime())) return;
+
+      const inCurrentWindow =
+        createdAt >= currentPeriodStart && createdAt <= now;
+      const inPreviousWindow =
+        createdAt >= previousPeriodStart && createdAt < currentPeriodStart;
+
+      if (inCurrentWindow) {
+        currentOrders += 1;
+        if (isPaidOrder(order)) currentRevenue += getOrderTotal(order);
+        return;
+      }
+
+      if (inPreviousWindow) {
+        previousOrders += 1;
+        if (isPaidOrder(order)) previousRevenue += getOrderTotal(order);
+      }
+    });
+
+    const buildLabel = (current, previous) => {
+      if (previous <= 0 && current <= 0) return "No data yet";
+      if (previous <= 0) return "New activity";
+      const change = ((current - previous) / previous) * 100;
+      const prefix = change >= 0 ? "+" : "";
+      return `${prefix}${change.toFixed(1)}% vs previous 30d`;
+    };
+
+    return {
+      revenueLabel: buildLabel(currentRevenue, previousRevenue),
+      orderLabel: buildLabel(currentOrders, previousOrders),
+      revenueUp:
+        previousRevenue <= 0 ? currentRevenue > 0 : currentRevenue >= previousRevenue,
+      orderUp:
+        previousOrders <= 0 ? currentOrders > 0 : currentOrders >= previousOrders,
+    };
+  }, [orders]);
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -385,16 +504,16 @@ const Dashboard = () => {
                         </p>
                         {/* Trend indicator */}
                         <div className="flex items-center mt-2 text-xs">
-                          {index === 2 && ( // Revenue card
-                            <span className="flex items-center text-green-600">
+                          {index === 2 && (
+                            <span className={`flex items-center ${superTrends.revenueUp ? "text-green-600" : "text-rose-600"}`}>
                               <FaArrowUp className="mr-1" />
-                              +12.5% from last month
+                              {superTrends.revenueLabel}
                             </span>
                           )}
-                          {index === 3 && ( // Orders card
-                            <span className="flex items-center text-green-600">
+                          {index === 3 && (
+                            <span className={`flex items-center ${superTrends.orderUp ? "text-green-600" : "text-rose-600"}`}>
                               <FaArrowUp className="mr-1" />
-                              +8.3% from last month
+                              {superTrends.orderLabel}
                             </span>
                           )}
                         </div>
@@ -497,7 +616,7 @@ const Dashboard = () => {
                               }}
                             >
                               <td className="px-6 py-4 text-sm font-medium text-[#ff6b35]">
-                                {franchise.franchiseName}
+                                {franchise.franchiseName || "Unassigned Franchise"}
                               </td>
                               <td className="px-6 py-4 text-sm text-center text-gray-900">
                                 {franchise.totalCarts}
@@ -590,10 +709,10 @@ const Dashboard = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">
-                      {user.name}
+                      {user.name || "Unnamed User"}
                     </p>
                     <p className="text-xs text-gray-500 truncate">
-                      {user.email}
+                      {user.email || "No email"}
                     </p>
                   </div>
                   <div className="flex-shrink-0">

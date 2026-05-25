@@ -1,30 +1,75 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
+import { getAdminApiOrigin } from "../utils/adminApiOrigin.js";
 
 const AuthContext = createContext();
-
-// API URL from environment variable
-// Ensure URL has protocol (http:// or https://)
-const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
-  // If URL doesn't start with http:// or https://, add http://
-  if (envUrl && !envUrl.match(/^https?:\/\//)) {
-    const fixedUrl = `http://${envUrl}`;
-    console.warn(
-      `[AuthContext] API URL missing protocol, fixed: ${envUrl} → ${fixedUrl}`,
-    );
-    return fixedUrl;
-  }
-  if (import.meta.env.DEV) {
-    console.log(`[AuthContext] Using API URL: ${envUrl}`);
-  }
-  return envUrl;
-};
-
-const nodeApi = getApiUrl();
 
 // Allowed roles for unified admin
 // Include "cart_admin" for backward compatibility with existing admin accounts
 const ALLOWED_ROLES = ["admin", "franchise_admin", "super_admin", "cart_admin"];
+const VERIFY_CACHE_KEY = "terraAdminVerifyCache";
+const VERIFY_COOLDOWN_KEY = "terraAdminVerifyCooldownUntil";
+const VERIFY_CACHE_TTL_MS = 60 * 1000;
+const VERIFY_TRANSIENT_COOLDOWN_MS = 5 * 1000;
+let verifyInFlight = null;
+
+const getTokenFingerprint = (token) =>
+  token ? `${token.length}:${token.slice(-16)}` : "";
+
+const readSessionJson = (key) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const markTokenVerified = (token, user) => {
+  try {
+    sessionStorage.setItem(
+      VERIFY_CACHE_KEY,
+      JSON.stringify({
+        fingerprint: getTokenFingerprint(token),
+        verifiedAt: Date.now(),
+        user,
+      }),
+    );
+    sessionStorage.removeItem(VERIFY_COOLDOWN_KEY);
+  } catch {
+    // Ignore storage failures; verification still succeeded.
+  }
+};
+
+const getCachedVerifiedUser = (token) => {
+  const cached = readSessionJson(VERIFY_CACHE_KEY);
+  if (
+    cached?.fingerprint === getTokenFingerprint(token) &&
+    cached?.user &&
+    Date.now() - Number(cached.verifiedAt || 0) < VERIFY_CACHE_TTL_MS
+  ) {
+    return cached.user;
+  }
+  return null;
+};
+
+const getVerifyCooldownUntil = () => {
+  try {
+    return Number(sessionStorage.getItem(VERIFY_COOLDOWN_KEY) || 0);
+  } catch {
+    return 0;
+  }
+};
+
+const setVerifyCooldown = (delayMs = VERIFY_TRANSIENT_COOLDOWN_MS) => {
+  try {
+    sessionStorage.setItem(
+      VERIFY_COOLDOWN_KEY,
+      String(Date.now() + Math.max(delayMs, VERIFY_TRANSIENT_COOLDOWN_MS)),
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -41,6 +86,24 @@ export const AuthProvider = ({ children }) => {
       case "cart_admin":
       default:
         return { token: "adminToken", user: "adminUser" };
+    }
+  };
+
+  const clearStoredAuth = () => {
+    try {
+      localStorage.removeItem("superAdminToken");
+      localStorage.removeItem("superAdminUser");
+      localStorage.removeItem("franchiseAdminToken");
+      localStorage.removeItem("franchiseAdminUser");
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("adminUser");
+      sessionStorage.removeItem("lastLoginTime");
+      sessionStorage.removeItem(VERIFY_CACHE_KEY);
+      sessionStorage.removeItem(VERIFY_COOLDOWN_KEY);
+    } catch (storageError) {
+      if (import.meta.env.DEV) {
+        console.warn("[AuthContext] Error clearing auth storage:", storageError);
+      }
     }
   };
 
@@ -110,8 +173,21 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (storedUser && token && ALLOWED_ROLES.includes(storedUser.role)) {
+      const cachedVerifiedUser = getCachedVerifiedUser(token);
+      if (cachedVerifiedUser) {
+        setUser(cachedVerifiedUser);
+        setLoading(false);
+        return;
+      }
+
       setUser(storedUser);
-      verifyToken(token, storedUser.role);
+      const cooldownUntil = getVerifyCooldownUntil();
+      if (cooldownUntil && Date.now() < cooldownUntil) {
+        setLoading(false);
+        return;
+      }
+
+      verifyToken(token, storedUser.role, storedUser);
     } else {
       setLoading(false);
     }
@@ -120,7 +196,7 @@ export const AuthProvider = ({ children }) => {
   // Login function - handles all admin roles
   const login = async (email, password) => {
     try {
-      const response = await fetch(`${nodeApi}/api/admin/login`, {
+      const response = await fetch(`${getAdminApiOrigin()}/api/admin/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -180,6 +256,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem(storageKeys.token, data.token);
       localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
       setUser(data.user);
+      markTokenVerified(data.token, data.user);
 
       // Store login timestamp for token retry logic
       sessionStorage.setItem("lastLoginTime", Date.now().toString());
@@ -200,15 +277,66 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Verify token
-  const verifyToken = async (token, expectedRole) => {
+  const verifyToken = async (token, expectedRole, fallbackUser = null) => {
     try {
-      const response = await fetch(`${nodeApi}/api/admin/verify`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const cachedVerifiedUser = getCachedVerifiedUser(token);
+      if (cachedVerifiedUser) {
+        setUser(cachedVerifiedUser);
+        return;
+      }
 
-      const data = await response.json();
+      const fingerprint = getTokenFingerprint(token);
+      const runVerifyRequest = async () => {
+        const response = await fetch(`${getAdminApiOrigin()}/api/admin/verify`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Request-Source": "terra-admin-auth",
+          },
+          cache: "no-store",
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+
+        return { response, data };
+      };
+
+      if (!verifyInFlight || verifyInFlight.fingerprint !== fingerprint) {
+        verifyInFlight = {
+          fingerprint,
+          promise: runVerifyRequest().finally(() => {
+            verifyInFlight = null;
+          }),
+        };
+      }
+
+      const { response, data } = await verifyInFlight.promise;
+
+      if (response.status === 429 || response.status >= 500) {
+        const retryAfterSeconds = Number.parseInt(
+          response.headers.get("Retry-After") || "",
+          10,
+        );
+        setVerifyCooldown(
+          Number.isFinite(retryAfterSeconds)
+            ? retryAfterSeconds * 1000
+            : VERIFY_TRANSIENT_COOLDOWN_MS,
+        );
+        if (fallbackUser) {
+          setUser(fallbackUser);
+        }
+        if (import.meta.env.DEV) {
+          console.warn("[AuthContext] Verify delayed by transient response", {
+            status: response.status,
+            expectedRole,
+          });
+        }
+        return;
+      }
 
       // Check for deactivation or authorization errors
       if (response.status === 403) {
@@ -216,7 +344,8 @@ export const AuthProvider = ({ children }) => {
           data?.message ||
           "Your account has been deactivated or is not authorized. Please contact TerraCart Support.";
         alert(errorMessage);
-        logout();
+        clearStoredAuth();
+        setUser(null);
         return;
       }
 
@@ -226,12 +355,15 @@ export const AuthProvider = ({ children }) => {
         !data?.success ||
         !ALLOWED_ROLES.includes(data?.user?.role)
       ) {
-        throw new Error("Token invalid or not authorized");
+        const invalidTokenError = new Error("Token invalid or not authorized");
+        invalidTokenError.status = response.status;
+        throw invalidTokenError;
       }
 
       // Update storage with verified user data
       const storageKeys = getStorageKeys(data.user.role);
       setUser(data.user);
+      markTokenVerified(token, data.user);
       try {
         localStorage.setItem(storageKeys.user, JSON.stringify(data.user));
       } catch (storageError) {
@@ -247,7 +379,14 @@ export const AuthProvider = ({ children }) => {
       if (import.meta.env.DEV) {
         console.error("Token verification failed:", error);
       }
-      logout();
+      const status = error?.status || error?.response?.status;
+      if ((!status || status === 429 || status >= 500) && fallbackUser) {
+        setVerifyCooldown();
+        setUser(fallbackUser);
+        return;
+      }
+      clearStoredAuth();
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -255,13 +394,7 @@ export const AuthProvider = ({ children }) => {
 
   // Logout function - clears all admin tokens
   const logout = () => {
-    // Clear all possible tokens
-    localStorage.removeItem("superAdminToken");
-    localStorage.removeItem("superAdminUser");
-    localStorage.removeItem("franchiseAdminToken");
-    localStorage.removeItem("franchiseAdminUser");
-    localStorage.removeItem("adminToken");
-    localStorage.removeItem("adminUser");
+    clearStoredAuth();
     setUser(null);
   };
 

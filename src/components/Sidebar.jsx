@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import api from "../utils/api";
+import { getMenuCached } from "../utils/menuCache";
 import {
   FaChartBar,
   FaBuilding,
@@ -95,7 +95,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [menuStats, setMenuStats] = useState({ categories: 0, items: 0 });
   const [menuLoading, setMenuLoading] = useState(true);
 
-  const userRole = user?.role;
+  const userRole = user?.role === "cart_admin" ? "admin" : user?.role;
 
   useEffect(() => {
     // Fetch menu stats when component mounts (only for admin role)
@@ -103,7 +103,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       const fetchMenuStats = async () => {
         try {
           setMenuLoading(true);
-          const response = await api.get("/menu");
+          const response = await getMenuCached();
           const menu = response.data || [];
           const totalItems = menu.reduce(
             (sum, cat) => sum + (cat.items?.length || 0),

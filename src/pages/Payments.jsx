@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import QRCode from "react-qr-code";
 import api from "../utils/api";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
@@ -24,6 +24,21 @@ const STATUS_BADGE = {
   FAILED: "bg-red-100 text-red-600 border-red-200",
 };
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+const getPaymentStatusFilterValue = (filterStatus) => {
+  switch (filterStatus) {
+    case "ACTIVE":
+      return "PENDING,PROCESSING,CASH_PENDING";
+    case "PAID":
+      return "PAID";
+    case "CANCELLED":
+      return "CANCELLED,FAILED";
+    default:
+      return "";
+  }
+};
+
 const Payments = () => {
   const { user } = useAuth();
   const [payments, setPayments] = useState([]);
@@ -32,6 +47,16 @@ const Payments = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterDate, setFilterDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 25,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
   const [busyId, setBusyId] = useState(null);
 
   const [activeQR, setActiveQR] = useState(null);
@@ -48,8 +73,48 @@ const Payments = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/payments");
-      setPayments(res.data || []);
+      const params = {
+        page: currentPage,
+        limit: pageSize,
+      };
+      const statusFilterValue = getPaymentStatusFilterValue(filterStatus);
+      if (statusFilterValue) {
+        params.status = statusFilterValue;
+      }
+      if (filterDate) {
+        params.startDate = filterDate;
+        params.endDate = filterDate;
+      }
+
+      const res = await api.get("/payments", { params });
+      const payload = res.data || {};
+      const paymentRows = Array.isArray(payload?.payments)
+        ? payload.payments
+        : Array.isArray(payload)
+          ? payload
+          : [];
+      setPayments(paymentRows);
+
+      const total =
+        Number(payload?.pagination?.total ?? payload?.total ?? paymentRows.length) || 0;
+      const totalPages = Math.max(
+        1,
+        Number(payload?.pagination?.totalPages) || Math.ceil(total / pageSize) || 1,
+      );
+      setPagination({
+        total,
+        page: Number(payload?.pagination?.page) || currentPage,
+        limit: Number(payload?.pagination?.limit) || pageSize,
+        totalPages,
+        hasNextPage:
+          payload?.pagination?.hasNextPage !== undefined
+            ? Boolean(payload.pagination.hasNextPage)
+            : currentPage < totalPages,
+        hasPrevPage:
+          payload?.pagination?.hasPrevPage !== undefined
+            ? Boolean(payload.pagination.hasPrevPage)
+            : currentPage > 1,
+      });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load payments");
     } finally {
@@ -102,44 +167,14 @@ const Payments = () => {
 
   useEffect(() => {
     loadPayments();
-  }, []);
+  }, [currentPage, pageSize, filterStatus, filterDate]);
 
   useEffect(() => {
     loadActiveQR();
   }, [user?._id, user?.id]);
 
-  const filteredPayments = useMemo(() => {
-    let filtered = payments;
-
-    switch (filterStatus) {
-      case "ACTIVE":
-        filtered = filtered.filter((p) =>
-          ["PENDING", "PROCESSING", "CASH_PENDING"].includes(p.status)
-        );
-        break;
-      case "PAID":
-        filtered = filtered.filter((p) => p.status === "PAID");
-        break;
-      case "CANCELLED":
-        filtered = filtered.filter((p) => ["CANCELLED", "FAILED"].includes(p.status));
-        break;
-      default:
-        break;
-    }
-
-    if (filterDate) {
-      filtered = filtered.filter((p) => {
-        const paymentDate = new Date(p.createdAt);
-        const filterDateObj = new Date(filterDate);
-        return paymentDate.toDateString() === filterDateObj.toDateString();
-      });
-    }
-
-    return filtered;
-  }, [payments, filterStatus, filterDate]);
-
   const handleDownloadPaymentsReport = () => {
-    const rows = filteredPayments.map((payment) => ({
+    const rows = payments.map((payment) => ({
       "Payment ID": payment.id || "",
       "Order ID": payment.orderId || "",
       "Created At": payment.createdAt
@@ -272,7 +307,10 @@ const Payments = () => {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
           >
             <option value="ALL">All</option>
@@ -283,7 +321,10 @@ const Payments = () => {
           <input
             type="date"
             value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
+            onChange={(e) => {
+              setFilterDate(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-3 py-2 rounded-lg border border-slate-300 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-initial"
             placeholder="Filter by date"
           />
@@ -313,7 +354,7 @@ const Payments = () => {
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             {loading ? (
               <div className="p-6 sm:p-8 text-center text-slate-500 text-sm sm:text-base">Loading payments...</div>
-            ) : filteredPayments.length === 0 ? (
+            ) : payments.length === 0 ? (
               <div className="p-6 sm:p-8 text-center text-slate-500 text-sm sm:text-base">
                 No payments match the selected filter.
               </div>
@@ -345,7 +386,7 @@ const Payments = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredPayments.map((payment) => (
+                  {payments.map((payment) => (
                     <tr
                       key={payment.id}
                       className={`hover:bg-slate-50 cursor-pointer ${
@@ -418,6 +459,60 @@ const Payments = () => {
                 </tbody>
               </table>
             )}
+          </div>
+          <div className="border-t border-slate-200 px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-xs sm:text-sm text-slate-600">
+              {(() => {
+                const total = pagination.total || 0;
+                if (total === 0 || payments.length === 0) {
+                  return "Showing 0 of 0";
+                }
+                const from = (currentPage - 1) * pageSize + 1;
+                const to = Math.min(from + payments.length - 1, total);
+                return `Showing ${from}-${to} of ${total}`;
+              })()}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <label className="text-xs sm:text-sm text-slate-600">Rows</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  const nextSize = Number(e.target.value) || 25;
+                  setPageSize(nextSize);
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={!pagination.hasPrevPage || loading}
+                className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              <span className="text-xs sm:text-sm text-slate-600">
+                Page {pagination.page || currentPage} of {pagination.totalPages || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((prev) =>
+                    pagination.totalPages ? Math.min(pagination.totalPages, prev + 1) : prev + 1,
+                  )
+                }
+                disabled={!pagination.hasNextPage || loading}
+                className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
 

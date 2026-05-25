@@ -9,6 +9,9 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import api from "../utils/api";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
 const sanitizeAddonName = (value) => {
   const normalized = String(value || "")
     .replace(/^\(\s*\+\s*\)\s*/u, "")
@@ -345,6 +348,16 @@ const Invoices = () => {
   const [syncingPayments, setSyncingPayments] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // Search query for Order ID
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 25,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
 
   const printRef = useRef(null);
 
@@ -363,17 +376,51 @@ const Invoices = () => {
     setError("");
     try {
       const { data } = await api.get("/orders", {
-        params: { includeHistory: "true" },
+        params: {
+          includeHistory: "true",
+          paidOnly: "true",
+          page: currentPage,
+          limit: pageSize,
+        },
       });
-      setOrders(Array.isArray(data) ? data : []);
+      const payload = data || {};
+      const orderRows = Array.isArray(payload?.orders)
+        ? payload.orders
+        : Array.isArray(payload)
+          ? payload
+          : [];
+      setOrders(orderRows);
+
+      const total =
+        Number(payload?.pagination?.total ?? payload?.total ?? orderRows.length) || 0;
+      const totalPages = Math.max(
+        1,
+        Number(payload?.pagination?.totalPages) || Math.ceil(total / pageSize) || 1,
+      );
+      setPagination({
+        total,
+        page: Number(payload?.pagination?.page) || currentPage,
+        limit: Number(payload?.pagination?.limit) || pageSize,
+        totalPages,
+        hasNextPage:
+          payload?.pagination?.hasNextPage !== undefined
+            ? Boolean(payload.pagination.hasNextPage)
+            : currentPage < totalPages,
+        hasPrevPage:
+          payload?.pagination?.hasPrevPage !== undefined
+            ? Boolean(payload.pagination.hasPrevPage)
+            : currentPage > 1,
+      });
+      return orderRows;
     } catch (err) {
       setError(
         err.response?.data?.message || err.message || "Failed to load orders"
       );
+      return [];
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize]);
 
   const loadFranchiseAndCartData = useCallback(async (order) => {
     if (!order) {
@@ -431,12 +478,31 @@ const Invoices = () => {
     }
   }, []);
 
-  const loadPayments = useCallback(async () => {
+  const loadPayments = useCallback(async (targetOrders = orders) => {
     setPaymentsLoading(true);
     try {
-      const { data } = await api.get("/payments");
+      const orderIds = (Array.isArray(targetOrders) ? targetOrders : [])
+        .map((order) => resolveOrderId(order?._id))
+        .filter(Boolean);
+
+      if (orderIds.length === 0) {
+        setPaymentsByOrder({});
+        return;
+      }
+
+      const { data } = await api.get("/payments", {
+        params: {
+          orderIds: orderIds.join(","),
+        },
+      });
+
+      const paymentRows = Array.isArray(data?.payments)
+        ? data.payments
+        : Array.isArray(data)
+          ? data
+          : [];
       const grouped = {};
-      (Array.isArray(data) ? data : []).forEach((payment) => {
+      paymentRows.forEach((payment) => {
         const orderId = resolveOrderId(payment?.orderId);
         if (!orderId) return;
         if (!grouped[orderId]) grouped[orderId] = [];
@@ -448,13 +514,14 @@ const Invoices = () => {
     } finally {
       setPaymentsLoading(false);
     }
-  }, []);
+  }, [orders]);
 
   const handleSyncPayments = async () => {
     setSyncingPayments(true);
     try {
       await api.post("/payments/sync-paid");
-      await Promise.all([loadOrders(), loadPayments()]);
+      const refreshedOrders = await loadOrders();
+      await loadPayments(refreshedOrders);
       alert("Synced payment records for paid orders.");
     } catch (err) {
       alert(err.response?.data?.message || "Failed to sync payments.");
@@ -465,8 +532,11 @@ const Invoices = () => {
 
   useEffect(() => {
     loadOrders();
-    loadPayments();
-  }, [loadOrders, loadPayments]);
+  }, [loadOrders]);
+
+  useEffect(() => {
+    loadPayments(orders);
+  }, [orders, loadPayments]);
 
   useEffect(() => {
     if (selected) {
@@ -746,7 +816,7 @@ const Invoices = () => {
             placeholder="Filter by date"
           />
           <button
-            onClick={loadPayments}
+            onClick={() => loadPayments()}
             className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg border border-gray-300 hover:bg-gray-100 whitespace-nowrap"
             disabled={paymentsLoading}
           >
@@ -764,6 +834,60 @@ const Invoices = () => {
             className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 whitespace-nowrap"
           >
             Download Excel
+          </button>
+        </div>
+      </div>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-xs sm:text-sm text-gray-600">
+          {(() => {
+            const total = pagination.total || 0;
+            if (total === 0 || orders.length === 0) {
+              return "Showing 0 of 0";
+            }
+            const from = (currentPage - 1) * pageSize + 1;
+            const to = Math.min(from + orders.length - 1, total);
+            return `Showing ${from}-${to} of ${total}`;
+          })()}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <label className="text-xs sm:text-sm text-gray-600">Rows</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value) || 25;
+              setPageSize(nextSize);
+              setCurrentPage(1);
+            }}
+            className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={!pagination.hasPrevPage || loading}
+            className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs sm:text-sm text-gray-600">
+            Page {pagination.page || currentPage} of {pagination.totalPages || 1}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) =>
+                pagination.totalPages ? Math.min(pagination.totalPages, prev + 1) : prev + 1,
+              )
+            }
+            disabled={!pagination.hasNextPage || loading}
+            className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
           </button>
         </div>
       </div>
@@ -864,7 +988,7 @@ const Invoices = () => {
                     Payment records
                   </h3>
                   <button
-                    onClick={loadPayments}
+                    onClick={() => loadPayments()}
                     className="text-xs text-blue-600 hover:text-blue-800"
                   >
                     Refresh

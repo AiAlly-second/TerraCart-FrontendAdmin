@@ -34,12 +34,7 @@ const Login = () => {
       const result = await login(email, password);
       if (result.success) {
         console.log('[Login] Login successful, navigating to dashboard');
-        // Navigate directly after successful login
-        // The user state is set in AuthContext, so we can navigate immediately
-        // Use a small delay to ensure state propagation
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 100);
+        // AuthContext sets user state; the effect above performs the single redirect.
       } else {
         setError(result.message || 'Login failed');
         setIsSubmitting(false);

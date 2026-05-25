@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from "../utils/api";
@@ -28,6 +28,7 @@ import {
 import { BiDish, BiReceipt } from "react-icons/bi";
 import { FaMoneyBillWave, FaFire, FaUserCircle, FaStar } from "react-icons/fa";
 import { getIngredients } from "../services/costingV2Api";
+import { getSocket } from "../utils/socket";
 
 // --- Components ---
 
@@ -217,16 +218,22 @@ const LiveTableStatus = ({ tables }) => (
     </h3>
     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
       {tables.map((table) => {
+        const normalizedStatus = String(table?.status || "")
+          .trim()
+          .toUpperCase();
+        const tableLabel =
+          table?.tableNumber ?? table?.number ?? table?.tableNo ?? table?._id ?? "--";
+
         // Determine status style
         let statusColor = "bg-white border-gray-200 text-gray-500"; // Default Free
         let statusIcon = <div className="w-3 h-3 rounded-full border border-gray-400"></div>;
         let statusText = "Free";
 
-        if (table.status === "OCCUPIED") {
+        if (normalizedStatus === "OCCUPIED") {
           statusColor = "bg-green-100 border-green-200 text-green-700";
           statusIcon = <FiCheckCircle className="text-green-600" />;
           statusText = "Occupied"; // Changed from Served to Occupied
-        } else if (table.status === "RESERVED") {
+        } else if (normalizedStatus === "RESERVED") {
             statusColor = "bg-orange-100 border-orange-200 text-orange-700";
             statusIcon = <FiClock className="text-orange-600" />;
             statusText = "Reserved";
@@ -238,8 +245,8 @@ const LiveTableStatus = ({ tables }) => (
             className={`min-w-[120px] p-3 rounded-lg border flex flex-col gap-2 shadow-sm ${statusColor}`}
           >
             <div className="flex justify-between items-center">
-              <span className="font-bold text-sm">Table {table.tableNumber}</span>
-              {table.status !== 'AVAILABLE' && <FiActivity />}
+              <span className="font-bold text-sm">Table {tableLabel}</span>
+              {normalizedStatus !== "AVAILABLE" && <FiActivity />}
             </div>
             <div className="flex items-center gap-1 text-xs font-medium">
               {statusIcon}
@@ -1458,91 +1465,137 @@ const DashboardAdmin = () => {
     },
     [istDayFormatter],
   );
+  const refreshTimerRef = useRef(null);
   
-  // Fetch Data
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      // Fetch Orders
+      const ordersRes = await api.get("/orders");
+      let ordersData = Array.isArray(ordersRes.data) ? ordersRes.data : 
+                       (ordersRes.data?.orders || ordersRes.data?.data || []);
+      setOrders(ordersData);
+
+      // Filter today's orders in IST (same reference as backend manager dashboard)
+      const todayIstKey = istDateKey(new Date());
+      const today = ordersData.filter(o => {
+          if (!o.createdAt) return false;
+          return istDateKey(o.createdAt) === todayIstKey;
+      });
+      setTodayOrders(today);
+
+      // Fetch canonical dashboard stats (same source as manager app dashboard)
       try {
-        // Fetch Orders
-        const ordersRes = await api.get("/orders");
-        let ordersData = Array.isArray(ordersRes.data) ? ordersRes.data : 
-                         (ordersRes.data?.orders || ordersRes.data?.data || []);
-        setOrders(ordersData);
-
-        // Filter today's orders in IST (same reference as backend manager dashboard)
-        const todayIstKey = istDateKey(new Date());
-        const today = ordersData.filter(o => {
-            if (!o.createdAt) return false;
-            return istDateKey(o.createdAt) === todayIstKey;
-        });
-        setTodayOrders(today);
-
-        // Fetch canonical dashboard stats (same source as manager app dashboard)
-        try {
-          const statsRes = await api.get("/dashboard/stats");
-          const statsData = statsRes?.data?.data ?? statsRes?.data ?? {};
-          setDashboardStats(statsData);
-        } catch (statsErr) {
-          if (import.meta.env.DEV) {
-            console.warn("Failed to fetch dashboard stats:", statsErr);
-          }
-          setDashboardStats({});
+        const statsRes = await api.get("/dashboard/stats");
+        const statsData = statsRes?.data?.data ?? statsRes?.data ?? {};
+        setDashboardStats(statsData);
+      } catch (statsErr) {
+        if (import.meta.env.DEV) {
+          console.warn("Failed to fetch dashboard stats:", statsErr);
         }
-
-        // Fetch Tables
-        const tablesRes = await api.get("/tables");
-        let tablesData = Array.isArray(tablesRes.data) ? tablesRes.data :
-                         (tablesRes.data?.tables || tablesRes.data?.data || []);
-        setTables(tablesData);
-
-        // Fetch Employees (for total count, though we rely on order waiterName for active status)
-        const employeesRes = await api.get("/employees");
-        let empData = Array.isArray(employeesRes.data) ? employeesRes.data :
-                      (employeesRes.data?.employees || employeesRes.data?.data || []);
-        setEmployees(empData);
-
-        // Fetch Pending Customer Requests (Bill, Water, etc.)
-        try {
-            const reqRes = await api.get("/customer-requests/pending");
-            const reqData = Array.isArray(reqRes.data) ? reqRes.data :
-                           (reqRes.data?.requests || reqRes.data?.data || []);
-            setPendingRequests(reqData);
-        } catch (reqErr) {
-            console.warn("Failed to fetch customer requests:", reqErr);
-        }
-
-        // Fetch Ingredients (for shelf-life alerts on Action Required panel)
-        try {
-            const ingRes = await getIngredients();
-            const ingData = ingRes?.data?.data ?? ingRes?.data ?? [];
-            setIngredients(Array.isArray(ingData) ? ingData : []);
-        } catch (ingErr) {
-            if (import.meta.env.DEV) console.warn("Failed to fetch ingredients for shelf alerts:", ingErr);
-        }
-
-        // Fetch overall customer rating stats
-        try {
-          const feedbackRes = await api.get("/feedback/stats");
-          const stats = feedbackRes?.data || {};
-          const avg = Number.parseFloat(stats.averageRating);
-          const total = Number.parseInt(stats.total, 10);
-          setFeedbackStats({
-            averageRating: Number.isFinite(avg) ? avg : 0,
-            total: Number.isFinite(total) ? total : 0,
-          });
-        } catch (feedbackErr) {
-          console.warn("Failed to fetch feedback stats:", feedbackErr);
-        }
-
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
+        setDashboardStats({});
       }
+
+      // Fetch Tables
+      const tablesRes = await api.get("/tables");
+      let tablesData = Array.isArray(tablesRes.data) ? tablesRes.data :
+                       (tablesRes.data?.tables || tablesRes.data?.data || []);
+      setTables(tablesData);
+
+      // Fetch Employees (for total count, though we rely on order waiterName for active status)
+      const employeesRes = await api.get("/employees");
+      let empData = Array.isArray(employeesRes.data) ? employeesRes.data :
+                    (employeesRes.data?.employees || employeesRes.data?.data || []);
+      setEmployees(empData);
+
+      // Fetch Pending Customer Requests (Bill, Water, etc.)
+      try {
+          const reqRes = await api.get("/customer-requests/pending");
+          const reqData = Array.isArray(reqRes.data) ? reqRes.data :
+                         (reqRes.data?.requests || reqRes.data?.data || []);
+          setPendingRequests(reqData);
+      } catch (reqErr) {
+          console.warn("Failed to fetch customer requests:", reqErr);
+      }
+
+      // Fetch Ingredients (for shelf-life alerts on Action Required panel)
+      try {
+          const ingRes = await getIngredients();
+          const ingData = ingRes?.data?.data ?? ingRes?.data ?? [];
+          setIngredients(Array.isArray(ingData) ? ingData : []);
+      } catch (ingErr) {
+          if (import.meta.env.DEV) console.warn("Failed to fetch ingredients for shelf alerts:", ingErr);
+      }
+
+      // Fetch overall customer rating stats
+      try {
+        const feedbackRes = await api.get("/feedback/stats");
+        const stats = feedbackRes?.data || {};
+        const avg = Number.parseFloat(stats.averageRating);
+        const total = Number.parseInt(stats.total, 10);
+        setFeedbackStats({
+          averageRating: Number.isFinite(avg) ? avg : 0,
+          total: Number.isFinite(total) ? total : 0,
+        });
+      } catch (feedbackErr) {
+        console.warn("Failed to fetch feedback stats:", feedbackErr);
+      }
+
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    }
+  }, [istDateKey]);
+
+  useEffect(() => {
+    fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 60000);
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const refreshEvents = [
+      "newOrder",
+      "order:created",
+      "orderUpdated",
+      "order:status:updated",
+      "order_status_updated",
+      "order:upsert",
+      "orderDeleted",
+      "order:deleted",
+      "paymentCreated",
+      "paymentUpdated",
+      "table:status:updated",
+      "assistance_request_created",
+    ];
+
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        fetchDashboardData();
+      }, 1200);
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // 60s polling
-    return () => clearInterval(interval);
-  }, [istDateKey]);
+    socket.on("connect", scheduleRefresh);
+    refreshEvents.forEach((eventName) => {
+      socket.on(eventName, scheduleRefresh);
+    });
+
+    return () => {
+      socket.off("connect", scheduleRefresh);
+      refreshEvents.forEach((eventName) => {
+        socket.off(eventName, scheduleRefresh);
+      });
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [fetchDashboardData]);
 
   const refetchPendingRequests = useCallback(async () => {
     try {

@@ -9,6 +9,7 @@ const ALLOWED_ROLES = ["admin", "franchise_admin", "super_admin", "cart_admin"];
 const ProtectedRoute = ({ children, allowedRoles = ALLOWED_ROLES }) => {
   const location = useLocation();
   const { user, loading } = useAuth();
+  const effectiveRole = user?.role === "cart_admin" ? "admin" : user?.role;
 
   // Check if we just logged in
   const loginTimestamp = sessionStorage.getItem("lastLoginTime");
@@ -35,18 +36,19 @@ const ProtectedRoute = ({ children, allowedRoles = ALLOWED_ROLES }) => {
   }
 
   // Redirect to login if not authenticated or not an allowed admin role
-  if (!user || !allowedRoles.includes(user.role)) {
+  if (!user || !allowedRoles.includes(effectiveRole)) {
     console.log("[ProtectedRoute] Redirecting to login", {
       hasUser: !!user,
       userRole: user?.role,
-      allowed: user ? allowedRoles.includes(user.role) : false,
+      effectiveRole,
+      allowed: user ? allowedRoles.includes(effectiveRole) : false,
       justLoggedIn,
     });
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // If user is authenticated and has an allowed role, render the protected content
-  console.log("[ProtectedRoute] Access granted", { role: user.role });
+  console.log("[ProtectedRoute] Access granted", { role: effectiveRole });
   return children;
 };
 

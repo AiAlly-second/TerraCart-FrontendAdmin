@@ -6,6 +6,8 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
+    "dev:full": "node scripts/dev-with-backend.mjs",
+    "dev:frontend": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -26,7 +28,8 @@
     "recharts": "^3.6.0",
     "socket.io-client": "^4.8.1",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "overrides": {
     "xlsx": "^0.18.5"

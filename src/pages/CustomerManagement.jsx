@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
 const CustomerManagement = () => {
   const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
@@ -9,13 +11,27 @@ const CustomerManagement = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("lastVisitAt");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 25,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
 
   useEffect(() => {
     fetchCustomers();
+  }, [sortBy, sortOrder, currentPage, pageSize, appliedSearchQuery]);
+
+  useEffect(() => {
     fetchStats();
-  }, [sortBy, sortOrder]);
+  }, []);
 
   const fetchCustomers = async () => {
     try {
@@ -23,10 +39,12 @@ const CustomerManagement = () => {
       const params = {
         sortBy,
         sortOrder,
+        page: currentPage,
+        limit: pageSize,
         // Include customers from all sources (orders, feedback, takeaway)
         includeAllSources: true,
       };
-      if (searchQuery) params.search = searchQuery;
+      if (appliedSearchQuery) params.search = appliedSearchQuery;
 
       console.log(
         "[CustomerManagement] Fetching customers with params:",
@@ -40,7 +58,33 @@ const CustomerManagement = () => {
       );
 
       const response = await api.get("/customers", { params });
-      const customersData = response.data.customers || response.data || [];
+      const payload = response.data || {};
+      const customersData = Array.isArray(payload?.customers)
+        ? payload.customers
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+      const total =
+        Number(payload?.pagination?.total ?? payload?.total ?? customersData.length) || 0;
+      const totalPages = Math.max(
+        1,
+        Number(payload?.pagination?.totalPages) || Math.ceil(total / pageSize) || 1,
+      );
+      setPagination({
+        total,
+        page: Number(payload?.pagination?.page) || currentPage,
+        limit: Number(payload?.pagination?.limit) || pageSize,
+        totalPages,
+        hasNextPage:
+          payload?.pagination?.hasNextPage !== undefined
+            ? Boolean(payload.pagination.hasNextPage)
+            : currentPage < totalPages,
+        hasPrevPage:
+          payload?.pagination?.hasPrevPage !== undefined
+            ? Boolean(payload.pagination.hasPrevPage)
+            : currentPage > 1,
+      });
 
       console.log(
         "[CustomerManagement] Received customers:",
@@ -97,7 +141,8 @@ const CustomerManagement = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchCustomers();
+    setCurrentPage(1);
+    setAppliedSearchQuery(searchQuery.trim());
   };
 
   const getRatingStars = (rating) => {
@@ -203,7 +248,10 @@ const CustomerManagement = () => {
             </label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="lastVisitAt">Last Visit</option>
@@ -218,7 +266,10 @@ const CustomerManagement = () => {
             </label>
             <select
               value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
+              onChange={(e) => {
+                setSortOrder(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="desc">Descending</option>
@@ -339,6 +390,60 @@ const CustomerManagement = () => {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-gray-200 px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-xs sm:text-sm text-gray-600">
+            {(() => {
+              const total = pagination.total || 0;
+              if (total === 0 || customers.length === 0) {
+                return "Showing 0 of 0";
+              }
+              const from = (currentPage - 1) * pageSize + 1;
+              const to = Math.min(from + customers.length - 1, total);
+              return `Showing ${from}-${to} of ${total}`;
+            })()}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <label className="text-xs sm:text-sm text-gray-600">Rows</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value) || 25;
+                setPageSize(nextSize);
+                setCurrentPage(1);
+              }}
+              className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={!pagination.hasPrevPage || loading}
+              className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            <span className="text-xs sm:text-sm text-gray-600">
+              Page {pagination.page || currentPage} of {pagination.totalPages || 1}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentPage((prev) =>
+                  pagination.totalPages ? Math.min(pagination.totalPages, prev + 1) : prev + 1,
+                )
+              }
+              disabled={!pagination.hasNextPage || loading}
+              className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

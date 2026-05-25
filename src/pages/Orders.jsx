@@ -15,6 +15,7 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { getMenuCached } from "../utils/menuCache";
 import { withCancellation } from "../utils/requestManager";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
@@ -44,6 +45,7 @@ const ORDER_SUMMARY_TILE_LABELS = {
   all: "All",
   active: "Active",
 };
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 // Use centralized socket connection with proper CORS configuration
 const socket = getSocket();
@@ -253,6 +255,45 @@ const formatOrderDateForFilter = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+const normalizeDateRange = (startDate, endDate) => {
+  const start = typeof startDate === "string" ? startDate : "";
+  const end = typeof endDate === "string" ? endDate : "";
+
+  if (start && end && start > end) {
+    return { startDate: end, endDate: start };
+  }
+
+  return { startDate: start, endDate: end };
+};
+
+const getOrderDateForRangeFilter = (order) =>
+  getOrderCreatedDate(order) || getOrderUpdatedDate(order);
+
+const isOrderWithinDateRange = (order, startDate, endDate) => {
+  const range = normalizeDateRange(startDate, endDate);
+  if (!range.startDate && !range.endDate) return true;
+
+  const orderDate = getOrderDateForRangeFilter(order);
+  if (!orderDate) return false;
+
+  const orderDateValue = formatOrderDateForFilter(orderDate);
+  if (range.startDate && orderDateValue < range.startDate) return false;
+  if (range.endDate && orderDateValue > range.endDate) return false;
+  return true;
+};
+
+const buildDateRangeLabel = (startDate, endDate) => {
+  const range = normalizeDateRange(startDate, endDate);
+  if (range.startDate && range.endDate) {
+    return range.startDate === range.endDate
+      ? range.startDate
+      : `${range.startDate} to ${range.endDate}`;
+  }
+  if (range.startDate) return `From ${range.startDate}`;
+  if (range.endDate) return `Until ${range.endDate}`;
+  return "All dates";
 };
 
 const formatOrderDateTime = (date) => {
@@ -661,6 +702,14 @@ const buildOrderLineItems = (order, { includeReturned = true } = {}) => {
 
   return lines;
 };
+
+const sumOrderLineItemsTotal = (lineItems) =>
+  lineItems.reduce((sum, line) => sum + (Number(line.total) || 0), 0);
+
+const getOrderReportTotalAmount = (order) =>
+  sumOrderLineItemsTotal(
+    buildOrderLineItems(order, { includeReturned: false }),
+  );
 
 // Calculate totals from actual items, not from KOT totals (to avoid rounding errors)
 // eslint-disable-next-line no-unused-vars
@@ -1155,7 +1204,18 @@ const Orders = () => {
   const [searchOrderId, setSearchOrderId] = useState("");
   const [searchTable, setSearchTable] = useState("");
   const [searchInvoice, setSearchInvoice] = useState("");
-  const [filterDate, setFilterDate] = useState(""); // Date filter (YYYY-MM-DD format)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 25,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
   const [expanded, setExpanded] = useState({}); // track expanded rows
   const [filterStatus, setFilterStatus] = useState("all");
   const [menuLoading, setMenuLoading] = useState(false);
@@ -2589,13 +2649,49 @@ const Orders = () => {
   };
 
   const refreshOrders = useCallback(async () => {
+    const params = {
+      includeHistory: "true",
+      page: currentPage,
+      limit: pageSize,
+    };
+    if (filterCafeId) {
+      params.cartId = filterCafeId;
+    }
+
     const ordersRes = await api.get("/orders", {
-      params: { includeHistory: "true" },
+      params,
     });
-    const allOrders = normalizeOrdersPayload(ordersRes.data);
+    const payload = ordersRes.data || {};
+    const allOrders = normalizeOrdersPayload(payload);
     const scopedOrders = filterOrdersByCafeId(allOrders, filterCafeId);
     setOrders(scopedOrders);
+
+    const total =
+      Number(payload?.pagination?.total ?? payload?.total ?? scopedOrders.length) || 0;
+    const totalPages = Math.max(
+      1,
+      Number(payload?.pagination?.totalPages) || Math.ceil(total / pageSize) || 1,
+    );
+    setPagination({
+      total,
+      page: Number(payload?.pagination?.page) || currentPage,
+      limit: Number(payload?.pagination?.limit) || pageSize,
+      totalPages,
+      hasNextPage:
+        payload?.pagination?.hasNextPage !== undefined
+          ? Boolean(payload.pagination.hasNextPage)
+          : currentPage < totalPages,
+      hasPrevPage:
+        payload?.pagination?.hasPrevPage !== undefined
+          ? Boolean(payload.pagination.hasPrevPage)
+          : currentPage > 1,
+    });
+
     return scopedOrders;
+  }, [filterCafeId, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [filterCafeId]);
 
   useEffect(() => {
@@ -2703,13 +2799,42 @@ const Orders = () => {
 
     const handleOrderUpdated = (updatedOrder) => {
       if (!updatedOrder) return;
+      const updatedOrderId = normalizeId(
+        updatedOrder._id || updatedOrder.id || updatedOrder.orderId,
+      );
+      if (!updatedOrderId) return;
+
+      const hasRichShape =
+        Array.isArray(updatedOrder.kotLines) ||
+        updatedOrder.table ||
+        updatedOrder.customerName ||
+        updatedOrder.customerMobile;
+
+      if (
+        !hasRichShape &&
+        (updatedOrder.status || updatedOrder.paymentStatus)
+      ) {
+        setOrders((prev) =>
+          prev.map((order) => {
+            if (normalizeId(order._id) !== updatedOrderId) return order;
+            return normalizeOrderForDisplay(
+              {
+                ...order,
+                ...updatedOrder,
+                _id: updatedOrderId,
+              },
+              order,
+            );
+          }),
+        );
+        return;
+      }
+
       if (matchesActiveFilter(updatedOrder)) {
         upsertOrder(updatedOrder);
         return;
       }
 
-      const updatedOrderId = normalizeId(updatedOrder._id);
-      if (!updatedOrderId) return;
       setOrders((prev) =>
         prev.filter((order) => normalizeId(order?._id) !== updatedOrderId),
       );
@@ -2729,6 +2854,8 @@ const Orders = () => {
     socket.on("order:created", handleOrderCreated);
     socket.on("orderUpdated", handleOrderUpdated);
     socket.on("order:status:updated", handleOrderUpdated);
+    socket.on("order_status_updated", handleOrderUpdated);
+    socket.on("order:upsert", handleOrderUpdated);
     socket.on("orderDeleted", handleOrderDeleted);
     socket.on("order:deleted", handleOrderDeleted);
 
@@ -2738,6 +2865,8 @@ const Orders = () => {
       socket.off("order:created", handleOrderCreated);
       socket.off("orderUpdated", handleOrderUpdated);
       socket.off("order:status:updated", handleOrderUpdated);
+      socket.off("order_status_updated", handleOrderUpdated);
+      socket.off("order:upsert", handleOrderUpdated);
       socket.off("orderDeleted", handleOrderDeleted);
       socket.off("order:deleted", handleOrderDeleted);
     };
@@ -3404,14 +3533,11 @@ const Orders = () => {
       const invoiceMatch =
         !normalizedInvoice || invoiceId.includes(normalizedInvoice);
 
-      // Date filter: compare order date with filter date
-      let dateMatch = true;
-      if (filterDate) {
-        const orderDate =
-          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
-        dateMatch =
-          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
-      }
+      const dateMatch = isOrderWithinDateRange(
+        order,
+        filterStartDate,
+        filterEndDate,
+      );
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
     });
@@ -3429,6 +3555,15 @@ const Orders = () => {
     );
   })();
 
+  const filteredOrdersTotalAmount = filteredOrders.reduce(
+    (sum, order) => sum + getOrderReportTotalAmount(order),
+    0,
+  );
+  const selectedDateRangeLabel = buildDateRangeLabel(
+    filterStartDate,
+    filterEndDate,
+  );
+
   const handleDownloadOrdersReport = () => {
     const rows = filteredOrders.map((order) => {
       const createdAtDate = getOrderCreatedDate(order);
@@ -3437,10 +3572,7 @@ const Orders = () => {
       const customerName = getOrderCustomerName(order);
       const customerMobile = getOrderCustomerMobile(order);
       const lineItems = buildOrderLineItems(order, { includeReturned: false });
-      const totalAmount = lineItems.reduce(
-        (sum, line) => sum + (Number(line.total) || 0),
-        0,
-      );
+      const totalAmount = sumOrderLineItemsTotal(lineItems);
 
       return {
         "Order ID": order._id || "",
@@ -3463,11 +3595,29 @@ const Orders = () => {
       };
     });
 
-    const fileName = buildExcelFileName("orders-report", filterDate);
+    const fileName = buildExcelFileName("orders-report", {
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+    });
     const exported = exportRowsToExcel({
       rows,
       fileName,
       sheetName: "Orders",
+      title: "Orders Report",
+      metadata: [
+        ["Date Range", selectedDateRangeLabel],
+        ["Status", filterStatus === "all" ? "All" : filterStatus],
+        ["Order / Token Search", searchOrderId.trim() || "All"],
+        ["Table Search", searchTable.trim() || "All"],
+        ["Invoice Search", searchInvoice.trim() || "All"],
+        ["Total Orders", rows.length],
+        ["Generated At", new Date().toLocaleString("en-IN")],
+      ],
+      total: {
+        label: `TOTAL AMOUNT FOR DATE RANGE (${selectedDateRangeLabel})`,
+        value: Number(filteredOrdersTotalAmount.toFixed(2)),
+        column: "Total Amount (Rs)",
+      },
     });
 
     if (!exported) {
@@ -3503,14 +3653,11 @@ const Orders = () => {
       const invoiceMatch =
         !normalizedInvoice || invoiceId.includes(normalizedInvoice);
 
-      // Date filter: compare order date with filter date
-      let dateMatch = true;
-      if (filterDate) {
-        const orderDate =
-          getOrderCreatedDate(order) || getOrderUpdatedDate(order);
-        dateMatch =
-          Boolean(orderDate) && formatOrderDateForFilter(orderDate) === filterDate;
-      }
+      const dateMatch = isOrderWithinDateRange(
+        order,
+        filterStartDate,
+        filterEndDate,
+      );
 
       return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
     });
@@ -3542,7 +3689,7 @@ const Orders = () => {
       if (import.meta.env.DEV) {
         console.log("[Orders] loadMenu - Fetching menu with params:", params);
       }
-      const res = await api.get("/menu", { params });
+      const res = await getMenuCached(params);
       const payload = res.data || [];
 
       if (!Array.isArray(payload) || payload.length === 0) {
@@ -3922,7 +4069,7 @@ const Orders = () => {
         </div>
 
         {/* Search Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 xl:grid-cols-7 gap-3">
           <input
             type="text"
             placeholder="Order ID / Token"
@@ -3944,13 +4091,32 @@ const Orders = () => {
             onChange={(e) => setSearchInvoice(e.target.value)}
             className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            title="Filter by order date"
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute -top-2 left-3 bg-white px-1 text-[10px] font-semibold uppercase text-gray-500">
+              Start date
+            </span>
+            <input
+              type="date"
+              value={filterStartDate}
+              max={filterEndDate || undefined}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              title="Filter orders from this date"
+            />
+          </div>
+          <div className="relative">
+            <span className="pointer-events-none absolute -top-2 left-3 bg-white px-1 text-[10px] font-semibold uppercase text-gray-500">
+              End date
+            </span>
+            <input
+              type="date"
+              value={filterEndDate}
+              min={filterStartDate || undefined}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              title="Filter orders until this date"
+            />
+          </div>
           <button
             onClick={handleDownloadOrdersReport}
             className="border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors"
@@ -3967,6 +4133,26 @@ const Orders = () => {
             </button>
           )}
         </div>
+        {(filterStartDate || filterEndDate) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-gray-600">
+              Date range: <span className="font-semibold">{selectedDateRangeLabel}</span>
+            </span>
+            <span className="rounded-md border border-amber-300 bg-amber-100 px-3 py-1 font-bold text-amber-900">
+              Total amount: Rs {formatMoney(filteredOrdersTotalAmount)}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterStartDate("");
+                setFilterEndDate("");
+              }}
+              className="rounded-md border border-gray-200 px-3 py-1 font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Clear dates
+            </button>
+          </div>
+        )}
       </div>
 
 
@@ -4006,6 +4192,54 @@ const Orders = () => {
     })}
   </div>
 </div>
+
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-xs sm:text-sm text-gray-600">
+          {filteredOrders.length} matching orders on this page
+          {pagination.total ? ` (Total records: ${pagination.total})` : ""}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <label className="text-xs sm:text-sm text-gray-600">Rows</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value) || 25;
+              setPageSize(nextSize);
+              setCurrentPage(1);
+            }}
+            className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={!pagination.hasPrevPage}
+            className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs sm:text-sm text-gray-600">
+            Page {pagination.page || currentPage} of {pagination.totalPages || 1}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) =>
+                pagination.totalPages ? Math.min(pagination.totalPages, prev + 1) : prev + 1,
+              )
+            }
+            disabled={!pagination.hasNextPage}
+            className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      </div>
 
       <div className="overflow-x-auto bg-white rounded-lg shadow-md -mx-2 sm:mx-0">
         {user?.role === "franchise_admin" && !filterCafeId && ordersByCart ? (

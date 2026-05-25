@@ -1,7 +1,8 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { getSocket } from "../utils/socket";
 import {
   FaBolt,
   FaBoxOpen,
@@ -120,8 +121,11 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [cartOrderStats, setCartOrderStats] = useState([]);
   const [revenueFilter, setRevenueFilter] = useState("DAILY");
+  const refreshTimerRef = useRef(null);
 
   const franchiseName = user?.name || "Franchise Dashboard";
+  const toReadableId = (value) =>
+    value ? `ID-${String(value).slice(-6).toUpperCase()}` : "Unavailable";
 
   const calculateRevenue = (ordersData) => {
     if (!Array.isArray(ordersData)) {
@@ -215,6 +219,53 @@ const Dashboard = () => {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user || !user._id) return;
+
+    const socket = getSocket();
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const refreshEvents = [
+      "newOrder",
+      "order:created",
+      "orderUpdated",
+      "order:status:updated",
+      "order_status_updated",
+      "order:upsert",
+      "orderDeleted",
+      "order:deleted",
+      "paymentCreated",
+      "paymentUpdated",
+      "table:status:updated",
+    ];
+
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        fetchDashboardData();
+      }, 1200);
+    };
+
+    socket.on("connect", scheduleRefresh);
+    refreshEvents.forEach((eventName) => {
+      socket.on(eventName, scheduleRefresh);
+    });
+
+    return () => {
+      socket.off("connect", scheduleRefresh);
+      refreshEvents.forEach((eventName) => {
+        socket.off(eventName, scheduleRefresh);
+      });
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [user]);
+
   const fetchDashboardData = async () => {
     try {
       // Don't set loading to true for background polling to avoid UI flickering
@@ -276,8 +327,8 @@ const Dashboard = () => {
           return {
             id: cart._id,
             name: cart.cartName || cart.cafeName || cart.name || "Unnamed Cart",
-            managerName: cart.name,
-            email: cart.email,
+            managerName: cart.name || "Unassigned Manager",
+            email: cart.email || "No email",
             location: cart.location || "Not specified",
             createdAt: cart.createdAt,
             status,
@@ -812,7 +863,7 @@ const Dashboard = () => {
                       </span>
                     )}
                     <span className="font-medium text-xs sm:text-sm text-[#4a2e1f] truncate">
-                      {cart.cartName}
+                      {cart.cartName || "Unnamed Cart"}
                     </span>
                   </div>
                 </div>
@@ -917,8 +968,8 @@ const Dashboard = () => {
                             {cart.cartCode}
                           </span>
                         ) : (
-                          <span className="text-[10px] md:text-xs text-gray-400">
-                            N/A
+                          <span className="px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-mono font-semibold bg-gray-100 text-gray-600 rounded">
+                            {toReadableId(cart.id)}
                           </span>
                         )}
                       </td>
@@ -945,7 +996,9 @@ const Dashboard = () => {
                         </span>
                       </td>
                       <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[#6b4423] hidden lg:table-cell">
-                        {new Date(cart.createdAt).toLocaleDateString()}
+                        {cart.createdAt
+                          ? new Date(cart.createdAt).toLocaleDateString()
+                          : "Unknown"}
                       </td>
                       <td className="px-2 md:px-4 py-2 md:py-3">
                         <button

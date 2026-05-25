@@ -1,8 +1,6 @@
 import axios from "axios";
 import { alert } from "./alert";
-
-// Primary backend (AWS EC2)
-const PRIMARY_API_URL = import.meta.env.VITE_PRIMARY_API_URL || import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+import { getAdminApiOrigin } from "./adminApiOrigin.js";
 
 // Fallback backend (Render.com)
 const FALLBACK_API_URL = import.meta.env.VITE_FALLBACK_API_URL || "";
@@ -16,11 +14,12 @@ const normalizeUrl = (url) => {
   return url;
 };
 
-const primaryUrl = normalizeUrl(PRIMARY_API_URL);
 const fallbackUrl = normalizeUrl(FALLBACK_API_URL);
 
+const getPrimaryBackendUrl = () => normalizeUrl(getAdminApiOrigin());
+
 // Current active backend
-let activeBackend = primaryUrl;
+let activeBackend = getPrimaryBackendUrl();
 let usingFallback = false;
 
 // Health check function
@@ -39,12 +38,14 @@ const checkBackendHealth = async (url) => {
 
 // Select best available backend
 const selectBackend = async () => {
+  const primaryUrl = getPrimaryBackendUrl();
+
   // Try primary first
   const primaryHealthy = await checkBackendHealth(primaryUrl);
-  
+
   if (primaryHealthy) {
     if (usingFallback) {
-      console.log('🔄 Switching back to PRIMARY backend (AWS):', primaryUrl);
+      console.log("🔄 Switching back to PRIMARY backend:", primaryUrl);
       usingFallback = false;
     }
     activeBackend = primaryUrl;
@@ -53,11 +54,11 @@ const selectBackend = async () => {
 
   // Try fallback if available
   if (fallbackUrl) {
-    console.warn('⚠️ PRIMARY backend unavailable, trying FALLBACK...');
+    console.warn("⚠️ PRIMARY backend unavailable, trying FALLBACK...");
     const fallbackHealthy = await checkBackendHealth(fallbackUrl);
-    
+
     if (fallbackHealthy) {
-      console.log('✅ Using FALLBACK backend (Render):', fallbackUrl);
+      console.log("✅ Using FALLBACK backend:", fallbackUrl);
       usingFallback = true;
       activeBackend = fallbackUrl;
       return fallbackUrl;
@@ -65,7 +66,9 @@ const selectBackend = async () => {
   }
 
   // Both failed - use primary anyway
-  console.error('❌ Both backends unavailable! Using primary as last resort.');
+  console.error(
+    "❌ Both backends unavailable! Using primary as last resort.",
+  );
   activeBackend = primaryUrl;
   return primaryUrl;
 };
@@ -82,21 +85,8 @@ setInterval(async () => {
   }
 }, 30000);
 
-const nodeApiBase = activeBackend;
-
-// Check if connecting to Render.com (which can be slow to wake up)
-const isRenderBackend = nodeApiBase.includes("onrender.com");
-
-// Configure timeout - longer for remote servers, especially Render.com
-// Render.com free tier can take 30-60 seconds to wake up from sleep
-const timeout = isRenderBackend ? 120000 : 60000; // 120s for Render, 60s for others
-
 const api = axios.create({
-  baseURL: `${nodeApiBase.replace(/\/$/, "")}/api`,
-  timeout: timeout,
-  // Don't set Content-Type here - let axios set it automatically based on the request data
-  // For JSON: axios will set "application/json"
-  // For FormData: axios will set "multipart/form-data" with boundary
+  timeout: 120000,
 });
 
 // Get the appropriate token based on user role
@@ -147,6 +137,12 @@ const getStorageKeys = (role) => {
 
 api.interceptors.request.use(
   (config) => {
+    const base = activeBackend.replace(/\/$/, "");
+    config.baseURL = `${base}/api`;
+    const slowRemote = activeBackend.includes("onrender.com");
+    config.timeout = slowRemote ? 120000 : 60000;
+
+    config.headers = config.headers || {};
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -178,6 +174,9 @@ api.interceptors.request.use(
         }
       }
     }
+
+    config.headers["X-Request-Source"] =
+      config.headers["X-Request-Source"] || "terra-admin-web";
 
     // Don't override Content-Type for FormData - axios sets it automatically with boundary
     if (config.data instanceof FormData) {
@@ -250,12 +249,16 @@ api.interceptors.response.use(
         error.message?.includes("Network Error") ||
         error.message?.includes("ERR_CONNECTION_CLOSED");
 
-      if (isNetworkError && isRenderBackend && import.meta.env.DEV) {
+      if (
+        isNetworkError &&
+        activeBackend.includes("onrender.com") &&
+        import.meta.env.DEV
+      ) {
         // For Render.com, these errors are expected when server is sleeping
         // Log as warning instead of error to reduce console noise
         console.warn(
           `[API Network Warning] ${error.message}\n` +
-            `Backend: ${nodeApiBase}\n` +
+            `Backend: ${activeBackend}\n` +
             `Render.com servers may be sleeping (free tier). Server will wake up automatically.\n` +
             `Please wait 30-60 seconds and try again.`
         );
@@ -264,7 +267,16 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 404) {
+    if (error.response?.status === 429) {
+      const retryAfter = error.response?.headers?.["retry-after"];
+      if (import.meta.env.DEV) {
+        console.warn("[API 429] Rate limited; request will not be retried", {
+          url: error.config?.url,
+          method: error.config?.method,
+          retryAfter,
+        });
+      }
+    } else if (error.response?.status === 404) {
       // Resource Not Found - Log specific URL for debugging (User Management)
       if (!error.config?.skipErrorLogging) {
         console.warn(`[API 404] Resource not found: ${error.config?.url}`);
@@ -472,11 +484,11 @@ api.interceptors.response.use(
       let errorMessage = "Network error. ";
 
       if (isTimeout) {
-        errorMessage += isRenderBackend
+        errorMessage += activeBackend.includes("onrender.com")
           ? "The backend server is taking longer than expected to respond. Render.com servers may need 30-60 seconds to wake up from sleep. Please wait and try again."
           : "Request timed out. The server may be slow or unavailable.";
       } else if (isConnectionClosed || isNetworkError) {
-        errorMessage += isRenderBackend
+        errorMessage += activeBackend.includes("onrender.com")
           ? "Connection to the backend server was closed. Render.com servers may be sleeping (free tier). The server will wake up automatically when you make a request - please wait 30-60 seconds and try again."
           : "Cannot connect to the backend server. Please check if the server is running and accessible.";
       } else {

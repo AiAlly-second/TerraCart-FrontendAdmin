@@ -15,6 +15,7 @@ import {
   canReturn,
 } from "../domain/orderLogic";
 import api from "../utils/api";
+import { getMenuCached } from "../utils/menuCache";
 import { printKOT } from "../utils/kotPrinter";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
 
@@ -906,7 +907,7 @@ const TakeawayOrders = () => {
     try {
       setMenuLoading(true);
       setMenuError("");
-      const res = await api.get("/menu");
+      const res = await getMenuCached();
       const data = Array.isArray(res.data) ? res.data : [];
 
       const items = [];
@@ -1105,6 +1106,8 @@ const TakeawayOrders = () => {
     socket.on("orderDeleted", handleOrderDeleted);
     socket.on("order:created", handleOrderCreated);
     socket.on("order:status:updated", handleOrderStatusUpdated);
+    socket.on("order_status_updated", handleOrderStatusUpdated);
+    socket.on("order:upsert", handleOrderUpdated);
 
     // Join cafe and cart rooms for real-time updates (matches Orders.jsx pattern)
     const targetCartId = getEffectiveCartId();
@@ -1126,6 +1129,8 @@ const TakeawayOrders = () => {
       socket.off("orderDeleted", handleOrderDeleted);
       socket.off("order:created", handleOrderCreated);
       socket.off("order:status:updated", handleOrderStatusUpdated);
+      socket.off("order_status_updated", handleOrderStatusUpdated);
+      socket.off("order:upsert", handleOrderUpdated);
 
       if (socketRef.current) {
         socketRef.current.disconnect();

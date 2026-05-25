@@ -7,7 +7,7 @@ import DashboardSuper from "./DashboardSuper";
 // Unified Dashboard component that renders role-specific dashboard
 const Dashboard = () => {
   const { user } = useAuth();
-  const userRole = user?.role;
+  const userRole = user?.role === "cart_admin" ? "admin" : user?.role;
 
   // Render role-specific dashboard
   if (userRole === "super_admin") {

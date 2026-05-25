@@ -1,41 +1,11 @@
 import io from "socket.io-client";
+import { getAdminApiOrigin } from "./adminApiOrigin.js";
 
 /**
- * Get the API URL from environment variable
- * In development, we can use the Vite proxy to avoid CORS issues
+ * Socket target origin — aligned with api.js / AuthContext via getAdminApiOrigin
+ * (VITE_USE_VITE_PROXY routes through Vite → backend).
  */
-const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_NODE_API_URL;
-
-  // In development mode, check if we should use the Vite proxy
-  // The proxy is configured in vite.config.js to forward /socket.io to the backend
-  if (import.meta.env.DEV && typeof window !== "undefined") {
-    // Use proxy if explicitly enabled, disabled, or if connecting to remote backend
-    // Default to using proxy for remote backends to avoid CORS and connection issues
-    const explicitlyDisabled = import.meta.env.VITE_USE_PROXY === "false";
-    const explicitlyEnabled = import.meta.env.VITE_USE_PROXY === "true";
-    const isRemoteBackend =
-      envUrl &&
-      (envUrl.includes("onrender.com") ||
-        envUrl.includes("herokuapp.com") ||
-        envUrl.includes("vercel.app") ||
-        envUrl.includes("netlify.app"));
-
-    const useProxy =
-      explicitlyEnabled || (!explicitlyDisabled && isRemoteBackend);
-
-    if (useProxy) {
-      // Use same origin - Vite proxy will handle forwarding to backend
-      // Socket.IO will connect to the same origin, avoiding CORS
-      if (import.meta.env.DEV) {
-        console.log("[Socket] Using Vite proxy to avoid CORS issues");
-      }
-      return window.location.origin; // e.g., "http://localhost:5174"
-    }
-  }
-
-  return envUrl || "http://localhost:5001";
-};
+const getApiUrl = () => getAdminApiOrigin();
 
 const getSocketAuthToken = () => {
   if (typeof window === "undefined") return null;
@@ -53,7 +23,10 @@ const getSocketAuthToken = () => {
  */
 export const createSocketConnection = (options = {}) => {
   const apiUrl = getApiUrl();
-  const envUrl = import.meta.env.VITE_NODE_API_URL || "http://localhost:5001";
+  const envUrl =
+    import.meta.env.VITE_NODE_API_URL ||
+    import.meta.env.VITE_PRIMARY_API_URL ||
+    "http://localhost:5001";
 
   // Determine if we're connecting to a different origin (cross-origin)
   const isCrossOrigin =
