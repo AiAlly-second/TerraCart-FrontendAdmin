@@ -12,7 +12,7 @@ import {
   FaChartBar,
 } from "react-icons/fa";
 import api from "../utils/api";
-import { getSocket } from "../utils/socket";
+import { ensureSocketConnected } from "../utils/socket";
 
 // Revenue Timeline Graph Component
 const RevenueTimeline = ({ orders }) => {
@@ -49,7 +49,10 @@ const RevenueTimeline = ({ orders }) => {
               }),
             );
             if (hours[hour]) {
-                const orderTotal = o.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0;
+                const directTotal = Number(o?.totalAmount);
+                const orderTotal = Number.isFinite(directTotal)
+                  ? directTotal
+                  : (o.kotLines?.reduce((sum, kot) => sum + (Number(kot.totalAmount) || 0), 0) || 0);
                 hours[hour].revenue += orderTotal;
             }
         });
@@ -163,18 +166,34 @@ const Dashboard = () => {
   const isFetchingRef = useRef(false);
   const refreshTimerRef = useRef(null);
 
+  const getOrderTotalAmount = (order) => {
+    const directTotal = Number(order?.totalAmount);
+    if (Number.isFinite(directTotal) && directTotal >= 0) {
+      return directTotal;
+    }
+    if (!Array.isArray(order?.kotLines)) return 0;
+    return order.kotLines.reduce(
+      (sum, kot) => sum + Number(kot?.totalAmount || 0),
+      0,
+    );
+  };
+
+  const isPaidOrder = (order) => {
+    if (!order) return false;
+    const statusToken = String(order.status || "").trim().toUpperCase();
+    const paymentToken = String(order.paymentStatus || "").trim().toUpperCase();
+    return statusToken === "PAID" || paymentToken === "PAID" || order.isPaid === true;
+  };
+
   const updateRevenue = (ordersData) => {
     // Super admin aggregates revenue from ACTIVE franchises only
     if (!Array.isArray(ordersData)) {
       return { revenue: "₹0.00", ordersCount: "0" };
     }
-    const paidOrders = ordersData.filter(
-      (order) => order && order.status === "Paid"
-    );
+    const paidOrders = ordersData.filter((order) => isPaidOrder(order));
 
     const totalRevenue = paidOrders.reduce((sum, order) => {
-      if (!order?.kotLines || !Array.isArray(order.kotLines)) return sum;
-      return sum + order.kotLines.reduce((kotSum, kot) => kotSum + Number(kot.totalAmount || 0), 0);
+      return sum + getOrderTotalAmount(order);
     }, 0);
 
     const safeTotalRevenue = Number(totalRevenue || 0);
@@ -214,10 +233,7 @@ const Dashboard = () => {
   }, [activeFranchiseIdsStr]); // Re-run only if the actual IDs change
 
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket.connected) {
-      socket.connect();
-    }
+    const socket = ensureSocketConnected("dashboard_super:socket_effect");
 
     const refreshEvents = [
       "newOrder",
@@ -241,8 +257,10 @@ const Dashboard = () => {
       }, 1200);
     };
 
+    socket.off("connect", scheduleRefresh);
     socket.on("connect", scheduleRefresh);
     refreshEvents.forEach((eventName) => {
+      socket.off(eventName, scheduleRefresh);
       socket.on(eventName, scheduleRefresh);
     });
 
@@ -293,8 +311,14 @@ const Dashboard = () => {
       let fetchedOrders = [];
 
       try {
-        const ordersResponse = await api.get("/orders");
-        fetchedOrders = ordersResponse.data || [];
+        const ordersResponse = await api.get("/orders/dashboard-summary", {
+          params: {
+            windowHours: 72,
+            limit: 600,
+          },
+        });
+        const payload = ordersResponse.data?.data || ordersResponse.data || {};
+        fetchedOrders = Array.isArray(payload.orders) ? payload.orders : [];
       } catch (e) { /* ignore */ }
 
       // Filter orders to only include those from ACTIVE franchises
@@ -305,16 +329,9 @@ const Dashboard = () => {
       });
 
       totalRevenue = activeOrders
-        .filter((o) => String(o?.status || "").trim().toUpperCase() === "PAID")
+        .filter((o) => isPaidOrder(o))
         .reduce((sum, order) => {
-          if (!order?.kotLines) return sum;
-          return (
-            sum +
-            order.kotLines.reduce(
-              (kSum, k) => kSum + Number(k?.totalAmount || 0),
-              0,
-            )
-          );
+          return sum + getOrderTotalAmount(order);
         }, 0);
       totalOrdersCount = activeOrders.length;
 
@@ -323,12 +340,11 @@ const Dashboard = () => {
       const todayOrders = activeOrders.filter(order => {
         if (!order.createdAt) return false;
         const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-        return orderDate === todayStr && order.status === 'Paid'; // Filter for PAID orders
+        return orderDate === todayStr && isPaidOrder(order); // Filter for PAID orders
       });
 
       const todayRev = todayOrders.reduce((sum, order) => {
-        if (!order.kotLines) return sum;
-        return sum + order.kotLines.reduce((kSum, k) => kSum + Number(k.totalAmount || 0), 0);
+        return sum + getOrderTotalAmount(order);
       }, 0);
 
       const avgVal = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
@@ -414,13 +430,7 @@ const Dashboard = () => {
     const previousPeriodStart = new Date(currentPeriodStart);
     previousPeriodStart.setDate(previousPeriodStart.getDate() - 30);
 
-    const getOrderTotal = (order) =>
-      (order?.kotLines || []).reduce(
-        (sum, kot) => sum + (Number(kot?.totalAmount) || 0),
-        0,
-      );
-    const isPaidOrder = (order) =>
-      String(order?.status || "").trim().toUpperCase() === "PAID";
+    const getOrderTotal = (order) => getOrderTotalAmount(order);
 
     let currentRevenue = 0;
     let previousRevenue = 0;

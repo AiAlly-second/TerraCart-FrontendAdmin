@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { getAdminApiOrigin } from "../utils/adminApiOrigin.js";
+import { clearMenuCacheOnLogout } from "../utils/menuCache";
 
 const AuthContext = createContext();
 
@@ -91,6 +92,7 @@ export const AuthProvider = ({ children }) => {
 
   const clearStoredAuth = () => {
     try {
+      clearMenuCacheOnLogout();
       localStorage.removeItem("superAdminToken");
       localStorage.removeItem("superAdminUser");
       localStorage.removeItem("franchiseAdminToken");

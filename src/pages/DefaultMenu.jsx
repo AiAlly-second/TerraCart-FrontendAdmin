@@ -17,6 +17,7 @@ import {
 } from "react-icons/fa";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import menuDataService from "../services/menuDataService";
 
 // Helper function to normalize image URLs
 // Converts absolute URLs from the same API server to relative URLs
@@ -197,11 +198,14 @@ const DefaultMenu = () => {
     }
   }, [userRole]);
 
-  const fetchDefaultMenu = async () => {
+  const fetchDefaultMenu = async ({ force = false } = {}) => {
     try {
       setLoading(true);
-      const response = await api.get("/default-menu");
-      const normalizedMenu = decodeDefaultMenuPayload(response.data);
+      const defaultMenuData = await menuDataService.getDefaultMenu({
+        force,
+        source: "default-menu:load",
+      });
+      const normalizedMenu = decodeDefaultMenuPayload(defaultMenuData);
       setDefaultMenu(normalizedMenu);
       // Expand all categories by default
       if (normalizedMenu?.categories) {
@@ -250,6 +254,7 @@ const DefaultMenu = () => {
       await api.put("/default-menu", {
         categories: menuToSave.categories,
       });
+      menuDataService.invalidateDefaultMenuOnly("default-menu:save");
       // #region agent log (disabled - analytics service not available in production)
       // Commented out debug analytics call - only enable if analytics service is running
       /*
@@ -376,6 +381,9 @@ const DefaultMenu = () => {
 
     setPushResults(results);
     setPushing(false);
+    if (results.some((result) => result.success)) {
+      menuDataService.invalidateMenuData({ reason: "default-menu:push" });
+    }
   };
 
   const toggleSelectAllFranchises = () => {

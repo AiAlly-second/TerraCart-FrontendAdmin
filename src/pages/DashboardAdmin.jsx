@@ -27,8 +27,23 @@ import {
 } from "react-icons/md";
 import { BiDish, BiReceipt } from "react-icons/bi";
 import { FaMoneyBillWave, FaFire, FaUserCircle, FaStar } from "react-icons/fa";
-import { getIngredients } from "../services/costingV2Api";
-import { getSocket } from "../utils/socket";
+import {
+  DASHBOARD_ADMIN_CORE_SECTIONS,
+  getDashboardAdminDiagnosticsSnapshot,
+  getDashboardAdminSnapshot,
+  recordDashboardAdminMount,
+  recordDashboardAdminSocketReconnect,
+  refreshDashboardAdminData,
+  refreshDashboardAdminWidgetData,
+  resolveDashboardAdminSectionsForEvent,
+} from "../services/dashboardAdminDataService";
+import {
+  ensureSocketConnected,
+  getSocket,
+  getSocketStabilitySnapshot,
+} from "../utils/socket";
+
+const DASHBOARD_WIDGET_CACHE_TTL_MS = 90_000;
 
 // --- Components ---
 
@@ -168,14 +183,32 @@ const TotalOrdersCard = ({ preparing, served, paid, cartId }) => {
   );
 };
 
-const OverallRatingCard = ({ averageRating, totalFeedback }) => {
+const OverallRatingCard = ({ averageRating, totalFeedback, onActivate }) => {
   const safeAverage = Number.isFinite(Number(averageRating))
     ? Number(averageRating)
     : 0;
   const displayRating = safeAverage > 0 ? safeAverage.toFixed(2) : "0.00";
+  const activateWidget = () => {
+    onActivate?.();
+  };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] flex flex-col justify-between h-full relative overflow-hidden">
+    <div
+      className="bg-white p-4 rounded-xl shadow-sm border border-[#e2c1ac] flex flex-col justify-between h-full relative overflow-hidden cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={activateWidget}
+      onMouseEnter={activateWidget}
+      onTouchStart={activateWidget}
+      onFocus={activateWidget}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          activateWidget();
+        }
+      }}
+      aria-label="Load feedback rating widget data"
+    >
       <div className="absolute top-0 right-0 p-3 opacity-10">
         <FaStar size={60} color="#d86d2a" />
       </div>
@@ -524,7 +557,7 @@ const normalizeDismissScope = (scope) => {
   return normalizeAlertId(scope) || "global";
 };
 
-const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved, dismissedAlertsScope = 'global' }) => {
+const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navigate, onCustomerRequestResolved, dismissedAlertsScope = 'global', onShelfTabActivated }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
   const stableDismissScope = useMemo(
@@ -576,6 +609,13 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
       return next;
     });
   };
+
+  const activateShelfWidget = useCallback(
+    (reason) => {
+      onShelfTabActivated?.(reason);
+    },
+    [onShelfTabActivated],
+  );
 
   // Action handlers
   const handleMarkServed = async (requestId, dismissKeys = []) => {
@@ -838,7 +878,10 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
         
         <div className="flex gap-2 p-1 bg-gray-50 rounded-lg">
           <button
-            onClick={() => setActiveTab('all')}
+            onClick={() => {
+              setActiveTab('all');
+              activateShelfWidget("dashboard_widget_shelf_tab_all");
+            }}
             className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
               activeTab === 'all'
                 ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
@@ -878,7 +921,10 @@ const AlertsPanel = ({ customerRequests, orders, tables, ingredients = [], navig
             Has Overstay
           </button>
           <button
-            onClick={() => setActiveTab('shelf')}
+            onClick={() => {
+              setActiveTab('shelf');
+              activateShelfWidget("dashboard_widget_shelf_tab");
+            }}
             className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
               activeTab === 'shelf'
                 ? 'bg-white text-[#d86d2a] shadow-sm border border-orange-100'
@@ -1432,20 +1478,20 @@ const RecentActivity = ({ orders, tables }) => {
 
 const DashboardAdmin = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const [orders, setOrders] = useState([]);
-  const [tables, setTables] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  
-  // Data State
-  const [todayOrders, setTodayOrders] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [ingredients, setIngredients] = useState([]);
-  const [dashboardStats, setDashboardStats] = useState({});
-  const [feedbackStats, setFeedbackStats] = useState({
-    averageRating: 0,
-    total: 0,
-  });
+  const { user } = useAuth();
+  const initialSnapshot = useMemo(() => getDashboardAdminSnapshot(), []);
+  const [orders, setOrders] = useState(initialSnapshot.orders);
+  const [tables, setTables] = useState(initialSnapshot.tables);
+  const [pendingRequests, setPendingRequests] = useState(
+    initialSnapshot.pendingRequests,
+  );
+  const [ingredients, setIngredients] = useState(initialSnapshot.ingredients);
+  const [dashboardStats, setDashboardStats] = useState(
+    initialSnapshot.dashboardStats,
+  );
+  const [feedbackStats, setFeedbackStats] = useState(
+    initialSnapshot.feedbackStats,
+  );
   const istDayFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat("en-CA", {
@@ -1466,101 +1512,291 @@ const DashboardAdmin = () => {
     [istDayFormatter],
   );
   const refreshTimerRef = useRef(null);
-  
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      // Fetch Orders
-      const ordersRes = await api.get("/orders");
-      let ordersData = Array.isArray(ordersRes.data) ? ordersRes.data : 
-                       (ordersRes.data?.orders || ordersRes.data?.data || []);
-      setOrders(ordersData);
+  const pollingIntervalRef = useRef(null);
+  const pollingInFlightRef = useRef(false);
+  const healthyPollTickRef = useRef(0);
+  const pendingSocketSectionsRef = useRef(new Set());
+  const widgetRefreshInFlightRef = useRef(new Set());
+  const widgetLastTriggerAtRef = useRef({
+    ingredients: 0,
+    feedback: 0,
+  });
+  const widgetVisibilityRef = useRef({
+    ingredients: false,
+    feedback: false,
+  });
 
-      // Filter today's orders in IST (same reference as backend manager dashboard)
-      const todayIstKey = istDateKey(new Date());
-      const today = ordersData.filter(o => {
-          if (!o.createdAt) return false;
-          return istDateKey(o.createdAt) === todayIstKey;
+  const applyDashboardSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return;
+    setOrders(Array.isArray(snapshot.orders) ? snapshot.orders : []);
+    setTables(Array.isArray(snapshot.tables) ? snapshot.tables : []);
+    setPendingRequests(
+      Array.isArray(snapshot.pendingRequests) ? snapshot.pendingRequests : [],
+    );
+    setIngredients(Array.isArray(snapshot.ingredients) ? snapshot.ingredients : []);
+    setDashboardStats(snapshot.dashboardStats || {});
+    setFeedbackStats(
+      snapshot.feedbackStats || {
+        averageRating: 0,
+        total: 0,
+      },
+    );
+  }, []);
+
+  const refreshDashboard = useCallback(
+    async ({ reason = "manual", sections, force = false } = {}) => {
+      const result = await refreshDashboardAdminData({
+        reason,
+        sections,
+        force,
       });
-      setTodayOrders(today);
+      if (result?.data) {
+        applyDashboardSnapshot(result.data);
+      }
+      return result;
+    },
+    [applyDashboardSnapshot],
+  );
 
-      // Fetch canonical dashboard stats (same source as manager app dashboard)
-      try {
-        const statsRes = await api.get("/dashboard/stats");
-        const statsData = statsRes?.data?.data ?? statsRes?.data ?? {};
-        setDashboardStats(statsData);
-      } catch (statsErr) {
-        if (import.meta.env.DEV) {
-          console.warn("Failed to fetch dashboard stats:", statsErr);
-        }
-        setDashboardStats({});
+  const refreshWidgetSection = useCallback(
+    async (section, { reason, force = false } = {}) => {
+      const sectionKey = String(section || "").trim();
+      if (!sectionKey) return null;
+
+      const now = Date.now();
+      const lastTriggeredAt = widgetLastTriggerAtRef.current[sectionKey] || 0;
+      if (!force && now - lastTriggeredAt < 900) {
+        return null;
+      }
+      widgetLastTriggerAtRef.current[sectionKey] = now;
+
+      const widgetResult = await refreshDashboardAdminWidgetData({
+        section: sectionKey,
+        force,
+        reason,
+        ttlMs: DASHBOARD_WIDGET_CACHE_TTL_MS,
+      });
+
+      if (widgetResult?.data) {
+        applyDashboardSnapshot(widgetResult.data);
       }
 
-      // Fetch Tables
-      const tablesRes = await api.get("/tables");
-      let tablesData = Array.isArray(tablesRes.data) ? tablesRes.data :
-                       (tablesRes.data?.tables || tablesRes.data?.data || []);
-      setTables(tablesData);
-
-      // Fetch Employees (for total count, though we rely on order waiterName for active status)
-      const employeesRes = await api.get("/employees");
-      let empData = Array.isArray(employeesRes.data) ? employeesRes.data :
-                    (employeesRes.data?.employees || employeesRes.data?.data || []);
-      setEmployees(empData);
-
-      // Fetch Pending Customer Requests (Bill, Water, etc.)
-      try {
-          const reqRes = await api.get("/customer-requests/pending");
-          const reqData = Array.isArray(reqRes.data) ? reqRes.data :
-                         (reqRes.data?.requests || reqRes.data?.data || []);
-          setPendingRequests(reqData);
-      } catch (reqErr) {
-          console.warn("Failed to fetch customer requests:", reqErr);
+      if (!widgetResult?.refreshPromise) {
+        return widgetResult;
       }
 
-      // Fetch Ingredients (for shelf-life alerts on Action Required panel)
-      try {
-          const ingRes = await getIngredients();
-          const ingData = ingRes?.data?.data ?? ingRes?.data ?? [];
-          setIngredients(Array.isArray(ingData) ? ingData : []);
-      } catch (ingErr) {
-          if (import.meta.env.DEV) console.warn("Failed to fetch ingredients for shelf alerts:", ingErr);
+      if (widgetRefreshInFlightRef.current.has(sectionKey)) {
+        return widgetResult;
       }
+      widgetRefreshInFlightRef.current.add(sectionKey);
 
-      // Fetch overall customer rating stats
-      try {
-        const feedbackRes = await api.get("/feedback/stats");
-        const stats = feedbackRes?.data || {};
-        const avg = Number.parseFloat(stats.averageRating);
-        const total = Number.parseInt(stats.total, 10);
-        setFeedbackStats({
-          averageRating: Number.isFinite(avg) ? avg : 0,
-          total: Number.isFinite(total) ? total : 0,
+      widgetResult.refreshPromise
+        .then((refreshResult) => {
+          if (refreshResult?.data) {
+            applyDashboardSnapshot(refreshResult.data);
+          }
+        })
+        .catch((error) => {
+          if (import.meta.env.DEV) {
+            console.warn(
+              `[DashboardAdmin] widget refresh failed for '${sectionKey}'`,
+              error,
+            );
+          }
+        })
+        .finally(() => {
+          widgetRefreshInFlightRef.current.delete(sectionKey);
         });
-      } catch (feedbackErr) {
-        console.warn("Failed to fetch feedback stats:", feedbackErr);
+
+      return widgetResult;
+    },
+    [applyDashboardSnapshot],
+  );
+
+  const activateFeedbackWidget = useCallback(() => {
+    widgetVisibilityRef.current.feedback = true;
+    refreshWidgetSection("feedback", {
+      reason: "dashboard_widget_feedback_card",
+    });
+  }, [refreshWidgetSection]);
+
+  const activateIngredientsWidget = useCallback(
+    (reason = "dashboard_widget_shelf_tab") => {
+      widgetVisibilityRef.current.ingredients = true;
+      refreshWidgetSection("ingredients", { reason });
+    },
+    [refreshWidgetSection],
+  );
+
+  const todayOrders = useMemo(() => {
+    if (!Array.isArray(orders) || orders.length === 0) {
+      return [];
+    }
+    const todayIstKey = istDateKey(new Date());
+    return orders.filter((order) => {
+      if (!order?.createdAt) return false;
+      return istDateKey(order.createdAt) === todayIstKey;
+    });
+  }, [orders, istDateKey]);
+
+  useEffect(() => {
+    recordDashboardAdminMount();
+    applyDashboardSnapshot(getDashboardAdminSnapshot());
+
+    refreshDashboard({
+      reason: "dashboard_mount",
+      sections: DASHBOARD_ADMIN_CORE_SECTIONS,
+    });
+
+    if (import.meta.env.DEV) {
+      const socketSnapshot = getSocketStabilitySnapshot();
+      const diagnostics = getDashboardAdminDiagnosticsSnapshot();
+      console.log("[DashboardAdmin] mount diagnostics", {
+        socketSnapshot,
+        diagnostics,
+      });
+    }
+
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [applyDashboardSnapshot, refreshDashboard]);
+
+  useEffect(() => {
+    const poll = () => {
+      const pageVisible =
+        typeof document === "undefined" ||
+        document.visibilityState === "visible";
+      if (!pageVisible) return;
+      if (pollingInFlightRef.current) return;
+
+      const socket = getSocket();
+      const socketHealthy = Boolean(socket?.connected);
+      pollingInFlightRef.current = true;
+
+      if (!socketHealthy) {
+        healthyPollTickRef.current = 0;
+        refreshDashboard({
+          reason: "dashboard_poll_socket_down",
+          force: true,
+          sections: DASHBOARD_ADMIN_CORE_SECTIONS,
+        }).finally(() => {
+          pollingInFlightRef.current = false;
+        });
+        return;
       }
 
-    } catch (err) {
-      console.error("Dashboard fetch error:", err);
+      healthyPollTickRef.current += 1;
+      const shouldRunCoreSync = healthyPollTickRef.current % 10 === 0;
+      refreshDashboard({
+        reason: shouldRunCoreSync
+          ? "dashboard_poll_socket_up_core_sync"
+          : "dashboard_poll_socket_up",
+        sections: shouldRunCoreSync
+          ? DASHBOARD_ADMIN_CORE_SECTIONS
+          : ["stats", "pendingRequests"],
+      }).finally(() => {
+        pollingInFlightRef.current = false;
+      });
+    };
+
+    if (pollingIntervalRef.current) {
+      console.warn(
+        "[DashboardAdmin] duplicate polling interval detected, resetting existing interval",
+      );
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
-  }, [istDateKey]);
+
+    pollingIntervalRef.current = setInterval(poll, 30_000);
+
+    const visibilityHandler = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshDashboard({
+        reason: "dashboard_visibility_resume",
+        sections: DASHBOARD_ADMIN_CORE_SECTIONS,
+      });
+      if (widgetVisibilityRef.current.feedback) {
+        refreshWidgetSection("feedback", {
+          reason: "dashboard_widget_feedback_visibility_resume",
+        });
+      }
+      if (widgetVisibilityRef.current.ingredients) {
+        refreshWidgetSection("ingredients", {
+          reason: "dashboard_widget_shelf_visibility_resume",
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+
+    return () => {
+      document.removeEventListener("visibilitychange", visibilityHandler);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      pollingInFlightRef.current = false;
+    };
+  }, [refreshDashboard, refreshWidgetSection]);
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 60000);
-    return () => clearInterval(interval);
-  }, [fetchDashboardData]);
+    const socket = ensureSocketConnected("dashboard_admin:effect");
 
-  useEffect(() => {
-    const socket = getSocket();
-    if (!socket.connected) {
-      socket.connect();
-    }
+    const flushSocketRefresh = () => {
+      const sections = Array.from(pendingSocketSectionsRef.current);
+      pendingSocketSectionsRef.current.clear();
+      refreshTimerRef.current = null;
+
+      if (sections.length === 0) return;
+      refreshDashboard({
+        reason: "dashboard_socket_event_batch",
+        force: true,
+        sections,
+      });
+    };
+
+    const scheduleRefreshForEvent = (eventName) => {
+      const sections = resolveDashboardAdminSectionsForEvent(eventName);
+      if (!Array.isArray(sections) || sections.length === 0) {
+        return;
+      }
+
+      sections.forEach((section) => {
+        if (section === "feedback" && !widgetVisibilityRef.current.feedback) {
+          return;
+        }
+        if (
+          section === "ingredients" &&
+          !widgetVisibilityRef.current.ingredients
+        ) {
+          return;
+        }
+        pendingSocketSectionsRef.current.add(section);
+      });
+
+      if (pendingSocketSectionsRef.current.size === 0) {
+        return;
+      }
+
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = setTimeout(flushSocketRefresh, 850);
+    };
+
+    const handleConnect = () => {
+      recordDashboardAdminSocketReconnect();
+      scheduleRefreshForEvent("socket_connect");
+    };
 
     const refreshEvents = [
       "newOrder",
       "order:created",
+      "order.created",
       "orderUpdated",
+      "order.updated",
+      "order:updated",
       "order:status:updated",
       "order_status_updated",
       "order:upsert",
@@ -1568,45 +1804,59 @@ const DashboardAdmin = () => {
       "order:deleted",
       "paymentCreated",
       "paymentUpdated",
+      "payment:created",
+      "payment:updated",
+      "payment.created",
+      "payment.updated",
       "table:status:updated",
+      "table:updated",
+      "table.updated",
+      "table_status_updated",
+      "table:merged",
+      "table:unmerged",
       "assistance_request_created",
+      "customer_request_created",
+      "customer_request_updated",
+      "customer_request.updated",
+      "customer-request-updated",
+      "request:updated",
+      "feedback:created",
+      "feedback.created",
+      "feedback.updated",
+      "feedback:updated",
     ];
 
-    const scheduleRefresh = () => {
-      if (refreshTimerRef.current) return;
-      refreshTimerRef.current = setTimeout(() => {
-        refreshTimerRef.current = null;
-        fetchDashboardData();
-      }, 1200);
-    };
+    const eventListeners = new Map();
 
-    socket.on("connect", scheduleRefresh);
+    socket.off("connect", handleConnect);
+    socket.on("connect", handleConnect);
+
     refreshEvents.forEach((eventName) => {
-      socket.on(eventName, scheduleRefresh);
+      const listener = () => scheduleRefreshForEvent(eventName);
+      eventListeners.set(eventName, listener);
+      socket.off(eventName, listener);
+      socket.on(eventName, listener);
     });
 
     return () => {
-      socket.off("connect", scheduleRefresh);
-      refreshEvents.forEach((eventName) => {
-        socket.off(eventName, scheduleRefresh);
+      socket.off("connect", handleConnect);
+      eventListeners.forEach((listener, eventName) => {
+        socket.off(eventName, listener);
       });
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
       }
     };
-  }, [fetchDashboardData]);
+  }, [refreshDashboard]);
 
   const refetchPendingRequests = useCallback(async () => {
-    try {
-      const reqRes = await api.get("/customer-requests/pending");
-      const reqData = Array.isArray(reqRes.data) ? reqRes.data :
-                     (reqRes.data?.requests || reqRes.data?.data || []);
-      setPendingRequests(reqData);
-    } catch (reqErr) {
-      console.warn("Failed to fetch customer requests:", reqErr);
-    }
-  }, []);
+    await refreshDashboard({
+      reason: "dashboard_pending_request_manual_refresh",
+      force: true,
+      sections: ["pendingRequests", "stats"],
+    });
+  }, [refreshDashboard]);
 
   // Dashboard table strip should represent dine-in tables only (exclude OFFICE QR entries)
   // and avoid duplicate logical rows for the same table number.
@@ -1831,6 +2081,7 @@ const DashboardAdmin = () => {
         <OverallRatingCard
           averageRating={feedbackStats.averageRating}
           totalFeedback={feedbackStats.total}
+          onActivate={activateFeedbackWidget}
         />
       </div>
 
@@ -1857,6 +2108,7 @@ const DashboardAdmin = () => {
            navigate={navigate}
            onCustomerRequestResolved={refetchPendingRequests}
            dismissedAlertsScope={user?._id || user?.id || user?.cartCode || 'global'}
+           onShelfTabActivated={activateIngredientsWidget}
          />
       </div>
 

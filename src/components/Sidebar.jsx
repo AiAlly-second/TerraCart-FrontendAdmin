@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getMenuCached } from "../utils/menuCache";
+import menuDataService from "../services/menuDataService";
 import {
   FaChartBar,
   FaBuilding,
@@ -103,8 +103,10 @@ const Sidebar = ({ isOpen, onClose }) => {
       const fetchMenuStats = async () => {
         try {
           setMenuLoading(true);
-          const response = await getMenuCached();
-          const menu = response.data || [];
+          const menu = await menuDataService.getMenu(
+            {},
+            { source: "sidebar:menu-stats" },
+          );
           const totalItems = menu.reduce(
             (sum, cat) => sum + (cat.items?.length || 0),
             0,

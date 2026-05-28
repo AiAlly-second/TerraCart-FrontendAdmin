@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FaPlus, FaEdit, FaTrash, FaSave, FaTimes } from "react-icons/fa";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import menuDataService from "../services/menuDataService";
 
 const toId = (value) => {
   if (!value) return "";
@@ -85,17 +86,19 @@ const GlobalAddons = () => {
     }
   };
 
-  const loadAddons = async (targetCartId = "") => {
+  const loadAddons = async (targetCartId = "", { force = false } = {}) => {
     try {
       setLoading(true);
       setError(null);
 
-      const params =
-        isFranchiseAdmin && targetCartId ? { params: { cartId: targetCartId } } : {};
+      const params = isFranchiseAdmin && targetCartId ? { cartId: targetCartId } : {};
 
-      const response = await api.get("/addons", params);
-      const addonsList = Array.isArray(response?.data?.data)
-        ? response.data.data.map((addon) => ({
+      const addonsData = await menuDataService.getAddons(params, {
+        force,
+        source: "global-addons:list",
+      });
+      const addonsList = Array.isArray(addonsData)
+        ? addonsData.map((addon) => ({
             ...addon,
             name: sanitizeAddonName(addon?.name),
           }))
@@ -148,10 +151,11 @@ const GlobalAddons = () => {
         await api.post("/addons", payload);
       }
 
+      menuDataService.invalidateAddonsOnly("addons:upsert");
       setFormData(defaultFormData);
       setShowForm(false);
       setEditingId(null);
-      await loadAddons(selectedCartId);
+      await loadAddons(selectedCartId, { force: true });
 
       alert(editingId ? "Add-on updated successfully!" : "Add-on created successfully!");
     } catch (err) {
@@ -181,7 +185,8 @@ const GlobalAddons = () => {
 
     try {
       await api.delete(`/addons/${id}`);
-      await loadAddons(selectedCartId);
+      menuDataService.invalidateAddonsOnly("addons:delete");
+      await loadAddons(selectedCartId, { force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete add-on");
     }
@@ -192,7 +197,8 @@ const GlobalAddons = () => {
       await api.put(`/addons/${addon._id}`, {
         isAvailable: !addon.isAvailable,
       });
-      await loadAddons(selectedCartId);
+      menuDataService.invalidateAddonsOnly("addons:toggle-availability");
+      await loadAddons(selectedCartId, { force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update add-on");
     }

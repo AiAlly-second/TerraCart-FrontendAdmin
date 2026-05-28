@@ -21,9 +21,22 @@ const CartDetails = () => {
         console.log(`[CartDetails] Fetching stats for cart ID: ${id}`);
       }
 
-      // Fetch orders - backend filters by franchiseId, but we need to filter by cartId
-      const ordersResponse = await api.get("/orders");
-      const allOrders = ordersResponse.data || [];
+      // Fetch only active lightweight orders scoped to this cart.
+      const ordersResponse = await api.get("/orders", {
+        params: {
+          includeHistory: "false",
+          cartId: id,
+          lightweight: "true",
+          page: 1,
+          limit: 250,
+        },
+      });
+      const ordersPayload = ordersResponse.data || {};
+      const allOrders = Array.isArray(ordersPayload)
+        ? ordersPayload
+        : Array.isArray(ordersPayload.orders)
+          ? ordersPayload.orders
+          : [];
       if (import.meta.env.DEV) {
         console.log(`[CartDetails] Total orders from API: ${allOrders.length}`);
       }
@@ -58,12 +71,20 @@ const CartDetails = () => {
         );
       }
 
-      const paidOrders = cartOrders.filter((order) => order.status === "Paid");
+      const paidOrders = cartOrders.filter((order) => {
+        const statusToken = String(order?.status || "").trim().toUpperCase();
+        const paymentToken = String(order?.paymentStatus || "").trim().toUpperCase();
+        return statusToken === "PAID" || paymentToken === "PAID" || order?.isPaid === true;
+      });
       if (import.meta.env.DEV) {
         console.log(`[CartDetails] Paid orders: ${paidOrders.length}`);
       }
 
       const totalRevenue = paidOrders.reduce((sum, order) => {
+        const directTotal = Number(order?.totalAmount);
+        if (Number.isFinite(directTotal) && directTotal >= 0) {
+          return sum + directTotal;
+        }
         if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
         return (
           sum +

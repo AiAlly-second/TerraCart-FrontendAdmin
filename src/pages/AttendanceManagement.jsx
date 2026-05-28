@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { FaDownload } from "react-icons/fa";
-import { getSocket } from "../utils/socket";
+import { ensureSocketConnected, getSocket, joinSocketRoomOnce } from "../utils/socket";
 import { confirm } from "../utils/confirm";
 import { exportRowsToExcel } from "../utils/excelReport";
 import TaskManagement from "./TaskManagement";
@@ -86,7 +86,7 @@ const AttendanceManagement = () => {
 
   // Socket: join cafe/cart rooms and refetch on attendance lifecycle events (app/web sync)
   useEffect(() => {
-    const socket = getSocket();
+    const socket = ensureSocketConnected("attendance_management:socket_effect");
     const attendanceEvents = [
       "attendance:updated",
       "attendance:checked_in",
@@ -115,8 +115,8 @@ const AttendanceManagement = () => {
       const cartIds = getEffectiveCartIds();
       if (cartIds.length > 0) {
         cartIds.forEach((cartId) => {
-          socket.emit("join:cafe", cartId);
-          socket.emit("join:cart", cartId);
+          joinSocketRoomOnce(socket, "join:cafe", cartId);
+          joinSocketRoomOnce(socket, "join:cart", cartId);
         });
         if (import.meta.env.DEV) {
           console.log("[AttendanceManagement] Joined socket rooms for carts:", cartIds);
@@ -133,13 +133,11 @@ const AttendanceManagement = () => {
       }, 200);
     };
 
-    if (!socket.connected) {
-      socket.connect();
-    }
-
     joinRooms();
+    socket.off("connect", joinRooms);
     socket.on("connect", joinRooms);
     attendanceEvents.forEach((eventName) => {
+      socket.off(eventName, onAttendanceEvent);
       socket.on(eventName, onAttendanceEvent);
     });
     return () => {
@@ -172,6 +170,13 @@ const AttendanceManagement = () => {
     }
     if (activeTab === "today") {
       pollingIntervalRef.current = setInterval(() => {
+        const pageVisible =
+          typeof document === "undefined" ||
+          document.visibilityState === "visible";
+        if (!pageVisible) return;
+        if (socketRefreshTimeoutRef.current) return;
+        const socket = getSocket();
+        if (socket?.connected) return;
         fetchTodayAttendance();
       }, 15000);
     }

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import api from "../utils/api";
-import { getMenuCached, invalidateMenuCache } from "../utils/menuCache";
+import menuDataService from "../services/menuDataService";
 import { useAuth } from "../context/AuthContext";
 
 // Helper: get API base URL with protocol ensured
@@ -164,65 +164,90 @@ const MenuManager = () => {
     [menu, selectedCategoryId]
   );
 
-  const loadMenu = async ({ force = false } = {}) => {
+  const applyMenuData = ({ menu: nextMenu, addons: nextAddons, spiceLevels: nextSpiceLevels }) => {
+    const menuData = normalizeMenuPayload(nextMenu || []);
+    setMenu(menuData);
+    setSpiceLevels(Array.isArray(nextSpiceLevels) ? nextSpiceLevels : [
+      "NONE",
+      "MILD",
+      "MEDIUM",
+      "HOT",
+      "EXTREME",
+    ]);
+    setSelectedCategoryId((current) => current || menuData[0]?._id || null);
+
+    if (userRole === "admin") {
+      const addonList = Array.isArray(nextAddons)
+        ? nextAddons.map((addon) => ({
+            ...addon,
+            name: sanitizeAddonName(addon?.name),
+          }))
+        : [];
+      setAddons(addonList);
+    }
+
+    if (import.meta.env.DEV) {
+      console.log("[MenuManager] Menu data hydrated:", {
+        categories: menuData.length,
+        addons: Array.isArray(nextAddons) ? nextAddons.length : 0,
+      });
+    }
+  };
+
+  const hydrateMenuData = async ({ forceResources = [] } = {}) => {
     setLoading(true);
     setError(null);
+    if (userRole === "admin") {
+      setAddonsLoading(true);
+      setAddonsError("");
+    }
+
     try {
-      const [menuRes, spiceRes] = await Promise.all([
-        getMenuCached({}, { force }),
-        api.get("/menu/meta/spice-levels").catch(() => null),
-      ]);
-      const menuData = normalizeMenuPayload(menuRes.data || []);
-
-      // Log menu data (development only)
-      if (import.meta.env.DEV) {
-        console.log(
-          "[FRANCHISE ADMIN] Menu loaded:",
-          menuData.length,
-          "categories"
-        );
-        menuData.forEach((cat, catIdx) => {
-          if (cat.items && cat.items.length > 0) {
-            cat.items.forEach((item, itemIdx) => {
-              console.log(
-                `[FRANCHISE ADMIN] Category ${catIdx + 1}, Item ${
-                  itemIdx + 1
-                }: "${item.name}" - Image: ${item.image || "NO IMAGE"}`
-              );
-            });
-          }
-        });
-      }
-
-      setMenu(menuData);
-      if (spiceRes?.data?.spiceLevels) {
-        setSpiceLevels(spiceRes.data.spiceLevels);
-      }
-      if (menuData.length && !selectedCategoryId && menuData[0]?._id) {
-        setSelectedCategoryId(menuData[0]._id);
-      }
+      const menuData = await menuDataService.getMenuData(
+        {
+          includeAddons: userRole === "admin",
+          includeSpiceLevels: true,
+        },
+        {
+          forceResources,
+          source: "menu-manager",
+        },
+      );
+      applyMenuData(menuData);
     } catch (err) {
       if (import.meta.env.DEV) {
         console.error(err);
       }
       setError(err.response?.data?.message || "Failed to load menu");
+      if (userRole === "admin") {
+        setAddons([]);
+        setAddonsError(err.response?.data?.message || "Failed to load add-ons");
+      }
     } finally {
       setLoading(false);
+      setAddonsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadMenu();
-  }, []);
+    if (!userRole) return;
+    hydrateMenuData();
+  }, [userRole]);
 
-  const loadAddons = async () => {
+  const refreshAddons = async ({ force = false } = {}) => {
     if (userRole !== "admin") return;
     try {
       setAddonsLoading(true);
       setAddonsError("");
-      const response = await api.get("/addons");
-      const list = Array.isArray(response?.data?.data)
-        ? response.data.data.map((addon) => ({
+      const addonData = await menuDataService.getAddons(
+        {},
+        {
+          force,
+          source: "menu-manager:addons",
+        },
+      );
+      const list = Array.isArray(addonData)
+        ? addonData.map((addon) => ({
             ...addon,
             name: sanitizeAddonName(addon?.name),
           }))
@@ -242,17 +267,12 @@ const MenuManager = () => {
       await api.put(`/addons/${addon._id}`, {
         isAvailable: addon.isAvailable === false,
       });
-      await loadAddons();
+      menuDataService.invalidateAddonsOnly("addons:toggle-availability");
+      await refreshAddons({ force: true });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update add-on status");
     }
   };
-
-  useEffect(() => {
-    if (userRole === "admin") {
-      loadAddons();
-    }
-  }, [userRole]);
 
   const handleCategorySubmit = async (event) => {
     event.preventDefault();
@@ -268,8 +288,8 @@ const MenuManager = () => {
       }
       setCategoryForm(emptyCategoryForm);
       setEditingCategoryId(null);
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:category-upsert");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save category");
     } finally {
@@ -321,8 +341,8 @@ const MenuManager = () => {
       if (selectedCategoryId === category._id) {
         setSelectedCategoryId(null);
       }
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:category-delete");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete category");
     }
@@ -378,8 +398,8 @@ const MenuManager = () => {
       }
       setItemForm(emptyItemForm);
       setEditingItemId(null);
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:item-upsert");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save menu item");
     } finally {
@@ -402,8 +422,8 @@ const MenuManager = () => {
         categoryId: targetCategoryId,
       });
       // Reload menu so UI reflects new category assignment
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:item-move");
+      await hydrateMenuData({ forceResources: ["menu"] });
       // Optionally, keep current category selected; item will disappear from this list
     } catch (err) {
       alert(
@@ -465,8 +485,8 @@ const MenuManager = () => {
 
     try {
       await api.delete(`/menu/items/${item._id}`);
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:item-delete");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete menu item");
     }
@@ -481,8 +501,8 @@ const MenuManager = () => {
       await api.patch(`/menu/items/${item._id}/availability`, {
         isAvailable: !item.isAvailable,
       });
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:item-availability");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update availability");
     }
@@ -497,8 +517,8 @@ const MenuManager = () => {
       await api.patch(`/menu/items/${item._id}`, {
         isFeatured: !(item.isFeatured === true),
       });
-      invalidateMenuCache();
-      await loadMenu({ force: true });
+      menuDataService.invalidateMenuOnly("menu:item-special");
+      await hydrateMenuData({ forceResources: ["menu"] });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to update special item flag");
     }
@@ -557,7 +577,10 @@ const MenuManager = () => {
             </div>
             <button
               type="button"
-              onClick={loadAddons}
+              onClick={() => {
+                menuDataService.invalidateAddonsOnly("addons:manual-refresh");
+                refreshAddons({ force: true });
+              }}
               className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-100"
             >
               Refresh

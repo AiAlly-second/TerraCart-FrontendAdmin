@@ -13,7 +13,7 @@ import Navbar from "./components/Navbar";
 import TabletTabs from "./components/TabletTabs";
 import AccessibilityButton from "./components/AccessibilityButton";
 import Login from "./pages/Login";
-import { getSocket } from "./utils/socket";
+import { ensureSocketConnected } from "./utils/socket";
 
 // Import all pages
 import Dashboard from "./pages/Dashboard";
@@ -74,13 +74,7 @@ function App() {
 
   // Initialize socket connection early on app load
   useEffect(() => {
-    // Get socket instance - this will create connection if it doesn't exist
-    const socket = getSocket();
-    
-    // Ensure socket is connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+    const socket = ensureSocketConnected("app_mount");
 
     // Log connection status
     if (import.meta.env.DEV) {

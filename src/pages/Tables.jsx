@@ -3,8 +3,16 @@ import QRCode from "react-qr-code";
 import { NavLink } from "react-router-dom";
 import { FaDownload } from "react-icons/fa";
 import api from "../utils/api";
-import { createSocketConnection } from "../utils/socket";
-import { withCancellation } from "../utils/requestManager";
+import {
+  getSocket,
+  joinSocketRoomOnce,
+  safeSocketOn,
+} from "../utils/socket";
+import {
+  runDedupedRequest,
+  throttleRequest,
+  withCancellation,
+} from "../utils/requestManager";
 
 const STATUS_MAP = {
   AVAILABLE: {
@@ -468,7 +476,8 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/tables");
+      await throttleRequest("tables:list", 600);
+      const res = await runDedupedRequest("tables:list", () => api.get("/tables"));
       // Ensure tables is always an array
       let tablesData = [];
       if (Array.isArray(res.data)) {
@@ -508,7 +517,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
 
   // --- Socket setup for live table status updates ---
   useEffect(() => {
-    const socket = createSocketConnection();
+    const socket = getSocket();
     socketRef.current = socket;
 
     const handleTableStatusUpdated = (payload) => {
@@ -547,9 +556,8 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
         const userId = payload.id;
         if (userId) {
           console.log("[Tables] Joining socket room with userId:", userId);
-          socket.emit("join:cafe", userId);
-          // Also join cart room for compatibility
-          socket.emit("join:cart", userId);
+          joinSocketRoomOnce(socket, "join:cafe", userId);
+          joinSocketRoomOnce(socket, "join:cart", userId);
           // Remember this cart admin ID so we can generate takeaway QR specific to this cart
           setCartId(userId);
         }
@@ -574,15 +582,14 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
       fetchTables();
     };
 
-    socket.on("table:status:updated", handleTableStatusUpdated);
-    socket.on("table:merged", handleTableMerged);
-    socket.on("table:unmerged", handleTableUnmerged);
+    safeSocketOn(socket, "table:status:updated", handleTableStatusUpdated);
+    safeSocketOn(socket, "table:merged", handleTableMerged);
+    safeSocketOn(socket, "table:unmerged", handleTableUnmerged);
 
     return () => {
       socket.off("table:status:updated", handleTableStatusUpdated);
       socket.off("table:merged", handleTableMerged);
       socket.off("table:unmerged", handleTableUnmerged);
-      socket.disconnect();
     };
   }, []);
 
@@ -610,7 +617,7 @@ const Tables = ({ panelType = PANEL_TABLE }) => {
     };
 
     const socket = socketRef.current;
-    socket.on("waitlistUpdated", handleWaitlistUpdated);
+    safeSocketOn(socket, "waitlistUpdated", handleWaitlistUpdated);
 
     return () => {
       socket.off("waitlistUpdated", handleWaitlistUpdated);

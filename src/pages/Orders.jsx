@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { getSocket } from "../utils/socket";
+import { getSocket, joinSocketRoomOnce, safeSocketOn } from "../utils/socket";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import {
@@ -15,7 +15,7 @@ import {
 } from "../domain/orderLogic";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { getMenuCached } from "../utils/menuCache";
+import menuDataService from "../services/menuDataService";
 import { withCancellation } from "../utils/requestManager";
 import tableIcon from "../assets/images/Attached_image-removebg-preview.png";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
@@ -1216,6 +1216,7 @@ const Orders = () => {
   });
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
+  const [downloadingOrdersReport, setDownloadingOrdersReport] = useState(false);
   const [expanded, setExpanded] = useState({}); // track expanded rows
   const [filterStatus, setFilterStatus] = useState("all");
   const [menuLoading, setMenuLoading] = useState(false);
@@ -2778,8 +2779,8 @@ const Orders = () => {
     const joinOrderRooms = () => {
       const targetCafeId = getTargetCafeId();
       if (!targetCafeId) return;
-      socket.emit("join:cafe", targetCafeId);
-      socket.emit("join:cart", targetCafeId);
+      joinSocketRoomOnce(socket, "join:cafe", targetCafeId);
+      joinSocketRoomOnce(socket, "join:cart", targetCafeId);
       if (import.meta.env.DEV) {
         console.log(`[Orders] Joined socket rooms: cafe:${targetCafeId}, cart:${targetCafeId}`);
       }
@@ -2849,24 +2850,22 @@ const Orders = () => {
     };
 
     joinOrderRooms();
-    socket.on("connect", joinOrderRooms);
-    socket.on("newOrder", handleOrderCreated);
-    socket.on("order:created", handleOrderCreated);
-    socket.on("orderUpdated", handleOrderUpdated);
-    socket.on("order:status:updated", handleOrderUpdated);
-    socket.on("order_status_updated", handleOrderUpdated);
-    socket.on("order:upsert", handleOrderUpdated);
-    socket.on("orderDeleted", handleOrderDeleted);
-    socket.on("order:deleted", handleOrderDeleted);
+    safeSocketOn(socket, "connect", joinOrderRooms);
+    safeSocketOn(socket, "newOrder", handleOrderCreated);
+    safeSocketOn(socket, "order.created", handleOrderCreated);
+    safeSocketOn(socket, "order:created", handleOrderCreated);
+    safeSocketOn(socket, "order.updated", handleOrderUpdated);
+    safeSocketOn(socket, "order_status_updated", handleOrderUpdated);
+    safeSocketOn(socket, "orderDeleted", handleOrderDeleted);
+    safeSocketOn(socket, "order:deleted", handleOrderDeleted);
 
     return () => {
       socket.off("connect", joinOrderRooms);
       socket.off("newOrder", handleOrderCreated);
+      socket.off("order.created", handleOrderCreated);
       socket.off("order:created", handleOrderCreated);
-      socket.off("orderUpdated", handleOrderUpdated);
-      socket.off("order:status:updated", handleOrderUpdated);
+      socket.off("order.updated", handleOrderUpdated);
       socket.off("order_status_updated", handleOrderUpdated);
-      socket.off("order:upsert", handleOrderUpdated);
       socket.off("orderDeleted", handleOrderDeleted);
       socket.off("order:deleted", handleOrderDeleted);
     };
@@ -3506,14 +3505,14 @@ const Orders = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordersByCart, user, filterCafeId]);
 
-  const filteredOrders = (() => {
+  const applyCurrentOrderFilters = useCallback((ordersList = []) => {
     const normalizedOrder = searchOrderId.trim().toLowerCase();
     const normalizedTable = searchTable.trim().toLowerCase();
     const normalizedInvoice = searchInvoice.trim().toLowerCase();
 
     // Deduplicate orders by _id to prevent duplicate keys
     const uniqueOrders = new Map();
-    orders.forEach((order) => {
+    (Array.isArray(ordersList) ? ordersList : []).forEach((order) => {
       const orderId = order._id?.toString() || order._id;
       if (orderId && !uniqueOrders.has(orderId)) {
         uniqueOrders.set(orderId, order);
@@ -3553,7 +3552,19 @@ const Orders = () => {
     return matches.filter(
       (o) => normalizeLegacyOrderStatus(o.status, o) === filterStatus,
     );
-  })();
+  }, [
+    searchOrderId,
+    searchTable,
+    searchInvoice,
+    filterStartDate,
+    filterEndDate,
+    filterStatus,
+  ]);
+
+  const filteredOrders = useMemo(
+    () => applyCurrentOrderFilters(orders),
+    [orders, applyCurrentOrderFilters],
+  );
 
   const filteredOrdersTotalAmount = filteredOrders.reduce(
     (sum, order) => sum + getOrderReportTotalAmount(order),
@@ -3564,122 +3575,144 @@ const Orders = () => {
     filterEndDate,
   );
 
-  const handleDownloadOrdersReport = () => {
-    const rows = filteredOrders.map((order) => {
-      const createdAtDate = getOrderCreatedDate(order);
-      const updatedAtDate = getOrderUpdatedDate(order);
-      const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
-      const customerName = getOrderCustomerName(order);
-      const customerMobile = getOrderCustomerMobile(order);
-      const lineItems = buildOrderLineItems(order, { includeReturned: false });
-      const totalAmount = sumOrderLineItemsTotal(lineItems);
+  const handleDownloadOrdersReport = async () => {
+    if (downloadingOrdersReport) return;
 
-      return {
-        "Order ID": order._id || "",
-        "Invoice ID": buildInvoiceId(order),
-        "Created At": formatOrderDateTimeLong(createdAtDate),
-        "Updated At": formatOrderDateTimeLong(updatedAtDate),
-        Status: order.status || "",
-        "Service Type":
-          resolvedTakeawayOrderType ||
-          (String(order.serviceType || "").toUpperCase() === "DINE_IN"
-            ? "Dine-In"
-            : String(order.serviceType || "")),
-        "Order Type": resolvedTakeawayOrderType || "",
-        "Table / Counter": order.tableNumber || "",
-        Token: order.takeawayToken ?? "",
-        Customer: customerName || "",
-        Mobile: customerMobile || "",
-        "Items Count": lineItems.length,
-        "Total Amount (Rs)": Number(totalAmount.toFixed(2)),
+    try {
+      setDownloadingOrdersReport(true);
+
+      const range = normalizeDateRange(filterStartDate, filterEndDate);
+      const baseParams = {
+        includeHistory: "true",
       };
-    });
 
-    const fileName = buildExcelFileName("orders-report", {
-      startDate: filterStartDate,
-      endDate: filterEndDate,
-    });
-    const exported = exportRowsToExcel({
-      rows,
-      fileName,
-      sheetName: "Orders",
-      title: "Orders Report",
-      metadata: [
-        ["Date Range", selectedDateRangeLabel],
-        ["Status", filterStatus === "all" ? "All" : filterStatus],
-        ["Order / Token Search", searchOrderId.trim() || "All"],
-        ["Table Search", searchTable.trim() || "All"],
-        ["Invoice Search", searchInvoice.trim() || "All"],
-        ["Total Orders", rows.length],
-        ["Generated At", new Date().toLocaleString("en-IN")],
-      ],
-      total: {
-        label: `TOTAL AMOUNT FOR DATE RANGE (${selectedDateRangeLabel})`,
-        value: Number(filteredOrdersTotalAmount.toFixed(2)),
-        column: "Total Amount (Rs)",
-      },
-    });
+      if (filterCafeId) {
+        baseParams.cartId = filterCafeId;
+      }
 
-    if (!exported) {
-      alert("No orders available for the selected filters.");
+      if (filterStatus !== "all") {
+        baseParams.status = filterStatus;
+      }
+
+      const normalizedOrder = searchOrderId.trim();
+      const normalizedTable = searchTable.trim();
+      const normalizedInvoice = searchInvoice.trim();
+      if (normalizedOrder) baseParams.orderSearch = normalizedOrder;
+      if (normalizedTable) baseParams.tableSearch = normalizedTable;
+      if (normalizedInvoice) baseParams.invoiceSearch = normalizedInvoice;
+      if (range.startDate) baseParams.startDate = range.startDate;
+      if (range.endDate) baseParams.endDate = range.endDate;
+
+      const allMatchingOrders = [];
+      let nextPage = 1;
+      const pageLimit = 100;
+      let hasNextPage = true;
+
+      while (hasNextPage) {
+        const ordersRes = await api.get("/orders", {
+          params: {
+            ...baseParams,
+            page: nextPage,
+            limit: pageLimit,
+          },
+        });
+        const payload = ordersRes.data || {};
+        const pageOrders = filterOrdersByCafeId(
+          normalizeOrdersPayload(payload),
+          filterCafeId,
+        );
+        allMatchingOrders.push(...pageOrders);
+
+        const paginationInfo = payload?.pagination;
+        if (!paginationInfo) {
+          hasNextPage = false;
+        } else {
+          hasNextPage = Boolean(paginationInfo.hasNextPage);
+          nextPage = Number(paginationInfo.page || nextPage) + 1;
+        }
+      }
+
+      const exportOrders = applyCurrentOrderFilters(allMatchingOrders);
+      const exportTotalAmount = exportOrders.reduce(
+        (sum, order) => sum + getOrderReportTotalAmount(order),
+        0,
+      );
+
+      const rows = exportOrders.map((order) => {
+        const createdAtDate = getOrderCreatedDate(order);
+        const updatedAtDate = getOrderUpdatedDate(order);
+        const resolvedTakeawayOrderType = resolveTakeawayOrderType(order);
+        const customerName = getOrderCustomerName(order);
+        const customerMobile = getOrderCustomerMobile(order);
+        const lineItems = buildOrderLineItems(order, { includeReturned: false });
+        const totalAmount = sumOrderLineItemsTotal(lineItems);
+
+        return {
+          "Order ID": order._id || "",
+          "Invoice ID": buildInvoiceId(order),
+          "Created At": formatOrderDateTimeLong(createdAtDate),
+          "Updated At": formatOrderDateTimeLong(updatedAtDate),
+          Status: order.status || "",
+          "Service Type":
+            resolvedTakeawayOrderType ||
+            (String(order.serviceType || "").toUpperCase() === "DINE_IN"
+              ? "Dine-In"
+              : String(order.serviceType || "")),
+          "Order Type": resolvedTakeawayOrderType || "",
+          "Table / Counter": order.tableNumber || "",
+          Token: order.takeawayToken ?? "",
+          Customer: customerName || "",
+          Mobile: customerMobile || "",
+          "Items Count": lineItems.length,
+          "Total Amount (Rs)": Number(totalAmount.toFixed(2)),
+        };
+      });
+
+      const fileName = buildExcelFileName("orders-report", {
+        startDate: filterStartDate,
+        endDate: filterEndDate,
+      });
+      const exported = exportRowsToExcel({
+        rows,
+        fileName,
+        sheetName: "Orders",
+        title: "Orders Report",
+        metadata: [
+          ["Date Range", selectedDateRangeLabel],
+          ["Status", filterStatus === "all" ? "All" : filterStatus],
+          ["Order / Token Search", searchOrderId.trim() || "All"],
+          ["Table Search", searchTable.trim() || "All"],
+          ["Invoice Search", searchInvoice.trim() || "All"],
+          ["Total Orders", rows.length],
+          ["Generated At", new Date().toLocaleString("en-IN")],
+        ],
+        total: {
+          label: `TOTAL AMOUNT FOR DATE RANGE (${selectedDateRangeLabel})`,
+          value: Number(exportTotalAmount.toFixed(2)),
+          column: "Total Amount (Rs)",
+        },
+      });
+
+      if (!exported) {
+        alert("No orders available for the selected filters.");
+      }
+    } catch (error) {
+      console.error("Error exporting orders report:", error);
+      alert("Failed to export orders report. Please try again.");
+    } finally {
+      setDownloadingOrdersReport(false);
     }
   };
 
   // Filter orders by cart for grouped view
-  const getFilteredOrdersForCart = (cartOrders) => {
-    const normalizedOrder = searchOrderId.trim().toLowerCase();
-    const normalizedTable = searchTable.trim().toLowerCase();
-    const normalizedInvoice = searchInvoice.trim().toLowerCase();
-
-    // Deduplicate orders by _id to prevent duplicate keys
-    const uniqueOrders = new Map();
-    cartOrders.forEach((order) => {
-      const orderId = order._id?.toString() || order._id;
-      if (orderId && !uniqueOrders.has(orderId)) {
-        uniqueOrders.set(orderId, order);
-      }
-    });
-
-    const matches = Array.from(uniqueOrders.values()).filter((order) => {
-      const orderIdMatch =
-        !normalizedOrder ||
-        (order._id || "").toLowerCase().includes(normalizedOrder);
-      const tableMatch =
-        !normalizedTable ||
-        (order.tableNumber !== undefined &&
-          order.tableNumber !== null &&
-          String(order.tableNumber).toLowerCase().includes(normalizedTable));
-      const invoiceId = buildInvoiceId(order).toLowerCase();
-      const invoiceMatch =
-        !normalizedInvoice || invoiceId.includes(normalizedInvoice);
-
-      const dateMatch = isOrderWithinDateRange(
-        order,
-        filterStartDate,
-        filterEndDate,
-      );
-
-      return orderIdMatch && tableMatch && invoiceMatch && dateMatch;
-    });
-
-    if (filterStatus === "all") return matches;
-    if (filterStatus === "active")
-      return matches.filter(
-        (o) =>
-          !["Cancelled", "Returned"].includes(
-            normalizeLegacyOrderStatus(o.status, o),
-          )
-      );
-    return matches.filter(
-      (o) => normalizeLegacyOrderStatus(o.status, o) === filterStatus,
-    );
-  };
+  const getFilteredOrdersForCart = (cartOrders) =>
+    applyCurrentOrderFilters(cartOrders);
 
   const toggleCartExpand = (cartId) => {
     setExpandedCarts((prev) => ({ ...prev, [cartId]: !prev[cartId] }));
   };
 
-  const loadMenu = useCallback(async (outletCartId = null) => {
+  const loadMenu = useCallback(async (outletCartId = null, { force = false } = {}) => {
     try {
       setMenuLoading(true);
       setMenuError("");
@@ -3689,8 +3722,10 @@ const Orders = () => {
       if (import.meta.env.DEV) {
         console.log("[Orders] loadMenu - Fetching menu with params:", params);
       }
-      const res = await getMenuCached(params);
-      const payload = res.data || [];
+      const payload = await menuDataService.getMenu(params, {
+        force,
+        source: "orders:load-menu",
+      });
 
       if (!Array.isArray(payload) || payload.length === 0) {
         const errorMsg = `No menu items found${outletCartId ? ` for outlet ${outletCartId}` : ""}. Please add menu items first.`;
@@ -3759,15 +3794,9 @@ const Orders = () => {
       setAddonsLoading(true);
       setAddonsError("");
       const params = outletCartId ? { cartId: outletCartId } : {};
-      const response = await api.get("/addons", { params });
-      const raw = response.data;
-      const addonsList = Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.addons)
-            ? raw.addons
-            : [];
+      const addonsList = await menuDataService.getAddons(params, {
+        source: "orders:addons",
+      });
       const list = addonsList.filter(
         (addon) =>
           addon &&
@@ -4119,9 +4148,10 @@ const Orders = () => {
           </div>
           <button
             onClick={handleDownloadOrdersReport}
-            className="border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors"
+            disabled={downloadingOrdersReport}
+            className="border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-2.5 px-4 rounded-lg shadow-sm text-sm flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Download Excel
+            {downloadingOrdersReport ? "Exporting..." : "Download Excel"}
           </button>
           {user?.role !== "franchise_admin" && (
             <button
@@ -5495,7 +5525,9 @@ const Orders = () => {
                             Menu not loaded.{" "}
                             <button
                               type="button"
-                              onClick={() => loadMenu(currentMenuCartId)}
+                              onClick={() =>
+                                loadMenu(currentMenuCartId, { force: true })
+                              }
                               className="text-blue-600 hover:text-blue-800 underline"
                             >
                               Click here to load menu
@@ -5548,7 +5580,9 @@ const Orders = () => {
                                 {menuError}
                                 <button
                                   type="button"
-                                  onClick={() => loadMenu(currentMenuCartId)}
+                                  onClick={() =>
+                                    loadMenu(currentMenuCartId, { force: true })
+                                  }
                                   className="ml-2 text-blue-600 hover:text-blue-800 underline"
                                 >
                                   Retry

@@ -11,7 +11,7 @@ import {
   pushToCartAdmins,
 } from "../../services/costingV2Api";
 import { useAuth } from "../../context/AuthContext";
-import api from "../../utils/api";
+import menuDataService from "../../services/menuDataService";
 import {
   FaPlus,
   FaEdit,
@@ -91,7 +91,10 @@ const Recipes = () => {
           getRecipes(),
           getIngredients(),
           getDefaultMenuItems(),
-          api.get("/addons").catch(() => ({ data: { data: [] } })),
+          menuDataService.getAddons(
+            {},
+            { source: "costing-recipes:addons" },
+          ).catch(() => []),
         ]);
 
       // Enhanced logging for debugging
@@ -132,9 +135,7 @@ const Recipes = () => {
         setIngredients(ingredientsRes.data.data || []);
       if (defaultMenuRes.data.success)
         setDefaultMenuItems(defaultMenuRes.data.data || []);
-      const addonsList = Array.isArray(addonsRes?.data?.data)
-        ? addonsRes.data.data
-        : [];
+      const addonsList = Array.isArray(addonsRes) ? addonsRes : [];
       setAddons(
         addonsList
           .filter((addon) => addon && (addon._id || addon.id))

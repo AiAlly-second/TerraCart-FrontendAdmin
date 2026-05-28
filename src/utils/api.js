@@ -76,14 +76,23 @@ const selectBackend = async () => {
 // Initialize backend selection
 selectBackend();
 
-// Periodic health check every 30 seconds
+const HEALTH_CHECK_INTERVAL_MS = 45000;
+
+// Periodic health check with visibility gating to reduce hidden-tab load.
 setInterval(async () => {
+  if (
+    typeof document !== "undefined" &&
+    document.visibilityState === "hidden"
+  ) {
+    return;
+  }
+
   const newBackend = await selectBackend();
   if (newBackend !== activeBackend) {
     console.log(`🔄 Backend switched from ${activeBackend} to ${newBackend}`);
     activeBackend = newBackend;
   }
-}, 30000);
+}, HEALTH_CHECK_INTERVAL_MS);
 
 const api = axios.create({
   timeout: 120000,

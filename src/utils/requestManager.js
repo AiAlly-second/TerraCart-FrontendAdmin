@@ -2,9 +2,43 @@
  * Request Manager Utility
  * Handles request cancellation and debouncing to prevent race conditions
  */
+import { STABILITY_FLAGS, STABILITY_THRESHOLDS } from "./stabilityFlags";
 
 // Map to store active AbortControllers for each request type
 const activeControllers = new Map();
+const inFlightRequests = new Map();
+const lastRequestAt = new Map();
+const requestRateWindows = new Map();
+
+const trimWindow = (timestamps, windowMs) => {
+  const cutoff = Date.now() - windowMs;
+  while (timestamps.length > 0 && timestamps[0] < cutoff) {
+    timestamps.shift();
+  }
+};
+
+const trackRequestRate = (requestKey) => {
+  if (!STABILITY_FLAGS.ENABLE_STABILITY_OBSERVABILITY) return;
+
+  if (!requestRateWindows.has(requestKey)) {
+    requestRateWindows.set(requestKey, []);
+  }
+
+  const timestamps = requestRateWindows.get(requestKey);
+  timestamps.push(Date.now());
+  trimWindow(timestamps, 60_000);
+
+  if (
+    timestamps.length >
+    STABILITY_THRESHOLDS.MAX_API_CALLS_PER_MINUTE_PER_KEY
+  ) {
+    console.warn("[Stability] repeated API storm detected", {
+      requestKey,
+      requestsPerMinute: timestamps.length,
+      threshold: STABILITY_THRESHOLDS.MAX_API_CALLS_PER_MINUTE_PER_KEY,
+    });
+  }
+};
 
 /**
  * Creates a debounced version of a function
@@ -140,6 +174,47 @@ export const debouncedWithCancellation = (requestType, asyncFn, wait = 300) => {
       }, wait);
     });
   };
+};
+
+/**
+ * Reuse in-flight request promise for same logical key.
+ * Useful for preventing duplicate fetch bursts from multiple components.
+ */
+export const runDedupedRequest = async (requestKey, requestFn) => {
+  trackRequestRate(requestKey);
+
+  if (!STABILITY_FLAGS.ENABLE_REQUEST_DEDUPE) {
+    return requestFn();
+  }
+
+  if (inFlightRequests.has(requestKey)) {
+    return inFlightRequests.get(requestKey);
+  }
+
+  const promise = Promise.resolve()
+    .then(requestFn)
+    .finally(() => {
+      inFlightRequests.delete(requestKey);
+      lastRequestAt.set(requestKey, Date.now());
+    });
+
+  inFlightRequests.set(requestKey, promise);
+  return promise;
+};
+
+/**
+ * Throttle repeated calls for same key.
+ */
+export const throttleRequest = async (
+  requestKey,
+  minGapMs = 500,
+) => {
+  if (!STABILITY_FLAGS.ENABLE_REQUEST_DEDUPE) return;
+  const lastTs = lastRequestAt.get(requestKey) || 0;
+  const now = Date.now();
+  const elapsed = now - lastTs;
+  if (elapsed >= minGapMs) return;
+  await new Promise((resolve) => setTimeout(resolve, minGapMs - elapsed));
 };
 
 

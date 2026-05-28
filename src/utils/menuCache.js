@@ -1,50 +1,31 @@
-import api from "./api";
+import menuDataService from "../services/menuDataService";
 
-const MENU_CACHE_TTL_MS = 10 * 1000;
-const cache = new Map();
-const pending = new Map();
+const asAxiosLikeResponse = (data) => ({
+  data,
+  status: 200,
+  statusText: "OK",
+  headers: {},
+  config: {},
+  request: null,
+});
 
-const stableParamsKey = (params = {}) =>
-  JSON.stringify(
-    Object.keys(params || {})
-      .sort()
-      .reduce((acc, key) => {
-        acc[key] = params[key];
-        return acc;
-      }, {}),
-  );
+export const getMenuCached = async (params = {}, options = {}) =>
+  asAxiosLikeResponse(await menuDataService.getMenu(params, options));
 
-export const invalidateMenuCache = () => {
-  cache.clear();
-  pending.clear();
+export const getDefaultMenuCached = async (options = {}) =>
+  asAxiosLikeResponse(await menuDataService.getDefaultMenu(options));
+
+export const invalidateMenuCache = (reason = "manual") => {
+  menuDataService.invalidateMenuData({ reason });
 };
 
-export const getMenuCached = async (params = {}, options = {}) => {
-  const key = stableParamsKey(params);
-  const now = Date.now();
-  const cached = cache.get(key);
-
-  if (!options.force && cached && now < cached.expiresAt) {
-    return cached.response;
-  }
-
-  if (!options.force && pending.has(key)) {
-    return pending.get(key);
-  }
-
-  const request = api
-    .get("/menu", { params })
-    .then((response) => {
-      cache.set(key, {
-        response,
-        expiresAt: Date.now() + MENU_CACHE_TTL_MS,
-      });
-      return response;
-    })
-    .finally(() => {
-      pending.delete(key);
-    });
-
-  pending.set(key, request);
-  return request;
+export const invalidateDefaultMenuCache = (reason = "manual") => {
+  menuDataService.invalidateDefaultMenuOnly(reason);
 };
+
+export const clearMenuCacheOnLogout = () => {
+  menuDataService.clearMenuDataCache("logout");
+};
+
+export const getMenuCacheDiagnostics = () =>
+  menuDataService.getMenuDataDiagnostics();

@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createSocketConnection } from "../utils/socket";
+import {
+  getSocket,
+  joinSocketRoomOnce,
+  safeSocketOn,
+} from "../utils/socket";
 import { useAuth } from "../context/AuthContext";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -15,9 +19,10 @@ import {
   canReturn,
 } from "../domain/orderLogic";
 import api from "../utils/api";
-import { getMenuCached } from "../utils/menuCache";
+import menuDataService from "../services/menuDataService";
 import { printKOT } from "../utils/kotPrinter";
 import { buildExcelFileName, exportRowsToExcel } from "../utils/excelReport";
+import { runDedupedRequest, throttleRequest } from "../utils/requestManager";
 
 const AUTO_PRINT_PRINTER_ID = "kitchen-primary";
 
@@ -907,11 +912,13 @@ const TakeawayOrders = () => {
     try {
       setMenuLoading(true);
       setMenuError("");
-      const res = await getMenuCached();
-      const data = Array.isArray(res.data) ? res.data : [];
+      const data = await menuDataService.getMenu({}, {
+        source: "takeaway-orders:load-menu",
+      });
+      const menuData = Array.isArray(data) ? data : [];
 
       const items = [];
-      (data || []).forEach((cat) => {
+      (menuData || []).forEach((cat) => {
         if (!cat) return;
         (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
           if (!item) return;
@@ -937,15 +944,10 @@ const TakeawayOrders = () => {
   const loadAddons = useCallback(async () => {
     try {
       setAddonsLoading(true);
-      const response = await api.get("/addons");
-      const raw = response.data;
-      const addonsList = Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.addons)
-            ? raw.addons
-            : [];
+      const addonsList = await menuDataService.getAddons(
+        {},
+        { source: "takeaway-orders:addons" },
+      );
       const list = addonsList.filter(
         (a) =>
           a &&
@@ -969,7 +971,17 @@ const TakeawayOrders = () => {
     const fetchOrders = async () => {
       try {
         // Use authenticated API to get orders filtered by cartId for cart admins
-        const res = await api.get("/orders");
+        await throttleRequest("takeaway_orders:list", 600);
+        const res = await runDedupedRequest("takeaway_orders:list", () =>
+          api.get("/orders", {
+            params: {
+              includeHistory: "false",
+              serviceType: "TAKEAWAY",
+              page: 1,
+              limit: 120,
+            },
+          }),
+        );
         if (import.meta.env.DEV) {
           console.log("[TakeawayOrders] API Response:", res);
           console.log("[TakeawayOrders] Response data:", res.data);
@@ -979,6 +991,8 @@ const TakeawayOrders = () => {
         let data = [];
         if (Array.isArray(res.data)) {
           data = res.data;
+        } else if (res.data && Array.isArray(res.data.orders)) {
+          data = res.data.orders;
         } else if (
           res.data &&
           res.data.success &&
@@ -1037,7 +1051,7 @@ const TakeawayOrders = () => {
     loadMenu();
     loadAddons();
 
-    const socket = createSocketConnection();
+    const socket = getSocket();
     socketRef.current = socket;
 
     const handleNewOrder = (order) => {
@@ -1101,19 +1115,18 @@ const TakeawayOrders = () => {
       upsertOrder(order);
     };
 
-    socket.on("newOrder", handleNewOrder);
-    socket.on("orderUpdated", handleOrderUpdated);
-    socket.on("orderDeleted", handleOrderDeleted);
-    socket.on("order:created", handleOrderCreated);
-    socket.on("order:status:updated", handleOrderStatusUpdated);
-    socket.on("order_status_updated", handleOrderStatusUpdated);
-    socket.on("order:upsert", handleOrderUpdated);
+    safeSocketOn(socket, "newOrder", handleNewOrder);
+    safeSocketOn(socket, "order.created", handleOrderCreated);
+    safeSocketOn(socket, "order.updated", handleOrderUpdated);
+    safeSocketOn(socket, "orderDeleted", handleOrderDeleted);
+    safeSocketOn(socket, "order:created", handleOrderCreated);
+    safeSocketOn(socket, "order_status_updated", handleOrderStatusUpdated);
 
     // Join cafe and cart rooms for real-time updates (matches Orders.jsx pattern)
     const targetCartId = getEffectiveCartId();
     if (targetCartId) {
-      socket.emit("join:cafe", targetCartId);
-      socket.emit("join:cart", targetCartId);
+      joinSocketRoomOnce(socket, "join:cafe", targetCartId);
+      joinSocketRoomOnce(socket, "join:cart", targetCartId);
       if (import.meta.env.DEV) {
         console.log(
           "[TakeawayOrders] Socket: Joined cafe and cart rooms:",
@@ -1125,16 +1138,12 @@ const TakeawayOrders = () => {
     return () => {
       active = false;
       socket.off("newOrder", handleNewOrder);
-      socket.off("orderUpdated", handleOrderUpdated);
       socket.off("orderDeleted", handleOrderDeleted);
       socket.off("order:created", handleOrderCreated);
-      socket.off("order:status:updated", handleOrderStatusUpdated);
       socket.off("order_status_updated", handleOrderStatusUpdated);
-      socket.off("order:upsert", handleOrderUpdated);
+      socket.off("order.updated", handleOrderUpdated);
+      socket.off("order.created", handleOrderCreated);
 
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
     };
   }, [upsertOrder, autoPrintEnabled, handleAutoPrint, getEffectiveCartId]);
 
@@ -1385,14 +1394,12 @@ const TakeawayOrders = () => {
         });
       }
 
-      // Refresh orders list by fetching again
-      const ordersRes = await api.get("/orders");
-      const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-      const takeawayOrders = allOrders.filter(
-        (o) => o.serviceType === "TAKEAWAY",
-      );
-
-      setOrders(takeawayOrders);
+      // Refresh only the edited order instead of reloading the full orders dataset.
+      const refreshedOrderResponse = await api.get(`/orders/${currentOrder._id}`);
+      const refreshedOrder = refreshedOrderResponse?.data;
+      if (refreshedOrder) {
+        upsertOrder(refreshedOrder);
+      }
 
       setIsModalOpen(false);
       setCurrentOrder(null);
@@ -1451,31 +1458,9 @@ const TakeawayOrders = () => {
         console.log("[TakeawayOrders] Order created successfully:", created);
       }
 
-      // Refresh takeaway orders list
-      const ordersRes = await api.get("/orders");
-      if (import.meta.env.DEV) {
-        console.log("[TakeawayOrders] Refreshed orders list:", ordersRes.data);
+      if (created) {
+        upsertOrder(created, { prepend: true });
       }
-
-      // Handle both response formats
-      let allOrders = [];
-      if (Array.isArray(ordersRes.data)) {
-        allOrders = ordersRes.data;
-      } else if (ordersRes.data && Array.isArray(ordersRes.data.data)) {
-        allOrders = ordersRes.data.data;
-      }
-
-      const takeawayOrders = (allOrders || []).filter(
-        (o) => o && o.serviceType === "TAKEAWAY",
-      );
-
-      if (import.meta.env.DEV) {
-        console.log(
-          "[TakeawayOrders] Filtered takeaway orders:",
-          takeawayOrders.length,
-        );
-      }
-      setOrders(takeawayOrders);
 
       setIsModalOpen(false);
       setCurrentOrder(null);

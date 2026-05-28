@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { getSocket } from "../utils/socket";
+import { ensureSocketConnected } from "../utils/socket";
 import {
   FaBolt,
   FaBoxOpen,
@@ -122,10 +122,31 @@ const Dashboard = () => {
   const [cartOrderStats, setCartOrderStats] = useState([]);
   const [revenueFilter, setRevenueFilter] = useState("DAILY");
   const refreshTimerRef = useRef(null);
+  const isFetchingRef = useRef(false);
 
   const franchiseName = user?.name || "Franchise Dashboard";
   const toReadableId = (value) =>
     value ? `ID-${String(value).slice(-6).toUpperCase()}` : "Unavailable";
+
+  const resolveOrderAmount = (order) => {
+    const directTotal = Number(order?.totalAmount);
+    if (Number.isFinite(directTotal) && directTotal >= 0) {
+      return directTotal;
+    }
+
+    if (!Array.isArray(order?.kotLines)) return 0;
+    return order.kotLines.reduce(
+      (sum, kot) => sum + Number(kot?.totalAmount || 0),
+      0,
+    );
+  };
+
+  const isPaidOrder = (order) => {
+    if (!order) return false;
+    const statusToken = String(order.status || "").trim().toUpperCase();
+    const paymentToken = String(order.paymentStatus || "").trim().toUpperCase();
+    return statusToken === "PAID" || paymentToken === "PAID" || order.isPaid === true;
+  };
 
   const calculateRevenue = (ordersData) => {
     if (!Array.isArray(ordersData)) {
@@ -145,28 +166,15 @@ const Dashboard = () => {
       );
     }
 
-    const paidOrders = (ordersData || []).filter(
-      (order) => order && order.status === "Paid"
-    );
+    const paidOrders = (ordersData || []).filter((order) => isPaidOrder(order));
     if (import.meta.env.DEV) {
       console.log("[Dashboard] Paid orders:", paidOrders.length);
     }
 
-    const totalRevenue = paidOrders.reduce((sum, order) => {
-      if (
-        !order ||
-        !order.kotLines ||
-        !Array.isArray(order.kotLines) ||
-        order.kotLines.length === 0
-      ) {
-        return sum;
-      }
-      const orderTotal = order.kotLines.reduce((kotSum, kot) => {
-        if (!kot) return kotSum;
-        return kotSum + Number(kot.totalAmount || 0);
-      }, 0);
-      return sum + orderTotal;
-    }, 0);
+    const totalRevenue = paidOrders.reduce(
+      (sum, order) => sum + resolveOrderAmount(order),
+      0,
+    );
 
     // Calculate today's orders (all statuses, not just paid)
     const today = new Date();
@@ -183,17 +191,11 @@ const Dashboard = () => {
     }
 
     // Today's revenue (only from paid orders today)
-    const todayPaidOrders = todayAllOrders.filter((o) => o.status === "Paid");
-    const todayRevenue = todayPaidOrders.reduce((sum, order) => {
-      if (!order.kotLines || !Array.isArray(order.kotLines)) return sum;
-      return (
-        sum +
-        order.kotLines.reduce(
-          (kotSum, kot) => kotSum + Number(kot.totalAmount || 0),
-          0
-        )
-      );
-    }, 0);
+    const todayPaidOrders = todayAllOrders.filter((o) => isPaidOrder(o));
+    const todayRevenue = todayPaidOrders.reduce(
+      (sum, order) => sum + resolveOrderAmount(order),
+      0,
+    );
 
     return {
       totalRevenue,
@@ -222,10 +224,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user || !user._id) return;
 
-    const socket = getSocket();
-    if (!socket.connected) {
-      socket.connect();
-    }
+    const socket = ensureSocketConnected("dashboard_franchise:socket_effect");
 
     const refreshEvents = [
       "newOrder",
@@ -249,8 +248,10 @@ const Dashboard = () => {
       }, 1200);
     };
 
+    socket.off("connect", scheduleRefresh);
     socket.on("connect", scheduleRefresh);
     refreshEvents.forEach((eventName) => {
+      socket.off(eventName, scheduleRefresh);
       socket.on(eventName, scheduleRefresh);
     });
 
@@ -267,7 +268,9 @@ const Dashboard = () => {
   }, [user]);
 
   const fetchDashboardData = async () => {
+    if (isFetchingRef.current) return;
     try {
+      isFetchingRef.current = true;
       // Don't set loading to true for background polling to avoid UI flickering
       // Only set for initial load or manual refresh if desired, but here we just update data
       // setLoading(true); 
@@ -296,14 +299,28 @@ const Dashboard = () => {
         console.error("Error fetching users:", err);
       }
 
-      // Fetch orders
+      // Fetch dashboard-safe lightweight order summary
       let fetchedOrders = [];
       let revenueData = { totalRevenue: 0, todayRevenue: 0, todayOrders: 0 };
       try {
-        const ordersResponse = await api.get("/orders");
-        fetchedOrders = ordersResponse.data || [];
+        const ordersResponse = await api.get("/orders/dashboard-summary", {
+          params: {
+            windowHours: 72,
+            limit: 600,
+          },
+        });
+        const payload = ordersResponse.data?.data || ordersResponse.data || {};
+        fetchedOrders = Array.isArray(payload.orders) ? payload.orders : [];
+        const summary = payload.summary || {};
         setOrders(fetchedOrders);
-        revenueData = calculateRevenue(fetchedOrders);
+        revenueData = {
+          totalRevenue: Number(summary.totalRevenue || 0),
+          todayRevenue: Number(summary.todayRevenue || 0),
+          todayOrders: Number(summary.todayOrders || 0),
+        };
+        if (!Number.isFinite(revenueData.totalRevenue)) {
+          revenueData = calculateRevenue(fetchedOrders);
+        }
       } catch (err) {
         console.error("Failed to fetch orders:", err);
       }
@@ -379,12 +396,8 @@ const Dashboard = () => {
           }
 
           // Add revenue if paid
-          if (order.status === "Paid" && order.kotLines) {
-            const orderTotal = order.kotLines.reduce(
-              (sum, kot) => sum + Number(kot.totalAmount || 0),
-              0
-            );
-            cartOrderMap[cartId].revenue += orderTotal;
+          if (isPaidOrder(order)) {
+            cartOrderMap[cartId].revenue += resolveOrderAmount(order);
           }
         }
       });
@@ -396,6 +409,7 @@ const Dashboard = () => {
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
+      isFetchingRef.current = false;
       // Only set loading false if it was true (initial load)
       setLoading(false);
     }
@@ -403,10 +417,22 @@ const Dashboard = () => {
 
   const [copied, setCopied] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [generatedFranchiseCode, setGeneratedFranchiseCode] = useState(
+    user?.franchiseCode || null
+  );
+  const [generatedFranchiseShortcut, setGeneratedFranchiseShortcut] = useState(
+    user?.franchiseShortcut || null
+  );
+
+  useEffect(() => {
+    setGeneratedFranchiseCode(user?.franchiseCode || null);
+    setGeneratedFranchiseShortcut(user?.franchiseShortcut || null);
+  }, [user?.franchiseCode, user?.franchiseShortcut]);
 
   // Franchise identification - prefer franchiseCode, fallback to shortened ID
-  const franchiseCode = user?.franchiseCode || null;
-  const franchiseShortcut = user?.franchiseShortcut || null;
+  const franchiseCode = generatedFranchiseCode || user?.franchiseCode || null;
+  const franchiseShortcut =
+    generatedFranchiseShortcut || user?.franchiseShortcut || null;
   const franchiseId = user?._id || "";
 
   // Generate display ID: Use franchiseCode if available, otherwise create a readable format
@@ -446,8 +472,8 @@ const Dashboard = () => {
           franchiseShortcut: response.data.franchiseShortcut,
         };
         localStorage.setItem("franchiseAdminUser", JSON.stringify(updatedUser));
-        // Reload page to reflect changes
-        window.location.reload();
+        setGeneratedFranchiseCode(response.data.franchiseCode);
+        setGeneratedFranchiseShortcut(response.data.franchiseShortcut || null);
       }
     } catch (error) {
       console.error("Error generating franchise code:", error);
@@ -464,13 +490,7 @@ const Dashboard = () => {
     })}`;
   };
 
-  const getOrderTotal = (order) => {
-    if (!order?.kotLines || !Array.isArray(order.kotLines)) return 0;
-    return order.kotLines.reduce(
-      (sum, kot) => sum + Number(kot?.totalAmount || 0),
-      0
-    );
-  };
+  const getOrderTotal = (order) => resolveOrderAmount(order);
 
   const formatCompactCurrency = (value) => {
     const amount = Number(value || 0);
@@ -490,7 +510,7 @@ const Dashboard = () => {
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
     const paidOrders = (orders || []).filter(
-      (order) => order?.status === "Paid" && order?.createdAt
+      (order) => isPaidOrder(order) && order?.createdAt
     );
     const now = new Date();
     let buckets = [];

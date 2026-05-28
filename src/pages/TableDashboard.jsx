@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { NavLink } from "react-router-dom";
 import api from "../utils/api";
-import { createSocketConnection } from "../utils/socket";
+import {
+  getSocket,
+  joinSocketRoomOnce,
+  safeSocketOn,
+} from "../utils/socket";
+import { STABILITY_FLAGS } from "../utils/stabilityFlags";
+import { runDedupedRequest, throttleRequest } from "../utils/requestManager";
 
 const TableDashboard = () => {
   const [tables, setTables] = useState([]);
@@ -12,17 +18,65 @@ const TableDashboard = () => {
     primaryTableId: "",
     secondaryTableIds: [],
   });
+  const mountedRef = useRef(true);
+  const fallbackPollTimerRef = useRef(null);
+
+  const fetchTables = useCallback(async () => {
+    try {
+      await throttleRequest("table_dashboard:occupancy", 600);
+      const response = await runDedupedRequest(
+        "table_dashboard:occupancy",
+        () => api.get("/tables/dashboard/occupancy"),
+      );
+      if (!mountedRef.current) return;
+      setTables(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      console.error("Error fetching tables:", error);
+      setTables([]);
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const stopFallbackPolling = useCallback(() => {
+    if (fallbackPollTimerRef.current) {
+      clearTimeout(fallbackPollTimerRef.current);
+      fallbackPollTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFallbackPoll = useCallback(
+    (socket) => {
+      stopFallbackPolling();
+      const baseMs = 25000;
+      const jitterMs = Math.floor(Math.random() * 5000);
+      fallbackPollTimerRef.current = setTimeout(async () => {
+        if (!mountedRef.current) return;
+        const pageVisible =
+          !STABILITY_FLAGS.ENABLE_VISIBILITY_POLLING_PAUSE ||
+          typeof document === "undefined" ||
+          document.visibilityState === "visible";
+        const socketHealthy = Boolean(socket?.connected);
+        if (pageVisible && !socketHealthy) {
+          await fetchTables();
+        }
+        scheduleFallbackPoll(socket);
+      }, baseMs + jitterMs);
+    },
+    [fetchTables, stopFallbackPolling],
+  );
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchTables();
-    const interval = setInterval(fetchTables, 5000); // Refresh every 5 seconds
-    
-    // Socket setup for real-time table merge/unmerge updates
-    const socket = createSocketConnection();
+
+    const socket = getSocket();
     
     const handleTableMerged = (payload) => {
       if (!payload?.primaryTable) return;
-      // Refresh tables to get updated merge status
       fetchTables();
     };
 
@@ -32,49 +86,48 @@ const TableDashboard = () => {
       fetchTables();
     };
 
+    const handleConnect = () => {
+      fetchTables();
+    };
+
+    safeSocketOn(socket, "table:merged", handleTableMerged);
+    safeSocketOn(socket, "table:unmerged", handleTableUnmerged);
+    safeSocketOn(socket, "connect", handleConnect);
+
     const token =
       localStorage.getItem("adminToken") ||
       localStorage.getItem("franchiseAdminToken") ||
       localStorage.getItem("superAdminToken");
-    
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         const userId = payload.id;
         if (userId) {
-          socket.emit("join:cafe", userId);
+          joinSocketRoomOnce(socket, "join:cafe", userId);
+          joinSocketRoomOnce(socket, "join:cart", userId);
         }
-      } catch (e) {
-        if (import.meta.env.DEV) {
-          console.warn("[TableDashboard] Could not decode token for socket room:", e);
-        }
+      } catch (_error) {
+        // best effort
       }
     }
 
-    socket.on("table:merged", handleTableMerged);
-    socket.on("table:unmerged", handleTableUnmerged);
+    const visibilityHandler = () => {
+      if (document.visibilityState === "visible") {
+        fetchTables();
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+    scheduleFallbackPoll(socket);
 
     return () => {
-      clearInterval(interval);
+      mountedRef.current = false;
+      stopFallbackPolling();
+      document.removeEventListener("visibilitychange", visibilityHandler);
       socket.off("table:merged", handleTableMerged);
       socket.off("table:unmerged", handleTableUnmerged);
-      socket.disconnect();
+      socket.off("connect", handleConnect);
     };
-  }, []);
-
-  const fetchTables = async () => {
-    try {
-      const response = await api.get("/tables/dashboard/occupancy");
-      // Ensure response.data is an array
-      setTables(Array.isArray(response?.data) ? response.data : []);
-    } catch (error) {
-      console.error("Error fetching tables:", error);
-      // Set empty array on error to prevent crashes
-      setTables([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchTables, scheduleFallbackPoll, stopFallbackPolling]);
 
   const handleMerge = async () => {
     if (

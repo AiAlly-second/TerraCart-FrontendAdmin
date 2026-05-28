@@ -32,9 +32,34 @@ class ErrorBoundary extends React.Component {
 
   handleReset = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
-    // Optionally reload the page
+    if (typeof this.props.onReset === "function") {
+      this.props.onReset();
+      return;
+    }
+
+    // Optional hard reset behavior is replaced with soft reset to avoid
+    // reconnect/listener storms from full page reloads.
     if (this.props.resetOnError) {
-      window.location.reload();
+      try {
+        window.history.replaceState({}, "", window.location.pathname);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } catch (_error) {
+        // keep boundary reset-only behavior if soft navigation is unavailable
+      }
+    }
+  };
+
+  handleGoHome = () => {
+    if (typeof this.props.onNavigateHome === "function") {
+      this.props.onNavigateHome();
+      return;
+    }
+
+    try {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch (_error) {
+      this.handleReset();
     }
   };
 
@@ -88,7 +113,7 @@ class ErrorBoundary extends React.Component {
                   Try Again
                 </button>
                 <button
-                  onClick={() => (window.location.href = "/")}
+                  onClick={this.handleGoHome}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Go Home
