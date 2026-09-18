@@ -36,6 +36,7 @@ export const getSidebarMenuItems = ({ userRole, isCostingEnabled }) => {
       { path: "/employees", icon: "employee", label: "Employee Management" },
       { path: "/revenue-history", icon: "revenue_history", label: "Revenue History" },
       { path: "/reports", icon: "reports", label: "Reports" },
+      { path: "/backup-restore", icon: "settings", label: "Database Backup & Restore" },
     ];
 
     if (isCostingEnabled) {

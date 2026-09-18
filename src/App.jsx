@@ -49,6 +49,7 @@ import Franchises from "./pages/Franchises";
 import Users from "./pages/Users";
 import RevenueHistory from "./pages/RevenueHistory";
 import Reports from "./pages/Reports";
+import BackupRestore from "./pages/BackupRestore";
 
 // Costing v2 pages
 import CostingV2Layout from "./pages/costing-v2/CostingV2Layout";
@@ -396,6 +397,14 @@ function App() {
                     element={
                       <ProtectedRoute allowedRoles={["super_admin"]}>
                         <RevenueHistory />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/backup-restore"
+                    element={
+                      <ProtectedRoute allowedRoles={["super_admin"]}>
+                        <BackupRestore />
                       </ProtectedRoute>
                     }
                   />

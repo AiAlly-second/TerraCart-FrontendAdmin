@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path,
+          timeout: 600000,
+          proxyTimeout: 600000,
         },
       },
     },
